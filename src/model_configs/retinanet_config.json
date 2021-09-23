@@ -1,0 +1,22 @@
+{
+	"num_classes": 1,
+	"confidence_threshold": 0.0,
+	"nms_iou_threshold": 0.5,
+	"max_detections_per_class": 100,
+	"max_detections": 100,
+
+
+
+	"num_epochs": 10,
+	"batch_size": 2,
+
+	"save_frequency": 5,
+
+
+	"input_img_min_side": 800.0,
+	"input_img_max_side": 1333.0,
+	"smallest_fmap_stride": 128.0,
+	"input_img_channels": 3
+
+
+}

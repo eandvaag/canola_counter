@@ -1,0 +1,32 @@
+{
+
+	"workspace_dir": "/home/eaa299/Documents/work/2021/plant_detection/canola_2020_06_08",
+
+	"data_split": {
+		"train": 0.8,
+		"val": 0.2,
+		"test": 0.0
+	},
+
+	"class_map": {
+		"plant": 0
+	},
+
+
+	"detector_extraction_params": {
+		"train_extraction_method": "box",
+		"test_extraction_method": "tile",
+		"patch_size": 350,
+		"tile_patch_overlap": 0.05
+	},
+
+
+	"classifier_extraction_params": {
+		"train_extraction_method": "component",
+		"test_extraction_method": "component",
+		"patch_padding": 0
+	},
+
+	"detector_config_path": "/home/eaa299/Documents/work/2021/plant_detection/plant_detection/src/model_configs/retinanet_config.json",
+	"classifier_config_path": ""
+}
