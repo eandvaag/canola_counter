@@ -12,11 +12,14 @@
 		"plant": 0
 	},
 
+	"score_thresh": 0.5,
+	"img_nms_iou_thresh": 0.25,
+
 
 	"detector_extraction_params": {
 		"train_extraction_method": "box",
 		"test_extraction_method": "tile",
-		"patch_size": 350,
+		"patch_size": 200,
 		"tile_patch_overlap": 0.05
 	},
 
@@ -27,6 +30,6 @@
 		"patch_padding": 0
 	},
 
-	"detector_config_path": "/home/eaa299/Documents/work/2021/plant_detection/plant_detection/src/model_configs/retinanet_config.json",
+	"detector_config_path": "/home/eaa299/Documents/work/2021/plant_detection/plant_detection/src/my_configs/centernet_config.json",
 	"classifier_config_path": ""
 }

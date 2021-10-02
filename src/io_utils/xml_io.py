@@ -18,9 +18,8 @@ def load_boxes_and_classes(xml_path, class_map):
         x_max = int(bnd_box.find('xmax').text)
         y_max = int(bnd_box.find('ymax').text)
 
-        box = np.array([y_min, x_min, y_max, x_max])
+        box = [y_min, x_min, y_max, x_max]
         boxes.append(box)
-           
         classes.append(class_map[obj_class])
             
 

@@ -6,14 +6,11 @@ import dataset
 import extract_patches as ep
 import model_interface
 import model_vis
+import model_eval
 
 from io_utils import json_io
 
-
-
-
-
-
+import logging
 
 
 
@@ -21,52 +18,55 @@ from io_utils import json_io
 
 def main(config):
 
-	settings = run_settings.Settings(config)
+    logging.basicConfig(level=logging.INFO)
+
+    settings = run_settings.Settings(config)
 
 
-	train_dataset = dataset.Dataset(settings.train_img_paths, "train")
-	val_dataset = dataset.Dataset(settings.val_img_paths, "val")
-	test_dataset = dataset.Dataset(settings.test_img_paths, "test")
-
-	#extractor = ep.BoxExtractor()
-	#train_tf_record_path = extractor.extract(train_dataset, settings, annotate_patches=True)
-	#val_tf_record_path = extractor.extract(val_dataset, settings, annotate_patches=True)
-
-	extractor = ep.TileExtractor()
-	#extractor = ep.BoxExtractor()
-	train_patches_dir = extractor.extract(train_dataset, settings, annotate_patches=True)
-	val_patches_dir = extractor.extract(val_dataset, settings, annotate_patches=True)
+    train_dataset = dataset.Dataset(settings.train_img_paths, "train")
+    val_dataset = dataset.Dataset(settings.val_img_paths, "val")
+    test_dataset = dataset.Dataset(settings.test_img_paths, "test")
 
 
-	#model = model_interface.RetinaNet(settings)
-	model = model_interface.RetinaNet(settings, model_uuid="6ba8a185-437a-45b0-a406-f258fde5d9f4")#, model_uuid="b3ede4f9-a5c8-49e2-bfe5-a133fdeb95e8")
-	
-	#model.train(train_patches_dir, val_patches_dir)
-	#exit()
-	train_pred_dir = model.generate_predictions(train_patches_dir, found_behaviour="skip")
-	val_pred_dir = model.generate_predictions(val_patches_dir, found_behaviour="skip")
+    #extractor = ep.BoxExtractor()
+    #extractor = ep.TileExtractor()
+    extractor = ep.JitterBoxExtractor()
 
-	#model_vis.output_patch_predictions(train_pred_dir)
-	#model_vis.output_img_predictions(train_pred_dir, nms_iou_threshold=0.25)
+    train_patch_dir = extractor.extract(train_dataset, settings, annotate_patches=True)
+    val_patch_dir = extractor.extract(val_dataset, settings, annotate_patches=True)
 
-	model_vis.output_patch_predictions(val_pred_dir)
-	#model_vis.output_img_predictions(val_pred_dir, nms_iou_threshold=0.25)
+    #model = model_interface.RetinaNet(settings, 'exothermic-screen')
+    #model = model_interface.CenterNet(settings, 'relaxed-canyon')
 
+    model = model_interface.CenterNet(settings)
 
+    model.train(train_patch_dir, val_patch_dir)
+    #model = model_interface.CenterNet(settings)#, 'relaxed-canyon')
+    #model_vis.output_patch_predictions(model, train_patch_dir, settings)
+    #model_vis.output_img_predictions(model, train_patch_dir, settings)
 
+    #model_vis.output_patch_predictions(model, val_patch_dir, settings)
+    #model_vis.output_img_predictions(model, val_patch_dir, settings)
 
+    #model_vis.output_loss_plot(model)
+    #model_eval.evaluate_patches(train_pred_dir, settings)
 
+    #retinanet = model_interface.RetinaNet(settings, 'exothermic-screen')
+    #centernet = model_interface.CenterNet(settings, 'relaxed-canyon')
+    #model_vis.bar_chart_img_results(
+    #    "/home/eaa299/Documents/work/2021/my_model_comparison_chart_tiles.html",
+    #    [retinanet, centernet], [train_patch_dir, train_patch_dir], settings)
 
 
 
 if __name__ == "__main__":
 
 
-	parser = argparse.ArgumentParser(description="A tool for detecting plants in UAV images")
-	parser.add_argument('input', type=str, help="")
-	args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="A tool for detecting plants in UAV images")
+    parser.add_argument('input', type=str, help="")
+    args = parser.parse_args()
 
 
-	config = json_io.load_json(args.input)
+    config = json_io.load_json(args.input)
 
-	main(config)
+    main(config)

@@ -15,7 +15,7 @@ def int_feature_list(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
-def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated):
+def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, require_box=False):
 
     patch_tf_records = []
 
@@ -25,9 +25,12 @@ def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated):
             "img_path": bytes_feature(img.img_path),
             "patch_path": bytes_feature(os.path.join(out_dir, patch_data["patch_names"][i])),
             #"scenario_uuid": bytes_feature(scenario_uuid),
-            "patch_coords": float_feature_list(patch_data["patch_coords"][i])
+            "patch_coords": int_feature_list(list(np.array(patch_data["patch_coords"][i]).astype(np.int64)))
         }
         if is_annotated:
+            if require_box and np.array(patch_data["patch_normalized_boxes"][i]).size == 0:
+                continue
+
             patch_tf_record.update({
                 "patch_normalized_boxes": float_feature_list(list(np.array(patch_data["patch_normalized_boxes"][i]).astype(np.float32).flatten())),
                 "patch_abs_boxes": int_feature_list(list(np.array(patch_data["patch_abs_boxes"][i]).astype(np.int64).flatten())),
@@ -35,6 +38,7 @@ def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated):
                 "patch_classes": int_feature_list(np.array(patch_data["patch_classes"][i]).astype(np.int64))
 
             })
+
         patch_tf_records.append(tf.train.Example(features=tf.train.Features(feature=patch_tf_record)))
 
     return patch_tf_records
@@ -65,10 +69,9 @@ def create_patch_tf_prediction_records(patch_data):
 
 
 
-def output_patch_tf_records(out_dir, patch_tf_records):
+def output_patch_tf_records(out_path, patch_tf_records):
 
-    record_path = os.path.join(out_dir, "record.tfrec")
-    with tf.io.TFRecordWriter(record_path) as writer:
+    with tf.io.TFRecordWriter(out_path) as writer:
         for patch_tf_record in patch_tf_records:
             writer.write(patch_tf_record.SerializeToString())
 
@@ -79,7 +82,7 @@ def parse_sample_from_tf_record(tf_sample, is_annotated):
         "img_path": tf.io.FixedLenFeature([], tf.string),
         "patch_path": tf.io.FixedLenFeature([], tf.string),
         #"scenario_uuid": tf.io.FixedLenFeature([], tf.string),
-        "patch_coords": tf.io.VarLenFeature(tf.float32)
+        "patch_coords": tf.io.VarLenFeature(tf.int64)
     }
     if is_annotated:
         schema.update({
@@ -90,5 +93,4 @@ def parse_sample_from_tf_record(tf_sample, is_annotated):
         })
 
     sample = tf.io.parse_single_example(tf_sample, schema)
-    #sample = tf.io.parse_example([tf_sample], schema)
     return sample

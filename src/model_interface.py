@@ -1,58 +1,44 @@
-from abc import ABC
-import uuid
-import os
-import shutil
+from abc import ABC, abstractmethod
 
+from detector_config import RetinaNetConfig, CenterNetConfig
 
-from io_utils import json_io
-
-from detector_models.retinanet import retinanet
+from models.detectors.retinanet import retinanet_driver
+from models.detectors.centernet import centernet_driver
 
 import model_vis
 
 class DetectorModel(ABC):
 
+    @abstractmethod
+    def train(self, train_patch_dir, val_patch_dir):
+        pass
 
-    def __init__(self, settings, model_uuid=None):
-
-        super().__init__()
-        
-        if model_uuid is None:
-            self.model_uuid = str(uuid.uuid4())
-            self.model_dir = os.path.join(settings.detectors_dir, self.model_uuid)
-            #self.config = json_io.load_json(settings.detector_config_path)
-            os.makedirs(self.model_dir)
-            os.makedirs(os.path.join(self.model_dir, "weights"))
-            #json_io.save_json(os.path.join(self.model_dir, "model_config.json"), self.config)
-            shutil.copy(settings.detector_config_path, os.path.join(self.model_dir, "model_config.json"))
-            #json_io.save_json(os.path.join(self.model_dir, "run_settings.json"), settings)
-            #self.load_model = False
-        else:
-            self.model_uuid = model_uuid
-            self.model_dir = os.path.join(settings.detectors_dir, self.model_uuid)
-            #self.config = json_io.load_json(os.path.join(self.model_dir, "model_config.json"))
-            #self.load_model = True
-
-    @property
-    def name(self):
+    @abstractmethod
+    def generate_predictions(self, patch_dir, skip_if_found=True):
         pass
 
 
 class CenterNet(DetectorModel):
 
-    @property
-    def name(self):
-        return "CenterNet"
-        
+    def __init__(self, settings, instance_name=None):
+        super().__init__()
+        self.config = CenterNetConfig(settings, instance_name=instance_name)
+
+    def train(self, train_patch_dir, val_patch_dir):
+        centernet_driver.train(train_patch_dir, val_patch_dir, self.config)
+
+    def generate_predictions(self, patch_dir, skip_if_found=True):
+        return centernet_driver.generate_predictions(patch_dir, self.config, skip_if_found=skip_if_found)
+
 
 class RetinaNet(DetectorModel):
 
-    @property
-    def name(self):
-        return "RetinaNet"
+    def __init__(self, settings, instance_name=None):
+        super().__init__()
+        self.config = RetinaNetConfig(settings, instance_name=instance_name)
 
-    def train(self, train_patches_dir, val_patches_dir):
-        retinanet.train(train_patches_dir, val_patches_dir, self.model_dir)
+    def train(self, train_patch_dir, val_patch_dir):
+        retinanet_driver.train(train_patch_dir, val_patch_dir, self.config)
 
-    def generate_predictions(self, tf_record_path, found_behaviour="skip"):
-        return retinanet.generate_predictions(tf_record_path, self.model_dir, found_behaviour=found_behaviour)
+    def generate_predictions(self, patch_dir, skip_if_found=True):
+        return retinanet_driver.generate_predictions(patch_dir, self.config, skip_if_found=skip_if_found)
