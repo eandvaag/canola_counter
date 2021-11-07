@@ -14,11 +14,11 @@ from io_utils import xml_io
 from io_utils import tf_record_io
 
 
-def get_patch_dir(dataset_name, extractor_name, patch_size, is_annotated, settings):
+def get_patch_dir(img_set, dataset_name, extractor_name, patch_size, is_annotated):
 
     annotated = "annotated" if is_annotated else "unannotated"
     dirname = dataset_name + "-" + extractor_name + "-" + str(patch_size) + "-" + annotated
-    return os.path.join(settings.detector_patch_dir, dirname)
+    return os.path.join(img_set.patch_dir, dirname)
 
 
 def parse_patch_dir(patch_dir):
@@ -41,27 +41,89 @@ def write_patches(out_dir, patch_data):
 
 
 
+def search_for_scenario(img_set, scenario):
+
+    scenario_lookup_path = os.path.join(img_set.patch_dir, "scenario_lookup.json")
+    scenario_lookup = json_io.load_json(scenario_lookup_path)
+
+    for scenario_id, stored_scenario in scenario_lookup["scenarios"].items():
+        
+        if scenario == stored_scenario:
+            return True, scenario_id
+
+    return False, None
+
+
+def generate_scenario_id():
+    return str(uuid.uuid4())
+
+
+def add_scenario(img_set, scenario_id, scenario):
+
+    scenario_lookup_path = os.path.join(img_set.patch_dir, "scenario_lookup.json")
+    scenario_lookup = json_io.load_json(scenario_lookup_path)
+
+    scenario_lookup["scenarios"][scenario_id] = scenario
+
+    json_io.save_json(scenario_lookup_path, scenario_lookup)
+
+
+def extract_patches(params, img_set, dataset, annotate_patches):
+
+    scenario = {"dataset_name": dataset.name,
+                "parameters":   params,
+                "is_annotated": annotate_patches}
+
+
+    scenario_exists, scenario_id = search_for_scenario(img_set, scenario)
+    if scenario_exists:
+        return scenario_id
+    else:
+        scenario_id = generate_scenario_id()
+
+
+    if params["method"] == "tile":
+        extractor = TileExtractor(params)
+    elif params["method"] == "box":
+        extractor = BoxExtractor(params)
+    elif params["method"] == "jitterbox":
+        extractor = JitterBoxExtractor(params)
+    else:
+        raise RuntimeError("Unrecognized patch extraction method: '{}'.".format(params["method"]))
+
+    extractor.extract(scenario_id, scenario, img_set)
+    return scenario_id
+
+
 class DetectorPatchExtractor(ABC):
 
     @property
     def name(self):
         pass
 
+    def __init__(self, params):
+        self.patch_size = params["patch_size"]
 
-    def extract(self, dataset, settings, annotate_patches):
 
-        patch_dir = get_patch_dir(dataset.name, self.name, settings.detector_patch_size, annotate_patches, settings)
+    def extract(self, scenario_id, scenario, img_set):
+
+        #patch_dir = get_patch_dir(img_set, dataset.name, self.name, self.patch_size, annotate_patches)
+        annotate_patches = scenario["is_annotated"]
+        dataset = img_set.datasets[scenario["dataset_name"]]
+
+
+        patch_dir = os.path.join(img_set.patch_dir, scenario_id)
         patches_record_path = os.path.join(patch_dir, "patches-record.tfrec")
         patches_with_boxes_record_path = os.path.join(patch_dir, "patches-with-boxes-record.tfrec")
 
+        #if os.path.exists(patches_record_path) and (os.path.exists(patches_with_boxes_record_path) or not annotate_patches):
+        #    return patch_dir
 
-        if os.path.exists(patches_record_path) and (os.path.exists(patches_with_boxes_record_path) or not annotate_patches):
-            return patch_dir
+        #if os.path.exists(patch_dir):
+        #    shutil.rmtree(patch_dir)
 
-        if os.path.exists(patch_dir):
-            shutil.rmtree(patch_dir)
-            
         os.makedirs(patch_dir)
+
         tf_records = []
         tf_records_with_boxes = []
 
@@ -70,12 +132,12 @@ class DetectorPatchExtractor(ABC):
             if annotate_patches and not img.is_annotated:
                 continue
 
-            patch_data = self._extract_patches_from_img(img, settings)
+            patch_data = self._extract_patches_from_img(img, img_set)
 
             write_patches(patch_dir, patch_data)
 
             if annotate_patches:
-                gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, settings.class_map)
+                gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
 
                 patch_data = annotate_patch_data(img, patch_data, gt_boxes, gt_classes)
 
@@ -95,17 +157,12 @@ class DetectorPatchExtractor(ABC):
         tf_record_io.output_patch_tf_records(patches_record_path, tf_records)
         tf_record_io.output_patch_tf_records(patches_with_boxes_record_path, tf_records_with_boxes)
 
-        return patch_dir
 
-
-    def delete_scenario(self, dataset, settings, annotate_patches):
-
-        scenario = DetectorExtractionScenario(dataset.name, self.name, settings.detector_patch_size, annotate_patches)
-        scenario.delete_scenario(settings)
+        add_scenario(img_set, scenario_id, scenario)
 
 
     @abstractmethod
-    def _extract_patches_from_img(self, img, settings):
+    def _extract_patches_from_img(self, img, img_set):
         pass
 
 
@@ -117,8 +174,11 @@ class JitterBoxExtractor(DetectorPatchExtractor):
     def name(self):
         return "jitterbox"
 
+    def __init__(self, params):
+        super().__init__(params)
+        self.num_patches_per_box = params["num_patches_per_box"]
 
-    def _extract_patches_from_img(self, img, settings):
+    def _extract_patches_from_img(self, img, img_set):
 
         logger = logging.getLogger(__name__)
 
@@ -129,24 +189,30 @@ class JitterBoxExtractor(DetectorPatchExtractor):
         }
 
         img_array = img.load_img_array()
-        gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, settings.class_map)
+        gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
 
-        gt_boxes = np.array(gt_boxes)
         centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
 
         patch_num = 0
         num_excluded = 0
         for gt_box in gt_boxes:
-            try:
-                patch, patch_coords = self._extract_patch_surrounding_gt_box(img_array, gt_box, settings.detector_patch_size)
-                patch_data["patches"].append(patch)
-                patch_data["patch_coords"].append(patch_coords)
-                patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
-                patch_num += 1
-            except RuntimeError as e:
-                num_excluded += 1
+            for i in range(self.num_patches_per_box):
+                try:
+                    patch, patch_coords = self._extract_patch_surrounding_gt_box(img_array, gt_box, self.patch_size)
+                    patch_data["patches"].append(patch)
+                    patch_data["patch_coords"].append(patch_coords)
+                    patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
+                    patch_num += 1
+                except RuntimeError as e:
+                    num_excluded += 1
         
-        logger.info("JitterBoxExtractor: Excluded {} patches that exceeded the boundaries of the image.".format(num_excluded))
+        num_extracted = len(patch_data["patch_names"])
+
+        if num_excluded > 0:
+            logger.info("JitterBoxExtractor: Some patches were excluded because they did not fall " +
+                        "within the boundaries of the image.")
+
+        logger.info("JitterBoxExtractor: Extracted {} patches ({} attempts.)".format(num_extracted, num_extracted + num_excluded))
 
         return patch_data
 
@@ -186,8 +252,7 @@ class BoxExtractor(DetectorPatchExtractor):
     def name(self):
         return "box"
 
-
-    def _extract_patches_from_img(self, img, settings):
+    def _extract_patches_from_img(self, img, img_set):
 
         logger = logging.getLogger(__name__)
 
@@ -198,16 +263,15 @@ class BoxExtractor(DetectorPatchExtractor):
         }
 
         img_array = img.load_img_array()
-        gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, settings.class_map)
-
-        gt_boxes = np.array(gt_boxes)
+        gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+        
         centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
 
         patch_num = 0
         num_excluded = 0
         for centre in centres:
             try:
-                patch, patch_coords = self._extract_patch_surrounding_point(img_array, centre, settings.detector_patch_size)
+                patch, patch_coords = self._extract_patch_surrounding_point(img_array, centre, self.patch_size)
                 patch_data["patches"].append(patch)
                 patch_data["patch_coords"].append(patch_coords)
                 patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
@@ -254,7 +318,11 @@ class TileExtractor(DetectorPatchExtractor):
         return 'tile'
 
 
-    def _extract_patches_from_img(self, img, settings):
+    def __init__(self, params):
+        super().__init__(params)
+        self.patch_overlap_pct = params["patch_overlap_pct"]
+
+    def _extract_patches_from_img(self, img, img_set):
 
         patch_data = {
             "patches": [],
@@ -266,8 +334,8 @@ class TileExtractor(DetectorPatchExtractor):
         img_array = img.load_img_array()
         img_path = img.img_path
 
-        tile_size = settings.detector_patch_size
-        overlap_px = int(m.floor(tile_size * settings.detector_tile_patch_overlap))
+        tile_size = self.patch_size
+        overlap_px = int(m.floor(tile_size * (self.patch_overlap_pct / 100)))
 
         h, w = img_array.shape[:2]
         patch_num = 0
