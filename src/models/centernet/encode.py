@@ -27,9 +27,9 @@ class LabelEncoder:
 
 
     def __init__(self, config):
-        self.num_classes = config.num_classes
-        self.max_detections = config.max_detections
-        self.downsampling_ratio = config.downsampling_ratio
+        self.num_classes = config.arch["num_classes"]
+        self.max_detections = config.arch["max_detections"]
+        self.downsampling_ratio = config.arch["downsampling_ratio"]
 
 
     def _encode_sample(self, features_shape, gt_boxes, cls_ids):
@@ -99,10 +99,10 @@ class Decoder:
     def __init__(self, config, **kwargs):
 
         super(Decoder, self).__init__(**kwargs)
-        self.max_detections = config.max_detections
-        self.num_classes = config.num_classes
-        self.score_thresh = config.score_thresh
-        self.downsampling_ratio = config.downsampling_ratio
+        self.max_detections = config.arch["max_detections"]
+        self.num_classes = config.arch["num_classes"]
+        self.score_thresh = config.inference["active"]["score_thresh"]
+        self.downsampling_ratio = config.arch["downsampling_ratio"]
 
     def __call__(self, predictions):
 

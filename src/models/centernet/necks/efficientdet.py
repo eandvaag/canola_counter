@@ -3,20 +3,11 @@ import math
 
 from models.centernet.backbones.efficientnet import keras_D0_backbone
 
-def get_backbone(backbone_config):
-
-    backbone_type = backbone_config["backbone_type"]
-
-    if backbone_config["keras_prebuilt"]:
-
-        load_imagenet_weights = backbone_config["imagenet_pretrained"]
-
-        if backbone_type == "D0":
-            return keras_D0_backbone(load_imagenet_weights)
 
 
-    raise RuntimeError("Invalid backbone configuration: '{}'.".format(backbone_config))
+def build_neck(config):
 
+    return EfficientDetNeck(config)
 
 
 
@@ -385,24 +376,24 @@ class TransposeLayer(tf.keras.layers.Layer):
 
 
 
-class ModifiedEfficientDet(tf.keras.layers.Layer):
+class EfficientDetNeck(tf.keras.layers.Layer):
 
     def __init__(self, config, **kwargs):
-        super(ModifiedEfficientDet, self).__init__(name="ModifiedEfficientDet", **kwargs)
-        self.backbone = get_backbone(config.backbone_config)
+        super(EfficientDetNeck, self).__init__(**kwargs)
+        #self.backbone = get_backbone(config.arch["backbone_config"])
         #self.backbone = get_efficient_net(1.0, 1.0, 0.2)
-        self.bifpn = BiFPN(output_channels=config.bifpn_width, layers=config.bifpn_depth)
+        self.bifpn = BiFPN(output_channels=config.arch["bifpn_width"], layers=config.arch["bifpn_depth"])
 
         # A simple adaptation so that the CenterNet heads can be attached to an EfficientDet
-        self.transpose = TransposeLayer(output_channels=config.bifpn_width)
+        self.transpose = TransposeLayer(output_channels=config.arch["bifpn_width"])
 
     def call(self, inputs, training=None, **kwargs):
         #print("\n\n(1) inputs.shape\n\n", inputs.shape)
 
-        x = tf.keras.applications.efficientnet.preprocess_input(inputs)
+        #x = tf.keras.applications.efficientnet.preprocess_input(inputs)
 
         #print("\n\n(2) inputs.shape\n\n", inputs.shape)
-        x = self.backbone(x, training=training)
-        x = self.bifpn(x, training=training)
+        #x = self.backbone(x, training=training)
+        x = self.bifpn(inputs, training=training)
         x = self.transpose(x, training=training)
         return x

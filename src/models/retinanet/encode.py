@@ -273,11 +273,10 @@ class Decoder:
         **kwargs
     ):
         super(Decoder, self).__init__(**kwargs)
-        self.num_classes = config.img_set.num_classes
-        self.score_thresh = config.score_thresh
-        self.patch_nms_iou_thresh = config.patch_nms_iou_thresh
-        self.max_detections_per_class = config.max_detections_per_class
-        self.max_detections = config.max_detections
+        self.score_thresh = config.inference["active"]["score_thresh"]
+        self.patch_nms_iou_thresh = config.inference["active"]["patch_nms_iou_thresh"]
+        self.max_detections_per_class = config.arch["max_detections_per_class"]
+        self.max_detections = config.arch["max_detections"]
 
         self._anchor_box = AnchorBox()
         self._box_variance = tf.convert_to_tensor(

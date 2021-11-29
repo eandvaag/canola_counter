@@ -1,5 +1,22 @@
 import tensorflow as tf
 
+def build_backbone(config):
+
+    backbone_config = config.arch["backbone_config"]
+    backbone_type = backbone_config["backbone_type"]
+
+    if backbone_config["keras_prebuilt"]:
+
+        load_imagenet_weights = backbone_config["imagenet_pretrained"]
+
+        if backbone_type == "D0":
+            backbone = keras_D0_backbone(load_imagenet_weights)
+
+    if backbone is None:
+        raise RuntimeError("Invalid backbone configuration: '{}'.".format(backbone_config))
+
+    return backbone
+
 
 def keras_D0_backbone(load_imagenet_weights):
     

@@ -7,6 +7,7 @@ import tqdm
 import logging
 import time
 
+
 from image_set import ImgSet
 
 from models.common import box_utils, \
@@ -15,10 +16,10 @@ from models.common import box_utils, \
                           driver_utils, \
                           inference_record_io
 
-from models.centernet.loss import CenterNetLoss
-from models.centernet.centernet import CenterNet
-import models.centernet.data_load as data_load
-from models.centernet.encode import Decoder
+from models.yolov4.loss import YOLOv4Loss
+from models.yolov4.yolov4 import YOLOv4, YOLOv4Tiny
+import models.yolov4.data_load as data_load
+from models.yolov4.encode import Decoder
 
 
 from io_utils import json_io
@@ -26,30 +27,83 @@ from io_utils import tf_record_io
 
 
 
-def post_process_sample(detections, resize_ratios, index):
+# def post_process_sample(detections, resize_ratios, index):
 
-    num_detections = detections[0][index]
-    boxes = detections[1][index][:num_detections]
-    scores = detections[2][index][:num_detections]
-    classes = detections[3][index][:num_detections]
+#     num_detections = detections.valid_detections[index]
+#     classes = detections.nmsed_classes[index][:num_detections]
+#     scores = detections.nmsed_scores[index][:num_detections]
+#     boxes = detections.nmsed_boxes[index][:num_detections]
 
-    boxes = boxes.numpy()
-    scores = scores.numpy()
-    classes = classes.numpy()
+#     boxes = boxes.numpy()
+#     scores = scores.numpy()
+#     classes = classes.numpy()
 
-    boxes = box_utils.swap_xy_np(boxes)
-    boxes = np.stack([
-        boxes[:, 0] * resize_ratios[index][0],
-        boxes[:, 1] * resize_ratios[index][1],
-        boxes[:, 2] * resize_ratios[index][0],
-        boxes[:, 3] * resize_ratios[index][1]
+#     boxes = box_utils.swap_xy_np(boxes)
+#     boxes = np.stack([
+#         boxes[:, 0] * resize_ratios[index][0],
+#         boxes[:, 1] * resize_ratios[index][1],
+#         boxes[:, 2] * resize_ratios[index][0],
+#         boxes[:, 3] * resize_ratios[index][1]
+#     ], axis=-1)
+
+#     boxes = np.rint(boxes).astype(np.int32)
+#     scores = scores.astype(np.float32)
+#     classes = classes.astype(np.int32)
+
+#     return boxes, scores, classes
+
+def post_process_sample(detections, resize_ratios, index, config):
+
+    detections = np.array(detections[index])
+
+    pred_xywh = detections[:, 0:4]
+    pred_conf = detections[:, 4]
+    pred_prob = detections[:, 5:]
+
+    pred_coor = (box_utils.swap_xy_tf(box_utils.convert_to_corners_tf(pred_xywh))).numpy()
+
+    pred_coor = np.stack([
+            pred_coor[:, 0] * resize_ratios[index][0],
+            pred_coor[:, 1] * resize_ratios[index][1],
+            pred_coor[:, 2] * resize_ratios[index][0],
+            pred_coor[:, 3] * resize_ratios[index][1]
     ], axis=-1)
 
-    boxes = np.rint(boxes).astype(np.int32)
+
+    invalid_mask = np.logical_or((pred_coor[:, 0] > pred_coor[:, 2]), (pred_coor[:, 1] > pred_coor[:, 3]))
+    pred_coor[invalid_mask] = 0
+
+    # # (4) discard some invalid boxes
+    #bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
+    #scale_mask = np.logical_and((valid_scale[0] < bboxes_scale), (bboxes_scale < valid_scale[1]))
+
+
+    score_threshold = 0.5
+    classes = np.argmax(pred_prob, axis=-1)
+    scores = pred_conf * pred_prob[np.arange(len(pred_coor)), classes]
+    score_mask = scores > score_threshold
+    #mask = np.logical_and(scale_mask, score_mask)
+    mask = score_mask
+    coors, scores, classes = pred_coor[mask], scores[mask], classes[mask]
+
+    #print("coors: ", coors)
+    #print("scores: ", scores)
+    #print("classes", classes)
+    coors = np.rint(coors).astype(np.int32)
     scores = scores.astype(np.float32)
     classes = classes.astype(np.int32)
 
-    return boxes, scores, classes
+    coors, classes, scores = box_utils.non_max_suppression(
+        coors,
+        classes,
+        scores,
+        iou_thresh=config.inference["active"]["patch_nms_iou_thresh"])
+
+    return coors, scores, classes
+
+
+
+
 
 
 def generate_predictions(config):
@@ -79,16 +133,17 @@ def generate_predictions(config):
             data_loader = data_load.InferenceDataLoader(tf_record_path, config)
             tf_dataset, tf_dataset_size = data_loader.create_dataset()
 
-            centernet = CenterNet(config)
+            if config.arch["model_type"] == "yolov4":
+                yolov4 = YOLOv4(config)
+            elif config.arch["model_type"] == "yolov4_tiny":
+                yolov4 = YOLOv4Tiny(config)
             decoder = Decoder(config)
 
-            #weights_path = model_load.get_most_recent_checkpoint(config.weights_dir)
-            #centernet.load_weights(weights_path)
+            input_shape = (config.inference["active"]["batch_size"], *(data_loader.get_model_input_shape()))
+            # *(config.arch["input_img_shape"]))
+            yolov4.build(input_shape=input_shape)
 
-            input_shape = (config.inference["active"]["batch_size"], *(config.arch["input_img_shape"]))
-            centernet.build(input_shape=input_shape)
-
-            model_io.load_all_weights(centernet, config)
+            model_io.load_all_weights(yolov4, config)
 
             predictions = {"image_predictions": {}, "patch_predictions": {}}
             steps = np.sum([1 for i in tf_dataset])
@@ -106,15 +161,23 @@ def generate_predictions(config):
 
 
                 start_inference_time = time.time()
-                pred = centernet(batch_images, training=False)
+                pred = yolov4(batch_images, training=False)
                 detections = decoder(pred)
+                #print("detections shape", [tf.shape(x) for x in detections])
+                pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+                #print("(1) pred_bbox shape", [tf.shape(x) for x in pred_bbox])
+
+                pred_bbox = tf.concat(pred_bbox, axis=1)
+
+                #print("(2) pred_bbox shape", tf.shape(pred_bbox))
+                #detections = decoder(batch_images, pred)
                 end_inference_time = time.time()
 
                 inference_times.append(end_inference_time - start_inference_time)
 
                 for i in range(batch_size):
 
-                    pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = post_process_sample(detections, batch_ratios, i)
+                    pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = post_process_sample(pred_bbox, batch_ratios, i, config)
 
                     patch_info = batch_info[i]
 
@@ -161,7 +224,6 @@ def generate_predictions(config):
                     predictions["image_predictions"][img_name]["patch_coords"].append(patch_coords.tolist())
 
 
-
             driver_utils.clip_img_boxes(predictions["image_predictions"])
             driver_utils.apply_nms_to_img_boxes(predictions["image_predictions"], 
                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
@@ -170,14 +232,16 @@ def generate_predictions(config):
             # for img_name in predictions["image_predictions"].keys():
             #     if len(predictions["image_predictions"][img_name]["pred_img_abs_boxes"]) > 0:
             #         pred_img_abs_boxes = np.array(predictions["image_predictions"][img_name]["pred_img_abs_boxes"])
-            #         pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, img_set.img_width, img_set.img_height)
+            #         pred_classes = np.array(predictions["image_predictions"][img_name]["pred_classes"])
+            #         pred_scores = np.array(predictions["image_predictions"][img_name]["pred_scores"])
+            #         img_width, img_height = imagesize.get(predictions["image_predictions"][img_name]["img_path"])
+            #         pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, img_width, img_height)
             #         predictions["image_predictions"][img_name]["pred_img_abs_boxes"] = pred_img_abs_boxes.tolist()
-
 
             #         nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression(
             #                                                 pred_img_abs_boxes,
-            #                                                 np.array(predictions["image_predictions"][img_name]["pred_classes"]),
-            #                                                 np.array(predictions["image_predictions"][img_name]["pred_scores"]),
+            #                                                 pred_classes,
+            #                                                 pred_scores,
             #                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
             #     else:
             #         nms_boxes = np.array([])
@@ -212,7 +276,6 @@ def generate_predictions(config):
             predictions["metrics"]["Per-Image Inference Time (s)"]["---"] = per_image_inference_time
             predictions["metrics"]["Per-Patch Inference Time (s)"] = {}
             predictions["metrics"]["Per-Patch Inference Time (s)"]["---"] = per_patch_inference_time
-            #predictions["metrics"]["Number of Model Parameters"]["---"] = 
 
             if dataset.is_annotated:
                 inference_metrics.collect_metrics(predictions, dataset, config)
@@ -246,6 +309,7 @@ def generate_predictions(config):
             dataset_index += 1
 
 
+
 def train(config):
 
     logger = logging.getLogger(__name__)
@@ -274,27 +338,33 @@ def train(config):
                                                 take_percent=config.training["active"]["percent_of_training_set_used"])
 
         val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
-        val_dataset, val_dataset_size = val_data_loader.create_batched_dataset()
+        #val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=True, augment=True)
+        val_dataset, val_dataset_size = val_data_loader.create_batched_dataset(
+                                                take_percent=config.training["active"]["percent_of_validation_set_used"])
 
 
         
-        centernet = CenterNet(config)
-        loss_fn = CenterNetLoss(config)
+        if config.arch["model_type"] == "yolov4":
+            yolov4 = YOLOv4(config)
+        elif config.arch["model_type"] == "yolov4_tiny":
+            yolov4 = YOLOv4Tiny(config)
 
-        input_shape = (config.training["active"]["batch_size"], *(config.arch["input_img_shape"]))
-        centernet.build(input_shape=input_shape)
+        loss_fn = YOLOv4Loss(config)
+        decoder = Decoder(config)
 
 
-        #lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=1e-4,
-        #                                                             decay_steps=steps_per_epoch * Config.learning_rate_decay_epochs,
-        #                                                             decay_rate=0.96)
+
+        input_shape = (config.training["active"]["batch_size"], *(train_data_loader.get_model_input_shape()))
+        yolov4.build(input_shape=input_shape)
+
+
         if seq_num == 0:
-            layer_lookup = centernet.get_layer_lookup()
+            layer_lookup = yolov4.get_layer_lookup()
             layer_lookup_path = os.path.join(config.weights_dir, "layer_lookup.json")
             json_io.save_json(layer_lookup_path, layer_lookup)
 
         else:
-            model_io.load_select_weights(centernet, config)
+            model_io.load_select_weights(yolov4, config)
 
         optimizer = tf.optimizers.Adam()
 
@@ -304,12 +374,27 @@ def train(config):
 
         def train_step(batch_images, batch_labels):
             with tf.GradientTape() as tape:
-                pred = centernet(batch_images, training=True)
-                loss_value = loss_fn(y_true=batch_labels, y_pred=pred)
+                conv = yolov4(batch_images, training=True)
+                #print("pred", pred)
+                pred = decoder(conv)
+                #print("dec_pred", dec_pred)
 
-            gradients = tape.gradient(target=loss_value, sources=centernet.trainable_variables)
-            optimizer.apply_gradients(grads_and_vars=zip(gradients, centernet.trainable_variables))
-            train_loss_metric.update_state(values=loss_value)
+                ciou_loss = 0
+                obj_loss = 0
+                prob_loss = 0
+                for i in range(config.arch["num_scales"]):
+                    label = batch_labels[i][0]
+                    bboxes = batch_labels[i][1]
+                    loss_items = loss_fn(label, bboxes, conv[i], pred[i], i)
+                    ciou_loss += loss_items[0]
+                    obj_loss += loss_items[1]
+                    prob_loss += loss_items[2]
+
+                total_loss = ciou_loss + obj_loss + prob_loss
+
+            gradients = tape.gradient(target=total_loss, sources=yolov4.trainable_variables)
+            optimizer.apply_gradients(grads_and_vars=zip(gradients, yolov4.trainable_variables))
+            train_loss_metric.update_state(values=total_loss)
 
 
 
@@ -334,26 +419,66 @@ def train(config):
         steps_taken = 0
         for epoch in range(max_num_epochs):
 
+
             train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
             for batch_data in train_bar:
 
                 optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
 
                 batch_images, batch_labels = train_data_loader.read_batch_data(batch_data)
+                #print("num batch labels", (batch_labels.numpy()[:,:,4]).size)
+                #print("num -1", np.sum(batch_labels.numpy()[:,:,4] == -1))
+                #print("num not -1", np.sum(batch_labels.numpy()[:,:,4] != -1))
                 train_step(batch_images, batch_labels)
                 train_bar.set_description("Epoch: {}/{} | t. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                           epoch, max_num_epochs-1, train_loss_metric.result(), 
                                           loss_record["training_loss"]["best"]["value"],
                                           loss_record["training_loss"]["best"]["epoch"]))
                 steps_taken += 1
+                #exit()
 
 
             val_bar = tqdm.tqdm(val_dataset, total=val_steps_per_epoch)
+            #v_i = 0
             for batch_data in val_bar:
                 batch_images, batch_labels = val_data_loader.read_batch_data(batch_data)
-                pred = centernet(batch_images, training=False)
-                loss_value = loss_fn(y_true=batch_labels, y_pred=pred)
+
+                #pred = retinanet(batch_images, training=True)
+                conv = yolov4(batch_images, training=False)
+                pred = decoder(conv)
+                
+                ciou_loss = 0
+                obj_loss = 0
+                prob_loss = 0
+                for i in range(config.arch["num_scales"]):
+                    label = batch_labels[i][0]
+                    bboxes = batch_labels[i][1]
+                    loss_items = loss_fn(label, bboxes, conv[i], pred[i], i)
+                    ciou_loss += loss_items[0]
+                    obj_loss += loss_items[1]
+                    prob_loss += loss_items[2]
+
+                loss_value = ciou_loss + obj_loss + prob_loss
+
+
+                #loss_value = loss_fn(y_true=batch_labels, y_pred=pred)
+                #prev_val_loss = float(val_loss_metric.result())
                 val_loss_metric.update_state(values=loss_value)
+                # if v_i > 0:
+                #     if val_loss_metric.result() - prev_val_loss > 1:
+                #         print("sudden upward spike")
+                #         print("updated_state_value", float(val_loss_metric.result()))
+                #         print("loss_value", loss_value)
+                #         print("prev_val_loss", prev_val_loss)
+                #         print("batch_images", batch_images)
+                #         print("batch_labels", batch_labels)
+                #         print("pred", pred)
+                #         print("num batch labels", (batch_labels.numpy()[:,:,4]).size)
+                #         print("num -1", np.sum(batch_labels.numpy()[:,:,4] == -1))
+                #         print("num not -1", np.sum(batch_labels.numpy()[:,:,4] != -1))
+                #         exit()
+                # v_i += 1
+
                 val_bar.set_description("Epoch: {}/{} | v. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                         epoch, max_num_epochs-1, val_loss_metric.result(), 
                                         loss_record["validation_loss"]["best"]["value"],
@@ -364,11 +489,11 @@ def train(config):
 
             cur_training_loss_is_best = driver_utils.update_loss_tracker_entry(loss_record, "training_loss", cur_training_loss, epoch)
             if cur_training_loss_is_best and config.training["active"]["save_method"] == "best_training_loss":
-                model_io.save_model_weights(centernet, config, seq_num, epoch)
+                model_io.save_model_weights(yolov4, config, seq_num, epoch)
 
             cur_validation_loss_is_best = driver_utils.update_loss_tracker_entry(loss_record, "validation_loss", cur_validation_loss, epoch)
             if cur_validation_loss_is_best and config.training["active"]["save_method"] == "best_validation_loss":
-                model_io.save_model_weights(centernet, config, seq_num, epoch)    
+                model_io.save_model_weights(yolov4, config, seq_num, epoch)    
 
             if driver_utils.stop_early(config, loss_record):
                 break

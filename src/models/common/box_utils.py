@@ -77,6 +77,11 @@ def non_max_suppression(boxes, classes, scores, iou_thresh):
 
 
 
+def clip_boxes_np(boxes, img_width, img_height):
+    """
+        boxes: min_y, min_x, max_y, max_x format
+    """
 
-
-
+    boxes = np.concatenate([np.maximum(boxes[:, :2], [0, 0]),
+                            np.minimum(boxes[:, 2:], [img_height-1, img_width-1])], axis=-1)
+    return boxes

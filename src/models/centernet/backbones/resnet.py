@@ -1,6 +1,51 @@
 import tensorflow as tf
 
 
+
+def build_backbone(config):
+
+    backbone_config = config.arch["backbone_config"]
+    backbone_type = backbone_config["backbone_type"]
+
+    backbone = None
+
+    if backbone_config["keras_prebuilt"]:
+
+        load_imagenet_weights = backbone_config["imagenet_pretrained"]
+        
+        if backbone_type == "resnet50":
+            backbone = keras_resnet50_backbone(load_imagenet_weights)
+
+        elif backbone_type == "resnet101":
+            backbone = keras_resnet101_backbone(load_imagenet_weights)
+
+        elif backbone_type == "resnet152":
+            backbone = keras_resnet152_backbone(load_imagenet_weights)
+
+    else:
+
+        if backbone_type == "resnet18":
+            backbone = resnet18_backbone()
+
+        elif backbone_type == "resnet34":
+            backbone = resnet34_backbone()
+
+        elif backbone_type == "resnet50":
+            backbone = resnet50_backbone()            
+
+        elif backbone_type == "resnet101":
+            backbone = resnet101_backbone()
+
+        elif backbone_type == "resnet152":
+            backbone = resnet152_backbone()
+
+    if backbone is None:
+        raise RuntimeError("Invalid backbone configuration: '{}'.".format(backbone_config))
+
+    return backbone
+
+
+
 class BasicBlock(tf.keras.layers.Layer):
     def __init__(self, filters, stride=1):
         super(BasicBlock, self).__init__()

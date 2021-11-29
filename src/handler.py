@@ -1,17 +1,12 @@
 import os
 
 from models.common import model_interface, group_interface
-from view_results import view_results
 import image_set
-import extract_regions
-
 
 def handle_request(req):
 
-
     req_type = req["request_type"]
     req_args = req["request_args"]
-
 
     if req_type == "register_image_set":
         image_set.register_image_set(req_args)
@@ -28,8 +23,8 @@ def handle_request(req):
     elif req_type == "run_group":
         group_interface.run_group(req_args)
 
-    elif req_type == "rerun_group":
-        group_interface.rerun_group(req_args)
+    elif req_type == "resume_group":
+        group_interface.resume_group(req_args)
 
     elif req_type == "destroy_group":
         group_interface.destroy_group(req_args)

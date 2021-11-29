@@ -12,84 +12,113 @@ from io_utils import tf_record_io
 
 
 
-def preprocess_data(sample, augment):
-    image = sample["image"]
-    bbox = box_utils.swap_xy_tf(sample["objects"]["bbox"])
-    class_id = tf.cast(sample["objects"]["label"], dtype=tf.int32)
+# def preprocess_data(sample, augment):
+#     image = sample["image"]
+#     bbox = box_utils.swap_xy_tf(sample["objects"]["bbox"])
+#     class_id = tf.cast(sample["objects"]["label"], dtype=tf.int32)
 
-    if augment:
-        image, bbox = random_flip_horizontal(image, bbox)
+#     if augment:
+#         image, bbox = random_flip_horizontal(image, bbox)
 
-    image, image_shape, _ = resize_and_pad_image(image, jitter=None)
+#     image, image_shape, _ = resize_and_pad_image(image, jitter=None)
     
-    bbox = tf.stack(
-        [
-            bbox[:, 0] * image_shape[1],
-            bbox[:, 1] * image_shape[0],
-            bbox[:, 2] * image_shape[1],
-            bbox[:, 3] * image_shape[0],
-        ],
-        axis=-1,
-    )
-    bbox = box_utils.convert_to_xywh_tf(bbox)
-    return image, bbox, class_id
+#     bbox = tf.stack(
+#         [
+#             bbox[:, 0] * image_shape[1],
+#             bbox[:, 1] * image_shape[0],
+#             bbox[:, 2] * image_shape[1],
+#             bbox[:, 3] * image_shape[0],
+#         ],
+#         axis=-1,
+#     )
+#     bbox = box_utils.convert_to_xywh_tf(bbox)
+#     return image, bbox, class_id
 
 
-def prepare_dataset_for_training(dataset, config, shuffle, augment):
+# def prepare_dataset_for_training(dataset, config, shuffle, augment):
 
-    autotune = tf.data.experimental.AUTOTUNE
-    label_encoder = LabelEncoder()
+#     autotune = tf.data.experimental.AUTOTUNE
+#     label_encoder = LabelEncoder()
 
-    dataset = dataset.map(lambda x: preprocess_data(x, augment), num_parallel_calls=autotune)
-    if shuffle:
-        dataset = dataset.shuffle(8 * config.train_batch_size)
-    dataset = dataset.padded_batch(batch_size=config.train_batch_size, padding_values=(0.0, 1e-8, -1), drop_remainder=True)
-    dataset = dataset.map(label_encoder.encode_batch, num_parallel_calls=autotune)
-    dataset = dataset.apply(tf.data.experimental.ignore_errors())
-    dataset = dataset.prefetch(autotune)
-    return dataset
+#     dataset = dataset.map(lambda x: preprocess_data(x, augment), num_parallel_calls=autotune)
+#     if shuffle:
+#         dataset = dataset.shuffle(8 * config.train_batch_size)
+#     dataset = dataset.padded_batch(batch_size=config.train_batch_size, padding_values=(0.0, 1e-8, -1), drop_remainder=True)
+#     dataset = dataset.map(label_encoder.encode_batch, num_parallel_calls=autotune)
+#     dataset = dataset.apply(tf.data.experimental.ignore_errors())
+#     dataset = dataset.prefetch(autotune)
+#     return dataset
 
 
 
 class DataLoader(ABC):
 
-    def __init__(self, tf_record_path, config):
+    def __init__(self, tf_record_paths, config):
         super().__init__()
-        self.tf_record_path = tf_record_path
-        self.input_img_min_side = config.input_img_min_side
-        self.input_img_max_side = config.input_img_max_side
+        self.tf_record_paths = tf_record_paths
+        #self.input_img_min_side = config.input_img_min_side
+        #self.input_img_max_side = config.input_img_max_side
+        self.input_img_shape = config.arch["input_img_shape"]
         self.smallest_fmap_stride = 128.0
+
+
+
+    def get_model_input_shape(self):
+
+        stride = self.smallest_fmap_stride
+        padded_img_shape = tf.cast(tf.math.ceil(np.array(self.input_img_shape[:2]) / stride) * stride, dtype=tf.int32)
+        return [*padded_img_shape, self.input_img_shape[2]]
 
     def _img_preprocess(self, img):
 
-        min_side = self.input_img_min_side
-        max_side = self.input_img_max_side
-        stride = self.smallest_fmap_stride
+        stride = tf.cast(self.smallest_fmap_stride, dtype=tf.float32)
+        patch_wh = tf.cast(tf.shape(img)[:2], dtype=tf.float32)
+
+        img = tf.image.resize(img, self.input_img_shape[:2]) #tf.cast(self.input_img_shape[:2], dtype=tf.int32))
+        resized_img_wh = tf.cast(tf.shape(img)[:2], dtype=tf.float32)#, dtype=tf.int32)
+        
+        padded_img_wh = tf.cast(tf.math.ceil(resized_img_wh / stride) * stride, dtype=tf.int32)
+        img = tf.image.pad_to_bounding_box(img, 0, 0, padded_img_wh[0], padded_img_wh[1])   
+
+        
+        ratio = patch_wh / resized_img_wh
+
+        #print("patch_wh", patch_wh)
+        #print("padded_img_wh", padded_img_wh)
+        #print("ratio", ratio)
+
+        return img, resized_img_wh, ratio
+
+    # def _img_preprocess(self, img):
+
+    #     min_side = self.input_img_min_side
+    #     max_side = self.input_img_max_side
+    #     stride = self.smallest_fmap_stride
 
 
-        img_shape = tf.cast(tf.shape(img)[:2], dtype=tf.float32)
+    #     img_shape = tf.cast(tf.shape(img)[:2], dtype=tf.float32)
 
-        ratio = min_side / tf.reduce_min(img_shape)
-        if ratio * tf.reduce_max(img_shape) > max_side:
-            ratio = max_side / tf.reduce_max(img_shape)
+    #     ratio = min_side / tf.reduce_min(img_shape)
+    #     if ratio * tf.reduce_max(img_shape) > max_side:
+    #     #    ratio = max_side / tf.reduce_max(img_shape)
 
-        img_shape = ratio * img_shape
-        img = tf.image.resize(img, tf.cast(img_shape, dtype=tf.int32))
-        padded_img_shape = tf.cast(tf.math.ceil(img_shape / stride) * stride, dtype=tf.int32)
-        img = tf.image.pad_to_bounding_box(img, 0, 0, padded_img_shape[0], padded_img_shape[1])
+    #     img_shape = ratio * img_shape
+    #     img = tf.image.resize(img, tf.cast(img_shape, dtype=tf.int32))
+    #     padded_img_shape = tf.cast(tf.math.ceil(img_shape / stride) * stride, dtype=tf.int32)
+    #     img = tf.image.pad_to_bounding_box(img, 0, 0, padded_img_shape[0], padded_img_shape[1])
 
-        ratio = [1.0 / ratio, 1.0 / ratio]
+    #     ratio = [1.0 / ratio, 1.0 / ratio]
 
-        return img, img_shape, ratio
+    #     return img, img_shape, ratio
 
 class InferenceDataLoader(DataLoader):
 
-    def __init__(self, tf_record_path, config):
-        super().__init__(tf_record_path, config)
-        self.batch_size = config.batch_size
+    def __init__(self, tf_record_paths, config):
+        super().__init__(tf_record_paths, config)
+        self.batch_size = config.inference["active"]["batch_size"]
 
     def create_dataset(self):
-        dataset = tf.data.TFRecordDataset(filenames=[self.tf_record_path])
+        dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
         dataset_size = np.sum([1 for _ in dataset])
         dataset = dataset.batch(batch_size=self.batch_size)
 
@@ -122,21 +151,26 @@ class InferenceDataLoader(DataLoader):
 
 class TrainDataLoader(DataLoader):
 
-    def __init__(self, tf_record_path, config, shuffle, augment):
-        super().__init__(tf_record_path, config)
-        self.batch_size = config.batch_size
+    def __init__(self, tf_record_paths, config, shuffle, augment):
+        super().__init__(tf_record_paths, config)
+        self.batch_size = config.training["active"]["batch_size"]
         self.label_encoder = LabelEncoder()
         self.shuffle = shuffle
         self.augment = augment
-        self.data_augmentations = config.data_augmentations
+        self.data_augmentations = config.training["active"]["data_augmentations"]
 
 
-    def create_batched_dataset(self):
+    def create_batched_dataset(self, take_percent=100):
 
-        dataset = tf.data.TFRecordDataset(filenames=[self.tf_record_path])
-        dataset_size = np.sum([1 for _ in dataset])
+        dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
+        
+        dataset_size = np.sum([1 for _ in dataset]) 
         if self.shuffle:
             dataset = dataset.shuffle(dataset_size)
+
+        dataset = dataset.take(dataset_size * (take_percent / 100))
+        dataset_size = np.sum([1 for _ in dataset])
+
         dataset = dataset.batch(batch_size=self.batch_size)
 
         autotune = tf.data.experimental.AUTOTUNE
@@ -182,13 +216,13 @@ class TrainDataLoader(DataLoader):
 
 
 
-    def _box_preprocess(self, img_shape, boxes):
+    def _box_preprocess(self, resized_img_wh, boxes):
         boxes = tf.stack(
             [
-                boxes[:, 0] * img_shape[1],
-                boxes[:, 1] * img_shape[0],
-                boxes[:, 2] * img_shape[1],
-                boxes[:, 3] * img_shape[0]
+                boxes[:, 0] * resized_img_wh[1],
+                boxes[:, 1] * resized_img_wh[0],
+                boxes[:, 2] * resized_img_wh[1],
+                boxes[:, 3] * resized_img_wh[0]
             ],
             axis=-1
         )
@@ -200,17 +234,33 @@ class TrainDataLoader(DataLoader):
         img_path = bytes.decode((sample["patch_path"]).numpy())
         #img_raw = tf.io.read_file(filename=img_path)
         #img = tf.io.decode_image(contents=img_raw, channels=self.input_img_channels, dtype=tf.float32, expand_animations=False)
-        img = tf.cast(cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB), dtype=tf.float32)
-        boxes = box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))
-        classes = tf.sparse.to_dense(sample["patch_classes"])
+        img = (cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)).astype(np.uint8)
+        boxes = (box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))).numpy().astype(np.float32)
+        classes = tf.sparse.to_dense(sample["patch_classes"]).numpy().astype(np.float32)
 
+        # print("before augment:")
+        # print("img.dtype", img.dtype)
+        #print("boxes", boxes)
+        #print("classes", classes)
 
         if self.augment:
-            img, boxes = data_augment.apply_augmentations(self.data_augmentations, img, boxes)
+            img, boxes, classes = data_augment.apply_augmentations(self.data_augmentations, img, boxes, classes)
 
-        img, img_shape, ratio = self._img_preprocess(img)
-        boxes = self._box_preprocess(img_shape, boxes)
-        classes = tf.cast(classes, dtype=tf.int32)
+
+        # print("after augment:")
+        # print("img.dtype", img.dtype)
+        #print("boxes", boxes)
+        #print("classes", classes)
+
+
+
+        img = tf.convert_to_tensor(img, dtype=tf.float32)
+        boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
+        classes = tf.convert_to_tensor(classes, dtype=tf.float32)
+
+        img, resized_img_wh, ratio = self._img_preprocess(img)
+        boxes = self._box_preprocess(resized_img_wh, boxes)
+        #classes = tf.cast(classes, dtype=tf.int32)
 
         return img, boxes, classes
 

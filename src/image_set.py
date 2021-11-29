@@ -14,13 +14,14 @@ from io_utils import json_io, xml_io
 
 class ImgSet(object):
 
-    def __init__(self, trial_name, mission_date):
+    def __init__(self, farm_name, field_name, mission_date):
 
         usr_data_root = os.path.join("usr", "data")
 
-        self.trial_name = trial_name
+        self.farm_name = farm_name
+        self.field_name = field_name
         self.mission_date = mission_date
-        self.root_dir = os.path.join(usr_data_root, "image_sets", trial_name, mission_date)
+        self.root_dir = os.path.join(usr_data_root, "image_sets", farm_name, field_name, mission_date)
         self.img_dir = os.path.join(self.root_dir, "images")
         self.patch_dir = os.path.join(self.root_dir, "patches")
         self.dzi_dir = os.path.join(self.root_dir, "dzi_images")
@@ -44,9 +45,9 @@ class ImgSet(object):
 
         self.class_map = img_set_info["class_map"]
         self.num_classes = img_set_info["num_classes"]
-        img_width, img_height = imagesize.get(img_set_info["training_image_paths"][0])
-        self.img_width = img_width
-        self.img_height = img_height
+        #img_width, img_height = imagesize.get(img_set_info["training_image_paths"][0])
+        #self.img_width = img_width
+        #self.img_height = img_height
 
 class DataSet(object):
 
@@ -90,7 +91,8 @@ def register_image_set(req_args):
 
     logger = logging.getLogger(__name__)
 
-    trial_name = req_args["trial_name"]
+    farm_name = req_args["farm_name"]
+    field_name = req_args["field_name"]
     mission_date = req_args["mission_date"]
     usr_data_root = os.path.join("usr", "data")
 
@@ -104,16 +106,13 @@ def register_image_set(req_args):
     usr_records_dir = os.path.join(usr_data_root, "records")
     if not os.path.exists(usr_records_dir):
         os.makedirs(usr_records_dir)
-    group_lookup_path = os.path.join(usr_records_dir, "group_lookup.json")
-    if not os.path.exists(group_lookup_path):
-        json_io.save_json(group_lookup_path, { "groups": {}})
     inference_lookup_path = os.path.join(usr_records_dir, "inference_lookup.json")
     if not os.path.exists(inference_lookup_path):
         json_io.save_json(inference_lookup_path, {"inference_runs": {}})
 
 
 
-    img_set_dir = os.path.join(usr_data_root, "image_sets", trial_name, mission_date)
+    img_set_dir = os.path.join(usr_data_root, "image_sets", farm_name, field_name, mission_date)
 
     img_set_img_dir = os.path.join(img_set_dir, "images")
     img_set_patch_dir = os.path.join(img_set_dir, "patches")

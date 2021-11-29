@@ -58,9 +58,9 @@ class RetinaNetLoss(tf.losses.Loss):
 
     def __init__(self, config):
         super(RetinaNetLoss, self).__init__(reduction="auto", name="RetinaNetLoss")
-        self._clf_loss = RetinaNetClassificationLoss(config.alpha, config.gamma)
-        self._box_loss = RetinaNetBoxLoss(config.delta)
-        self._num_classes = config.img_set.num_classes
+        self.clf_loss = RetinaNetClassificationLoss(config.arch["alpha"], config.arch["gamma"])
+        self.box_loss = RetinaNetBoxLoss(config.arch["delta"])
+        self.num_classes = config.arch["num_classes"]
 
     def call(self, y_true, y_pred):
         y_pred = tf.cast(y_pred, dtype=tf.float32)
@@ -68,14 +68,14 @@ class RetinaNetLoss(tf.losses.Loss):
         box_predictions = y_pred[:, :, :4]
         cls_labels = tf.one_hot(
             tf.cast(y_true[:, :, 4], dtype=tf.int32),
-            depth=self._num_classes,
+            depth=self.num_classes,
             dtype=tf.float32,
         )
         cls_predictions = y_pred[:, :, 4:]
         positive_mask = tf.cast(tf.greater(y_true[:, :, 4], -1.0), dtype=tf.float32)
         ignore_mask = tf.cast(tf.equal(y_true[:, :, 4], -2.0), dtype=tf.float32)
-        clf_loss = self._clf_loss(cls_labels, cls_predictions)
-        box_loss = self._box_loss(box_labels, box_predictions)
+        clf_loss = self.clf_loss(cls_labels, cls_predictions)
+        box_loss = self.box_loss(box_labels, box_predictions)
         clf_loss = tf.where(tf.equal(ignore_mask, 1.0), 0.0, clf_loss)
         box_loss = tf.where(tf.equal(positive_mask, 1.0), box_loss, 0.0)
 

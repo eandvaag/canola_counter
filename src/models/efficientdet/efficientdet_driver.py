@@ -10,7 +10,7 @@ import time
 import extract_patches as ep
 
 import models.common.box_utils as box_utils
-import models.common.model_load as model_load
+#import models.common.model_load as model_load
 
 from models.efficientdet.loss import EfficientDetLoss
 from models.efficientdet.efficientdet import EfficientDet

@@ -23,7 +23,8 @@ def draw_boxes_on_img(img_array,
                       display_class=True,
                       display_score=True):
 
-    rev_class_map = dict([(v, k) for k, v in class_map.items()])
+    if display_class:
+        rev_class_map = dict([(v, k) for k, v in class_map.items()])
 
     out_array = np.copy(img_array)
 
@@ -51,7 +52,7 @@ def draw_boxes_on_img(img_array,
             if display_class and display_score:
                 label = rev_class_map[pred_class] + ": " + str(round(pred_score, 2))
             elif display_class:
-                label = pred_class
+                label = rev_class_map[pred_class]
             elif display_score:
                 label = str(round(pred_score, 2))
 

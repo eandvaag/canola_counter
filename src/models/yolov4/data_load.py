@@ -6,7 +6,7 @@ import cv2
 import models.common.box_utils as box_utils
 import models.common.data_augment as data_augment
 
-from models.centernet.encode import LabelEncoder
+from models.yolov4.encode import LabelEncoder
 
 from io_utils import tf_record_io
 
@@ -23,6 +23,9 @@ class DataLoader(ABC):
         ratio = np.array(img.shape[:2]) / np.array(self.input_img_shape[:2])
         img = tf.image.resize(images=img, size=self.input_img_shape[:2])
         return img, ratio
+
+    def get_model_input_shape(self):
+        return self.input_img_shape
 
 
 class InferenceDataLoader(DataLoader):
@@ -82,12 +85,7 @@ class TrainDataLoader(DataLoader):
     def create_batched_dataset(self, take_percent=100):
 
         dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
-        #print("(1) DATASET size is ", np.sum([1 for _ in dataset]))
-        #dataset = dataset[:self.pct_of_training_set_used]
-
-
-        #print("(3) DATASET size is ", np.sum([1 for _ in dataset]))
-        #exit()
+        
         dataset_size = np.sum([1 for _ in dataset])
         if self.shuffle:
             dataset = dataset.shuffle(dataset_size)
@@ -117,8 +115,8 @@ class TrainDataLoader(DataLoader):
             batch_classes.append(classes)
 
         batch_imgs = tf.stack(values=batch_imgs, axis=0)
-        batch_boxes = tf.stack(batch_boxes, axis=0)
-        batch_classes = tf.stack(batch_classes, axis=0)
+        #batch_boxes = tf.stack(batch_boxes, axis=0)
+        #batch_classes = tf.stack(batch_classes, axis=0)
 
         return self.label_encoder.encode_batch(batch_imgs, batch_boxes, batch_classes)
 
@@ -140,20 +138,20 @@ class TrainDataLoader(DataLoader):
 
         img = tf.convert_to_tensor(img, dtype=tf.float32)
         boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
-        classes = tf.convert_to_tensor(classes, dtype=tf.float32)
+        classes = tf.convert_to_tensor(classes, dtype=tf.uint8) #tf.float32)
 
 
         img, _ = self._img_preprocess(img)
         boxes = self._box_preprocess(boxes)
 
-        num_boxes = boxes.shape[0]
-        num_pad_boxes = self.max_detections - num_boxes
+        #num_boxes = boxes.shape[0]
+        #num_pad_boxes = self.max_detections - num_boxes
 
-        pad_boxes = np.zeros((num_pad_boxes, 4))
-        pad_classes = np.full(num_pad_boxes, -1)
+        #pad_boxes = np.zeros((num_pad_boxes, 4))
+        #pad_classes = np.full(num_pad_boxes, -1)
 
-        boxes = np.vstack([boxes, pad_boxes]).astype(np.float32)
-        classes = np.concatenate([classes, pad_classes]).astype(np.float32)
+        #boxes = np.vstack([boxes, pad_boxes]).astype(np.float32)
+        #classes = np.concatenate([classes, pad_classes]).astype(np.uint8) #float32)
 
         return img, boxes, classes
 
@@ -171,7 +169,7 @@ class TrainDataLoader(DataLoader):
 
             ], axis=-1)
         )
-
+        boxes = box_utils.convert_to_xywh_tf(boxes)
         return boxes
 
 

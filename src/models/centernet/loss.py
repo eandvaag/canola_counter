@@ -58,15 +58,15 @@ class CenterNetLoss:#(tf.losses.Loss):
 
     def __init__(self, config):
         #super(CenterNetLoss, self).__init__(reduction="", name="CenterNetLoss")
-        self.num_classes = config.num_classes
+        self.num_classes = config.arch["num_classes"]
 
         self.heatmap_loss_obj = CenterNetHeatMapLoss()
         self.offset_loss_obj = CenterNetL1Loss()
         self.size_loss_obj = CenterNetL1Loss()
 
-        self.heatmap_loss_weight = config.heatmap_loss_weight
-        self.offset_loss_weight = config.offset_loss_weight
-        self.size_loss_weight = config.size_loss_weight
+        self.heatmap_loss_weight = config.arch["heatmap_loss_weight"]
+        self.offset_loss_weight = config.arch["offset_loss_weight"]
+        self.size_loss_weight = config.arch["size_loss_weight"]
 
 
 

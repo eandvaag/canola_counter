@@ -1,17 +1,18 @@
 # Supported models
 
 - CenterNet
-	+ Modified ResNet
-		* ResNet50, ResNet101, ResNet152
-	+ Modified EfficientDet BiFPN
-		* D0, D1, D2, D3, D4, D5, D6, D7
+	+ Neck: ResNet Deconvolution
+		- Backbone: ResNets: ResNet50, ResNet101, ResNet152
+
+	+ Neck: EfficientDet BiFPN
+		- Backbone: EfficientNets: D0, D1, D2, D3, D4, D5, D6, D7
 
 
 - RetinaNet
-	+ Original FPN
-		* ResNet50, ResNet101, ResNet152
+	+ Neck: FPN
+		- Backbone: ResNets: ResNet50, ResNet101, ResNet152
 
 
-- EfficientDet
-	+ Original EfficientDet BiFPN
-		* D0, D1, D2, D3, D4, D5, D6, D7
+- YOLOv4
+	+ Neck: SPP-PAN
+		- Backbone: CSP-Darknet53
