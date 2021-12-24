@@ -15,7 +15,7 @@ class LabelEncoder:
         self.anchors_per_scale = config.arch["anchors_per_scale"]
         self.input_img_shape = config.arch["input_img_shape"]
         assert self.input_img_shape[0] == self.input_img_shape[1]
-        self.output_dim = self.input_img_shape[0] // self.strides # a 3x1 array
+        self.output_dim = self.input_img_shape[0] // self.strides # an nx1 array, n == num_scales
         self.max_detections_per_scale = config.arch["max_detections_per_scale"]
         self.num_scales = config.arch["num_scales"]
         #self.batch_size = config.training["active"]["batch_size"]
@@ -47,7 +47,7 @@ class LabelEncoder:
             delta = 0.01
             smooth_onehot = onehot * (1 - delta) + delta * uniform_distribution
 
-            # a 3x4 array -- each row contains the scaled xywh box coordinates for that scale of the pyramid
+            # an nx4 array -- each row contains the scaled xywh box coordinates for that scale of the pyramid
             # these are 'pixel coordinates' (though they are floats)
             bbox_xywh_scaled = 1.0 * bbox_xywh[np.newaxis, :] / self.strides[:, np.newaxis]
             
@@ -57,7 +57,7 @@ class LabelEncoder:
             exist_positive = False
             for i in range(self.num_scales):
 
-                # anchors xywh is 3x4
+                # anchors xywh is nx4
                 anchors_xywh = np.zeros((self.anchors_per_scale, 4))
                 # round down the scaled xy centre of the box to the nearest integer, then add 0.5 to those rounded values
                 # this will be the xy position of the closest anchor at that level of pyramid

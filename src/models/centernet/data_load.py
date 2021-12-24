@@ -90,7 +90,7 @@ class TrainDataLoader(DataLoader):
         #exit()
         dataset_size = np.sum([1 for _ in dataset])
         if self.shuffle:
-            dataset = dataset.shuffle(dataset_size)
+            dataset = dataset.shuffle(dataset_size, reshuffle_each_iteration=True)
 
         dataset = dataset.take(dataset_size * (take_percent / 100))
         dataset_size = np.sum([1 for _ in dataset])

@@ -113,8 +113,6 @@ def run_group(req_args):
     group_config["model_info"] = {}
 
     group_name = group_config["group_name"]
-    group_description = group_config["group_description"]
-
 
     logger.info("Started processing group '{}' (uuid: {}).".format(group_name, group_uuid))
 
@@ -130,34 +128,43 @@ def run_group(req_args):
     else:
         outer_loop_range = 1
 
-
+    exception_handle_method = group_config["on_exception"] if "on_exception" in group_config else "raise"
     model_index = 0
-    
-    for _ in range(outer_loop_range):
-        for _ in range(group_config["replications"]):
+    try:
+        for _ in range(outer_loop_range):
+            for _ in range(group_config["replications"]):
 
-            arch_config, training_config, inference_config = create_model_configs(group_config, 
-                                                                                  model_index)
+                arch_config, training_config, inference_config = create_model_configs(group_config, 
+                                                                                      model_index)
 
-            m = group_config["model_info"][model_index]
+                m = group_config["model_info"][model_index]
 
-            model_interface.create_model(arch_config)
-            m["stage"] = FINISHED_ARCH
-            json_io.save_json(group_config_path, group_config)
-
-
-            model_interface.train_model(training_config)
-            m["stage"] = FINISHED_TRAINING
-            json_io.save_json(group_config_path, group_config)
+                model_interface.create_model(arch_config)
+                m["stage"] = FINISHED_ARCH
+                json_io.save_json(group_config_path, group_config)
 
 
-            model_interface.run_inference(inference_config)
-            m["stage"] = FINISHED_INFERENCE
-            json_io.save_json(group_config_path, group_config)
+                model_interface.train_model(training_config)
+                m["stage"] = FINISHED_TRAINING
+                json_io.save_json(group_config_path, group_config)
 
-            logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
-            
-            model_index += 1
+
+                model_interface.run_inference(inference_config)
+                m["stage"] = FINISHED_INFERENCE
+                json_io.save_json(group_config_path, group_config)
+
+                logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
+                
+                model_index += 1
+
+    except Exception as e:
+        if exception_handle_method == "raise":
+            raise e
+        elif exception_handle_method == "destroy_and_raise":
+            destroy_group({"group_uuid": group_uuid})
+            raise e
+        else:
+            raise e
 
     logger.info("Finished processing group '{}' (uuid: {}).".format(group_config["group_name"], group_uuid))
 
@@ -170,6 +177,9 @@ def resume_group(req_args):
     group_config_path = os.path.join("usr", "data", "groups", group_uuid + ".json")
     group_config = json_io.load_json(group_config_path)
 
+    group_name = group_config["group_name"]
+
+    logger.info("Resuming processing of group '{}' (uuid: {}).".format(group_name, group_uuid))
 
     if "variation_config" in group_config:
         outer_loop_range = len(group_config["variation_config"]["param_values"])
@@ -177,35 +187,46 @@ def resume_group(req_args):
         outer_loop_range = 1
 
 
+    exception_handle_method = group_config["on_exception"] if "on_exception" in group_config else "raise"
     model_index = 0
-    for _ in range(outer_loop_range):
-        for _ in range(group_config["replications"]):
+    try:
+        for _ in range(outer_loop_range):
+            for _ in range(group_config["replications"]):
 
 
-            arch_config, training_config, inference_config = create_model_configs(group_config, 
-                                                                                  model_index)
+                arch_config, training_config, inference_config = create_model_configs(group_config, 
+                                                                                      model_index)
 
 
-            m = group_config["model_info"][model_index]
-            
-            if m["stage"] == ADDED_TO_GROUP:
-                model_interface.create_model(arch_config, on_found="replace")
-                m["stage"] = FINISHED_ARCH
-                json_io.save_json(group_config_path, group_config)
+                m = group_config["model_info"][model_index]
+                
+                if m["stage"] == ADDED_TO_GROUP:
+                    model_interface.create_model(arch_config, on_found="replace")
+                    m["stage"] = FINISHED_ARCH
+                    json_io.save_json(group_config_path, group_config)
 
-            if m["stage"] == FINISHED_ARCH:
-                model_interface.train_model(training_config, on_found="replace")
-                m["stage"] = FINISHED_TRAINING
-                json_io.save_json(group_config_path, group_config)
+                if m["stage"] == FINISHED_ARCH:
+                    model_interface.train_model(training_config, on_found="replace")
+                    m["stage"] = FINISHED_TRAINING
+                    json_io.save_json(group_config_path, group_config)
 
-            if m["stage"] == FINISHED_TRAINING:
-                model_interface.run_inference(inference_config, on_found="replace")
-                m["stage"] = FINISHED_INFERENCE
-                json_io.save_json(group_config_path, group_config)
+                if m["stage"] == FINISHED_TRAINING:
+                    model_interface.run_inference(inference_config, on_found="replace")
+                    m["stage"] = FINISHED_INFERENCE
+                    json_io.save_json(group_config_path, group_config)
 
-            logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
+                logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
 
-            model_index += 1
+                model_index += 1
+
+    except Exception as e:
+        if exception_handle_method == "raise":
+            raise e
+        elif exception_handle_method == "destroy_and_raise":
+            destroy_group({"group_uuid": group_uuid})
+            raise e
+        else:
+            raise e
 
     logger.info("Finished processing group '{}' (uuid: {}).".format(group_config["group_name"], group_uuid))
 

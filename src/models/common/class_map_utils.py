@@ -5,18 +5,20 @@ from io_utils import json_io
 from image_set import ImgSet
 
 
-def create_and_save_class_map_data(training_config):
 
-    class_map = {}
-    class_num = 0
-    for seq_num in range(len(training_config["training_sequence"])):
-        for training_img_set_conf in training_config["training_sequence"][seq_num]["image_sets"]:
-            img_set = ImgSet(training_img_set_conf["farm_name"], training_img_set_conf["field_name"], 
-                             training_img_set_conf["mission_date"])
-            for class_name in img_set.class_map.keys():
-                if class_name not in class_map:
-                    class_map[class_name] = class_num
-                    class_num += 1
+def create_and_save_class_map_data(training_config, class_map=None):
+
+    if class_map is None:
+        class_map = {}
+        class_num = 0
+        for seq_num in range(len(training_config["training_sequence"])):
+            for training_img_set_conf in training_config["training_sequence"][seq_num]["image_sets"]:
+                img_set = ImgSet(training_img_set_conf["farm_name"], training_img_set_conf["field_name"], 
+                                 training_img_set_conf["mission_date"])
+                for class_name in img_set.class_map.keys():
+                    if class_name not in class_map:
+                        class_map[class_name] = class_num
+                        class_num += 1
 
 
     reverse_class_map = {v: k for k, v in class_map.items()}

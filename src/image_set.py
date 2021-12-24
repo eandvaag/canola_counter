@@ -44,10 +44,19 @@ class ImgSet(object):
            raise RuntimeError("Training, validation, and test datasets must only contain annotated images.")
 
         self.class_map = img_set_info["class_map"]
+        self.reverse_class_map = {v: k for k, v in self.class_map.items()}
         self.num_classes = img_set_info["num_classes"]
         #img_width, img_height = imagesize.get(img_set_info["training_image_paths"][0])
         #self.img_width = img_width
         #self.img_height = img_height
+        #self.flight_metadata = img_set_info["flight_metadata"]
+
+    def get_box_counts(self):
+
+        box_counts = {}
+        for dataset_name, dataset in self.datasets.items():
+            box_counts[dataset_name] = dataset.get_box_counts(self.class_map)
+        return box_counts
 
 class DataSet(object):
 
@@ -65,6 +74,11 @@ class DataSet(object):
 
         self.name = name
 
+    def get_box_counts(self, class_map):
+        xml_paths = [img.xml_path for img in self.imgs if img.is_annotated]
+        box_counts = xml_io.get_box_counts(xml_paths, class_map)
+        return box_counts
+
 
 
 class Img(object):
@@ -78,11 +92,39 @@ class Img(object):
 
 
     def load_img_array(self):
-        return cv2.imread(self.img_path)
+        return cv2.cvtColor(cv2.imread(self.img_path), cv2.COLOR_BGR2RGB)
 
+    def get_wh(self):
+        w, h = imagesize.get(self.img_path)
+        return w, h
 
+    def get_gsd(self, flight_metadata=None, prioritize_exif=False):
+        metadata = exif_io.get_exif_metadata(self.img_path)
 
+        # TODO
+        #sensor_x_res = metadata["EXIF:FocalPlaneXResolution"]
+        #sensor_y_res = metadata["EXIF:FocalPlaneYResolution"]
+        #focal_length = metadata["EXIF:FocalLength"]
 
+        flight_height = flight_metadata["flight_height_m"]
+        sensor_height = flight_metadata["sensor_height_mm"] * 1000
+        sensor_width = flight_metadata["sensor_width_mm"] * 1000
+        focal_length = flight_metadata["focal_length_mm"] * 1000
+
+        img_width, img_height = self.get_wh()
+
+        gsd_h = (flight_height * sensor_height) / (focal_length * img_height)
+        gsd_w = (flight_height * sensor_width) / (focal_length * img_width)
+        gsd = max(gsd_h, gsd_w)
+        
+        return gsd
+
+    def get_area_m2(self, flight_metadata=None, prioritize_exif=False):
+
+        gsd = self.get_gsd(flight_metadata=flight_metadata, prioritize_exif=prioritize_exif)
+        img_width, img_height = self.get_wh()
+        area_m2 = (img_width * gsd) * (img_height * gsd)
+        return area_m2
 
 
 
@@ -106,6 +148,9 @@ def register_image_set(req_args):
     usr_records_dir = os.path.join(usr_data_root, "records")
     if not os.path.exists(usr_records_dir):
         os.makedirs(usr_records_dir)
+    usr_ensembles_dir = os.path.join(usr_data_root, "ensembles")
+    if not os.path.exists(usr_ensembles_dir):
+        os.makedirs(usr_ensembles_dir)
     inference_lookup_path = os.path.join(usr_records_dir, "inference_lookup.json")
     if not os.path.exists(inference_lookup_path):
         json_io.save_json(inference_lookup_path, {"inference_runs": {}})
@@ -149,7 +194,7 @@ def register_image_set(req_args):
                                           name.endswith("XML") or name.endswith("xml")]
 
     img_set_config["num_images"] = len(img_set_config["all_image_paths"])
-    img_set_config["num_annotations"] = len(img_set_config["all_annotation_paths"])
+    img_set_config["num_annotated_images"] = len(img_set_config["all_annotation_paths"])
 
 
     if "training_images" in req_args and \
@@ -178,16 +223,20 @@ def register_image_set(req_args):
         raise RuntimeError("Missing information needed to create dataset splits.")
 
 
+    img_set_config["num_training_images"] = len(img_set_config["training_image_paths"])
+    img_set_config["num_validation_images"] = len(img_set_config["validation_image_paths"])
+    img_set_config["num_test_images"] = len(img_set_config["test_image_paths"])
+
     img_set_config["class_map"] = xml_io.create_class_map(img_set_config["all_annotation_paths"])
     img_set_config["num_classes"] = len(img_set_config["class_map"].keys())
 
 
 
-    all_img_paths = []
-    all_img_paths.extend(img_set_config["training_image_paths"])
-    all_img_paths.extend(img_set_config["validation_image_paths"]) 
-    all_img_paths.extend(img_set_config["test_image_paths"])
-
+    #all_img_paths = []
+    #all_img_paths.extend(img_set_config["training_image_paths"])
+    #all_img_paths.extend(img_set_config["validation_image_paths"]) 
+    #all_img_paths.extend(img_set_config["test_image_paths"])
+    all_img_paths = img_set_config["all_image_paths"]
 
     conversion_tmp_dir = os.path.join(img_set_dzi_dir, "conversion_tmp")
     os.mkdir(conversion_tmp_dir)
@@ -206,4 +255,9 @@ def register_image_set(req_args):
 
     os.rmdir(conversion_tmp_dir)
 
+    json_io.save_json(img_set_config_path, img_set_config)
+
+    img_set = ImgSet(farm_name, field_name, mission_date)
+    box_counts = img_set.get_box_counts()
+    img_set_config["box_counts"] = box_counts
     json_io.save_json(img_set_config_path, img_set_config)

@@ -90,7 +90,8 @@ def generate_predictions(config):
 
             model_io.load_all_weights(centernet, config)
 
-            predictions = {"image_predictions": {}, "patch_predictions": {}}
+            predictions = driver_utils.create_predictions_skeleton(img_set, dataset)
+            
             steps = np.sum([1 for i in tf_dataset])
 
 
@@ -165,57 +166,12 @@ def generate_predictions(config):
             driver_utils.clip_img_boxes(predictions["image_predictions"])
             driver_utils.apply_nms_to_img_boxes(predictions["image_predictions"], 
                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
-            driver_utils.add_class_detections(predictions["image_predictions"], config)
+            driver_utils.add_class_detections(predictions["image_predictions"], img_set)
 
-            # for img_name in predictions["image_predictions"].keys():
-            #     if len(predictions["image_predictions"][img_name]["pred_img_abs_boxes"]) > 0:
-            #         pred_img_abs_boxes = np.array(predictions["image_predictions"][img_name]["pred_img_abs_boxes"])
-            #         pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, img_set.img_width, img_set.img_height)
-            #         predictions["image_predictions"][img_name]["pred_img_abs_boxes"] = pred_img_abs_boxes.tolist()
-
-
-            #         nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression(
-            #                                                 pred_img_abs_boxes,
-            #                                                 np.array(predictions["image_predictions"][img_name]["pred_classes"]),
-            #                                                 np.array(predictions["image_predictions"][img_name]["pred_scores"]),
-            #                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
-            #     else:
-            #         nms_boxes = np.array([])
-            #         nms_classes = np.array([])
-            #         nms_scores = np.array([])
-
-            #     predictions["image_predictions"][img_name]["nms_pred_img_abs_boxes"] = nms_boxes.tolist()
-            #     predictions["image_predictions"][img_name]["nms_pred_classes"] = nms_classes.tolist()
-            #     predictions["image_predictions"][img_name]["nms_pred_scores"] = nms_scores.tolist()
-            #     unique, counts = np.unique(nms_classes, return_counts=True)
-            #     class_num_to_count = dict(zip(unique, counts))
-            #     pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
-            #     pred_class_boxes = {}
-            #     for class_num in class_num_to_count.keys():
-            #         class_name = config.arch["reverse_class_map"][class_num]
-            #         pred_class_counts[class_name] = int(class_num_to_count[class_num])
-            #         pred_class_boxes[class_name] = (nms_boxes[class_num == nms_classes]).tolist()
-
-
-            #     predictions["image_predictions"][img_name]["pred_class_counts"] = pred_class_counts
-            #     predictions["image_predictions"][img_name]["pred_class_boxes"] = pred_class_boxes
-
-
-            total_inference_time = float(np.sum(inference_times))
-            per_patch_inference_time = float(total_inference_time / tf_dataset_size)
-            per_image_inference_time = float(total_inference_time / len(predictions["image_predictions"]))
-
-            predictions["metrics"] = {}
-            predictions["metrics"]["Total Inference Time (s)"] = {}
-            predictions["metrics"]["Total Inference Time (s)"]["---"] = total_inference_time
-            predictions["metrics"]["Per-Image Inference Time (s)"] = {}
-            predictions["metrics"]["Per-Image Inference Time (s)"]["---"] = per_image_inference_time
-            predictions["metrics"]["Per-Patch Inference Time (s)"] = {}
-            predictions["metrics"]["Per-Patch Inference Time (s)"]["---"] = per_patch_inference_time
-            #predictions["metrics"]["Number of Model Parameters"]["---"] = 
-
+            inference_metrics.collect_statistics(predictions, img_set, dataset,
+                                                 inference_times=inference_times)
             if dataset.is_annotated:
-                inference_metrics.collect_metrics(predictions, dataset, config)
+                inference_metrics.collect_metrics(predictions, img_set, dataset)
 
             pred_dirname = os.path.basename(patch_dir)
             pred_dir = os.path.join(config.model_dir, "predictions", pred_dirname)
@@ -224,7 +180,7 @@ def generate_predictions(config):
             json_io.save_json(pred_path, predictions)
 
             excel_path = os.path.join(pred_dir, "results.xlsx")
-            driver_utils.output_excel(excel_path, predictions, img_set, dataset_name, config)
+            driver_utils.output_excel(excel_path, predictions, img_set, dataset_name)
 
             inference_entry = {
                 "farm_name": farm_name,
@@ -265,8 +221,10 @@ def train(config):
             validation_patch_dir, _ = driver_utils.create_patches(
                 config.training["active"]["validation_patch_extraction_params"], img_set, "validation")
 
-            training_tf_record_paths.append(os.path.join(training_patch_dir, "patches-with-boxes-record.tfrec"))
-            validation_tf_record_paths.append(os.path.join(validation_patch_dir, "patches-with-boxes-record.tfrec"))
+            #training_tf_record_paths.append(os.path.join(training_patch_dir, "patches-with-boxes-record.tfrec"))
+            #validation_tf_record_paths.append(os.path.join(validation_patch_dir, "patches-with-boxes-record.tfrec"))
+            training_tf_record_paths.append(os.path.join(training_patch_dir, "patches-record.tfrec"))
+            validation_tf_record_paths.append(os.path.join(validation_patch_dir, "patches-record.tfrec"))
 
 
         train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
@@ -274,7 +232,8 @@ def train(config):
                                                 take_percent=config.training["active"]["percent_of_training_set_used"])
 
         val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
-        val_dataset, val_dataset_size = val_data_loader.create_batched_dataset()
+        val_dataset, val_dataset_size = val_data_loader.create_batched_dataset(
+                                                take_percent=config.training["active"]["percent_of_validation_set_used"])
 
 
         
@@ -307,6 +266,8 @@ def train(config):
                 pred = centernet(batch_images, training=True)
                 loss_value = loss_fn(y_true=batch_labels, y_pred=pred)
 
+            if np.isnan(loss_value):
+                raise RuntimeError("NaN loss has occurred.")
             gradients = tape.gradient(target=loss_value, sources=centernet.trainable_variables)
             optimizer.apply_gradients(grads_and_vars=zip(gradients, centernet.trainable_variables))
             train_loss_metric.update_state(values=loss_value)
@@ -353,6 +314,8 @@ def train(config):
                 batch_images, batch_labels = val_data_loader.read_batch_data(batch_data)
                 pred = centernet(batch_images, training=False)
                 loss_value = loss_fn(y_true=batch_labels, y_pred=pred)
+                if np.isnan(loss_value):
+                    raise RuntimeError("NaN loss has occurred.")
                 val_loss_metric.update_state(values=loss_value)
                 val_bar.set_description("Epoch: {}/{} | v. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                         epoch, max_num_epochs-1, val_loss_metric.result(), 

@@ -15,7 +15,7 @@ def int_feature_list(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
-def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, require_box=False):
+def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, require_box=False, require_no_box=False):
 
     patch_tf_records = []
 
@@ -29,6 +29,8 @@ def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, requ
         }
         if is_annotated:
             if require_box and np.array(patch_data["patch_normalized_boxes"][i]).size == 0:
+                continue
+            if require_no_box and np.array(patch_data["patch_normalized_boxes"][i]).size > 0:
                 continue
 
             patch_tf_record.update({
@@ -44,24 +46,55 @@ def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, requ
     return patch_tf_records
 
 
-def create_patch_tf_prediction_records(patch_data):
+def create_patch_tf_records_for_img(img, patch_data_lst, out_dir, is_annotated, require_box=False, require_no_box=False):
 
     patch_tf_records = []
 
-    for i in range(len(patch_data)):
+    for patch_data in patch_data_lst:
 
         patch_tf_record = {
-            "img_path": bytes_feature(patch_data[i]["img_path"]),
-            "patch_path": bytes_feature(patch_data[i]["patch_path"]),
-            #"scenario_uuid": bytes_feature(patch_data[i]["scenario_uuid"]),
-            "patch_coords": int_feature_list(list(np.array(patch_data[i]["patch_coords"]).astype(np.int64))),
-            "predicted_abs_boxes": float_feature_list(list(np.array(patch_data[i]["predicted_abs_boxes"]).astype(np.int64).flatten())),
-            "predicted_classes": int_feature_list(list(np.array(patch_data[i]["predicted_classes"]).astype(np.int64))),
-            "scores": float_feature_list(list(np.array(patch_data[i]["predicted_classes"]).astype(np.float32)))
+            "img_path": bytes_feature(img.img_path),
+            "patch_path": bytes_feature(os.path.join(out_dir, patch_data["patch_name"])),
+            #"scenario_uuid": bytes_feature(scenario_uuid),
+            "patch_coords": int_feature_list(list(np.array(patch_data["patch_coords"]).astype(np.int64)))
         }
+        if is_annotated:
+            if require_box and np.array(patch_data["patch_normalized_boxes"]).size == 0:
+                continue
+            if require_no_box and np.array(patch_data["patch_normalized_boxes"]).size > 0:
+                continue
+
+            patch_tf_record.update({
+                "patch_normalized_boxes": float_feature_list(list(np.array(patch_data["patch_normalized_boxes"]).astype(np.float32).flatten())),
+                "patch_abs_boxes": int_feature_list(list(np.array(patch_data["patch_abs_boxes"]).astype(np.int64).flatten())),
+                "img_abs_boxes": int_feature_list(list(np.array(patch_data["img_abs_boxes"]).astype(np.int64).flatten())),
+                "patch_classes": int_feature_list(np.array(patch_data["patch_classes"]).astype(np.int64))
+
+            })
+
         patch_tf_records.append(tf.train.Example(features=tf.train.Features(feature=patch_tf_record)))
 
     return patch_tf_records
+
+
+# def create_patch_tf_prediction_records(patch_data):
+
+#     patch_tf_records = []
+
+#     for i in range(len(patch_data)):
+
+#         patch_tf_record = {
+#             "img_path": bytes_feature(patch_data[i]["img_path"]),
+#             "patch_path": bytes_feature(patch_data[i]["patch_path"]),
+#             #"scenario_uuid": bytes_feature(patch_data[i]["scenario_uuid"]),
+#             "patch_coords": int_feature_list(list(np.array(patch_data[i]["patch_coords"]).astype(np.int64))),
+#             "predicted_abs_boxes": float_feature_list(list(np.array(patch_data[i]["predicted_abs_boxes"]).astype(np.int64).flatten())),
+#             "predicted_classes": int_feature_list(list(np.array(patch_data[i]["predicted_classes"]).astype(np.int64))),
+#             "scores": float_feature_list(list(np.array(patch_data[i]["predicted_classes"]).astype(np.float32)))
+#         }
+#         patch_tf_records.append(tf.train.Example(features=tf.train.Features(feature=patch_tf_record)))
+
+#     return patch_tf_records
 
 
 

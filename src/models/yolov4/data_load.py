@@ -1,4 +1,5 @@
 from abc import ABC
+import math as m
 import numpy as np
 import tensorflow as tf
 import cv2
@@ -68,13 +69,17 @@ class InferenceDataLoader(DataLoader):
         return img, ratio
 
 
+
+
+
+
 class TrainDataLoader(DataLoader):
 
     def __init__(self, tf_record_paths, config, shuffle, augment):
 
         super().__init__(tf_record_paths, config)
         self.batch_size = config.training["active"]["batch_size"]
-        self.max_detections = config.arch["max_detections"]
+        #self.max_detections = config.arch["max_detections"]
         self.label_encoder = LabelEncoder(config)
         self.shuffle = shuffle
         self.augment = augment
@@ -85,20 +90,31 @@ class TrainDataLoader(DataLoader):
     def create_batched_dataset(self, take_percent=100):
 
         dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
-        
+
         dataset_size = np.sum([1 for _ in dataset])
         if self.shuffle:
-            dataset = dataset.shuffle(dataset_size)
+            dataset = dataset.shuffle(dataset_size, reshuffle_each_iteration=True)
 
         dataset = dataset.take(dataset_size * (take_percent / 100))
-        dataset_size = np.sum([1 for _ in dataset])
+        num_images = np.sum([1 for _ in dataset])
 
         dataset = dataset.batch(batch_size=self.batch_size)
 
         autotune = tf.data.experimental.AUTOTUNE
         dataset = dataset.prefetch(autotune)
 
-        return dataset, dataset_size
+
+        # for i, batch_data in enumerate(dataset):
+
+        #     for tf_sample in batch_data:
+        #         sample = tf_record_io.parse_sample_from_tf_record(tf_sample, is_annotated=True)
+        #         img_path = bytes.decode((sample["patch_path"]).numpy())
+        #         boxes = (box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))).numpy().astype(np.float32)
+        #         print("sample: {} {}".format(img_path, boxes))
+        #     if i == 0:
+        #         break
+
+        return dataset, num_images
 
 
     def read_batch_data(self, batch_data):
@@ -175,3 +191,56 @@ class TrainDataLoader(DataLoader):
 
 
 
+class SplitDataLoader(TrainDataLoader):
+
+    def __init__(self, tf_record_paths_obj, tf_record_paths_bg, config, shuffle, augment):
+
+        super().__init__(tf_record_paths_obj + tf_record_paths_bg, config, shuffle, augment)
+        self.tf_record_paths_obj = tf_record_paths_obj
+        self.tf_record_paths_bg = tf_record_paths_bg
+        self.pct_with_obj = config.training["active"]["data_loader"]["percent_of_batch_with_objects"]
+        self.label_encoder = LabelEncoder(config)
+        self.shuffle = shuffle
+        self.augment = augment
+        self.data_augmentations = config.training["active"]["data_augmentations"]
+
+    def create_batched_dataset(self, take_percent=100):
+
+        num_obj_patches = m.ceil(self.batch_size * (self.pct_with_obj / 100))
+        num_bg_patches = self.batch_size - num_obj_patches
+
+
+        # https://stackoverflow.com/questions/48272035/tensorflow-how-to-generate-unbalanced-combined-data-sets
+        def concat(*tensor_list):
+            return tf.concat(tensor_list, axis=0)
+
+        dataset_obj = tf.data.TFRecordDataset(filenames=self.tf_record_paths_obj)
+        dataset_bg = tf.data.TFRecordDataset(filenames=self.tf_record_paths_bg)
+
+        dataset_obj_size = np.sum([1 for _ in dataset_obj])
+        dataset_bg_size = np.sum([1 for _ in dataset_bg])
+        
+        if self.shuffle:
+            dataset_obj = dataset_obj.shuffle(dataset_obj_size, reshuffle_each_iteration=True)
+            dataset_bg = dataset_bg.shuffle(dataset_bg_size, reshuffle_each_iteration=True)
+
+
+        dataset_obj = dataset_obj.take(dataset_obj_size * (take_percent / 100))
+        dataset_bg = dataset_bg.take(dataset_bg_size * (take_percent / 100))
+
+        num_obj_images = np.sum([1 for _ in dataset_obj])
+        num_bg_images = np.sum([1 for _ in dataset_bg])
+
+        num_images = num_obj_images + num_bg_images
+
+
+        dataset_obj = dataset_obj.batch(batch_size=num_obj_patches)
+        dataset_bg = dataset_bg.batch(batch_size=num_bg_patches)
+
+        zipped_dataset = tf.data.Dataset.zip((dataset_obj, dataset_bg))
+        split_dataset = zipped_dataset.map(concat)
+
+        autotune = tf.data.experimental.AUTOTUNE
+        split_dataset = split_dataset.prefetch(autotune)
+
+        return split_dataset, num_images

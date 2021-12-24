@@ -26,6 +26,8 @@ class DetectorWrapper(ABC):
         self.config.add_training_config(train_config)
         self.custom_train_model()
 
+
+
     def run_inference(self, inference_config):
         self.config.add_inference_config(inference_config)
         return self.custom_run_inference()

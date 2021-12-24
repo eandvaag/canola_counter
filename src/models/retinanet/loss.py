@@ -13,6 +13,13 @@ class RetinaNetBoxLoss(tf.losses.Loss):
         self._delta = delta
 
     def call(self, y_true, y_pred):
+        # self._delta = 1
+        #
+        # if |x| < self._delta:
+        #   smoothL1Loss(x) = 0.5 * x**2
+        # else:
+        #   smoothL1Loss(x) = |x| - 0.5
+
         difference = y_true - y_pred
         absolute_difference = tf.abs(difference)
         squared_difference = difference ** 2
@@ -57,6 +64,9 @@ class RetinaNetLoss(tf.losses.Loss):
     """Wrapper to combine both the losses"""
 
     def __init__(self, config):
+        # reduction "auto": loss values will be computed for each item in the batch (in parallel), then
+        # the average loss is returned (losses are summed, then the sum is divided by the batch size)
+        #super(RetinaNetLoss, self).__init__(reduction="sum_over_batch_size", name="RetinaNetLoss")
         super(RetinaNetLoss, self).__init__(reduction="auto", name="RetinaNetLoss")
         self.clf_loss = RetinaNetClassificationLoss(config.arch["alpha"], config.arch["gamma"])
         self.box_loss = RetinaNetBoxLoss(config.arch["delta"])
@@ -66,6 +76,9 @@ class RetinaNetLoss(tf.losses.Loss):
         y_pred = tf.cast(y_pred, dtype=tf.float32)
         box_labels = y_true[:, :, :4]
         box_predictions = y_pred[:, :, :4]
+
+        # one-hot encoding -- "background" class (-1) will be set to all zeroes (ignore "class" (-2) 
+        # is also encoded as all zeroes, we will later ignore these entries)
         cls_labels = tf.one_hot(
             tf.cast(y_true[:, :, 4], dtype=tf.int32),
             depth=self.num_classes,
@@ -79,9 +92,22 @@ class RetinaNetLoss(tf.losses.Loss):
         clf_loss = tf.where(tf.equal(ignore_mask, 1.0), 0.0, clf_loss)
         box_loss = tf.where(tf.equal(positive_mask, 1.0), box_loss, 0.0)
 
+        #print("0 clf_loss", clf_loss)
+        #print("0 box_loss", box_loss)
+
         # losses are normalized by the number of anchors assigned to a ground truth box   
         normalizer = tf.reduce_sum(positive_mask, axis=-1)
+        #print("normalizer", normalizer)
+        
+
         clf_loss = tf.math.divide_no_nan(tf.reduce_sum(clf_loss, axis=-1), normalizer)
+        #clf_loss = tf.reduce_mean(clf_loss, axis=-1)
         box_loss = tf.math.divide_no_nan(tf.reduce_sum(box_loss, axis=-1), normalizer)
+        #box_loss = tf.reduce_mean(box_loss, axis=-1)
+
+        #print("1 clf_loss", clf_loss)
+        #print("1 box_loss", box_loss)
+
         loss = clf_loss + box_loss
+        #print("loss", loss)
         return loss

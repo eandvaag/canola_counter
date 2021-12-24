@@ -13,6 +13,8 @@ from io_utils import json_io
 from io_utils import xml_io
 from io_utils import tf_record_io
 
+from models.common import box_utils
+
 
 def get_patch_dir(img_set, dataset_name, extractor_name, patch_size, is_annotated):
 
@@ -34,10 +36,13 @@ def parse_patch_dir(patch_dir):
 
 
 
-def write_patches(out_dir, patch_data):
+def write_patches(out_dir, patch_data_lst):
+    for patch_data in patch_data_lst:
+        cv2.imwrite(os.path.join(out_dir, patch_data["patch_name"]),
+                    cv2.cvtColor(patch_data["patch"], cv2.COLOR_RGB2BGR))
 
-    for patch, patch_name in zip(patch_data["patches"], patch_data["patch_names"]):
-        cv2.imwrite(os.path.join(out_dir, patch_name), patch)
+    #for patch, patch_name in zip(patch_data["patches"], patch_data["patch_names"]):
+    #    cv2.imwrite(os.path.join(out_dir, patch_name), cv2.cvtColor(patch, cv2.COLOR_RGB2BGR))
 
 
 
@@ -84,6 +89,8 @@ def extract_patches(params, img_set, dataset, annotate_patches):
 
     if params["method"] == "tile":
         extractor = TileExtractor(params)
+    elif params["method"] == "artificial_tile":
+        extractor = ArtificialTileExtractor(params)
     elif params["method"] == "box":
         extractor = BoxExtractor(params)
     elif params["method"] == "jitterbox":
@@ -115,6 +122,7 @@ class DetectorPatchExtractor(ABC):
         patch_dir = os.path.join(img_set.patch_dir, scenario_id)
         patches_record_path = os.path.join(patch_dir, "patches-record.tfrec")
         patches_with_boxes_record_path = os.path.join(patch_dir, "patches-with-boxes-record.tfrec")
+        patches_with_no_boxes_record_path = os.path.join(patch_dir, "patches-with-no-boxes-record.tfrec")
 
         #if os.path.exists(patches_record_path) and (os.path.exists(patches_with_boxes_record_path) or not annotate_patches):
         #    return patch_dir
@@ -126,36 +134,45 @@ class DetectorPatchExtractor(ABC):
 
         tf_records = []
         tf_records_with_boxes = []
+        tf_records_with_no_boxes = []
 
         for img in tqdm.tqdm(dataset.imgs, desc="Generating patches"):
 
             if annotate_patches and not img.is_annotated:
-                continue
+                raise RuntimeError("Cannot annotate patches for image {}. Image is not annotated.".format(img.img_path))
 
-            patch_data = self._extract_patches_from_img(img, img_set)
+            patch_data_lst = self._extract_patches_from_img(img, img_set, annotate_patches=annotate_patches)
 
-            write_patches(patch_dir, patch_data)
+            write_patches(patch_dir, patch_data_lst)
 
             if annotate_patches:
-                gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+                #gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
 
-                patch_data = annotate_patch_data(img, patch_data, gt_boxes, gt_classes)
+                #patch_data = annotate_patch_data(img, patch_data, gt_boxes, gt_classes)
 
-                tf_records_with_boxes_for_img = tf_record_io.create_patch_tf_records_for_img(img, patch_data, 
+                tf_records_with_boxes_for_img = tf_record_io.create_patch_tf_records_for_img(img, patch_data_lst, 
                                                                                              patch_dir, annotate_patches, 
                                                                                              require_box=True)
 
+                tf_records_with_no_boxes_for_img = tf_record_io.create_patch_tf_records_for_img(img, patch_data_lst, 
+                                                                                             patch_dir, annotate_patches, 
+                                                                                             require_no_box=True)
 
-            tf_records_for_img = tf_record_io.create_patch_tf_records_for_img(img, patch_data, patch_dir, annotate_patches)
+
+            tf_records_for_img = tf_record_io.create_patch_tf_records_for_img(img, patch_data_lst, patch_dir, annotate_patches)
 
 
 
             tf_records.extend(tf_records_for_img)
-            tf_records_with_boxes.extend(tf_records_with_boxes_for_img)
+            if annotate_patches:
+                tf_records_with_boxes.extend(tf_records_with_boxes_for_img)
+                tf_records_with_no_boxes.extend(tf_records_with_no_boxes_for_img)
 
 
         tf_record_io.output_patch_tf_records(patches_record_path, tf_records)
-        tf_record_io.output_patch_tf_records(patches_with_boxes_record_path, tf_records_with_boxes)
+        if annotate_patches:
+            tf_record_io.output_patch_tf_records(patches_with_boxes_record_path, tf_records_with_boxes)
+            tf_record_io.output_patch_tf_records(patches_with_no_boxes_record_path, tf_records_with_no_boxes)
 
 
         add_scenario(img_set, scenario_id, scenario)
@@ -164,7 +181,6 @@ class DetectorPatchExtractor(ABC):
     @abstractmethod
     def _extract_patches_from_img(self, img, img_set):
         pass
-
 
 
 
@@ -178,15 +194,22 @@ class JitterBoxExtractor(DetectorPatchExtractor):
         super().__init__(params)
         self.num_patches_per_box = params["num_patches_per_box"]
 
-    def _extract_patches_from_img(self, img, img_set):
+    def _extract_patches_from_img(self, img, img_set, annotate_patches):
 
-        logger = logging.getLogger(__name__)
+        #logger = logging.getLogger(__name__)
 
-        patch_data = {
-            "patches": [],
-            "patch_coords": [],
-            "patch_names": [],
-        }
+        #patch_data = {
+        #    "patches": [],
+        #    "patch_coords": [],
+        #    "patch_names": [],
+        #}
+        if not annotate_patches:
+            raise RuntimeError("ArtificialTileExtractor requires annotated patches.")
+
+        patch_data_lst = []
+
+        gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+
 
         img_array = img.load_img_array()
         gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
@@ -197,24 +220,28 @@ class JitterBoxExtractor(DetectorPatchExtractor):
         num_excluded = 0
         for gt_box in gt_boxes:
             for i in range(self.num_patches_per_box):
-                try:
-                    patch, patch_coords = self._extract_patch_surrounding_gt_box(img_array, gt_box, self.patch_size)
-                    patch_data["patches"].append(patch)
-                    patch_data["patch_coords"].append(patch_coords)
-                    patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
-                    patch_num += 1
-                except RuntimeError as e:
-                    num_excluded += 1
+                #try:
+                patch, patch_coords = self._extract_patch_surrounding_gt_box(img_array, gt_box, self.patch_size)
+                patch_data = {}
+                patch_data["patch"] = patch
+                patch_data["patch_coords"] = patch_coords
+                patch_data["patch_name"] = os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png"
+                annotate_patch(patch_data, gt_boxes, gt_classes)
+                patch_data_lst.append(patch_data)
+                patch_num += 1
+                #except RuntimeError as e:
+                #    num_excluded += 1
         
-        num_extracted = len(patch_data["patch_names"])
+        #num_boxes = len(gt_boxes)
+        #num_extracted = len(patch_data["patch_names"])
 
-        if num_excluded > 0:
-            logger.info("JitterBoxExtractor: Some patches were excluded because they did not fall " +
-                        "within the boundaries of the image.")
+        #if num_excluded > 0:
+        #    logger.info("JitterBoxExtractor: Some patches were excluded because they did not fall " +
+        #                "within the boundaries of the image.")
+        #
+        #logger.info("JitterBoxExtractor: Extracted {} patches from {} boxes.".format(num_extracted, num_boxes))#, num_extracted + num_excluded))
 
-        logger.info("JitterBoxExtractor: Extracted {} patches ({} attempts.)".format(num_extracted, num_extracted + num_excluded))
-
-        return patch_data
+        return patch_data_lst
 
 
 
@@ -230,8 +257,10 @@ class JitterBoxExtractor(DetectorPatchExtractor):
         if box_h > patch_size or box_w > patch_size:
             raise RuntimeError("Box exceeds size of patch.")
 
-        patch_y_min = random.randrange((box_y_min + box_h) - patch_size, box_y_min)  
+        patch_y_min = random.randrange((box_y_min + box_h) - patch_size, box_y_min)
+        patch_y_min = min(img_h - patch_size, max(0, patch_y_min))
         patch_x_min = random.randrange((box_x_min + box_w) - patch_size, box_x_min)
+        patch_x_min = min(img_w - patch_size, max(0, patch_x_min))
         patch_y_max = patch_y_min + patch_size
         patch_x_max = patch_x_min + patch_size
 
@@ -246,42 +275,42 @@ class JitterBoxExtractor(DetectorPatchExtractor):
 
 
 
-class BoxExtractor(DetectorPatchExtractor):
+# class BoxExtractor(DetectorPatchExtractor):
 
-    @property
-    def name(self):
-        return "box"
+#     @property
+#     def name(self):
+#         return "box"
 
-    def _extract_patches_from_img(self, img, img_set):
+#     def _extract_patches_from_img(self, img, img_set):
 
-        logger = logging.getLogger(__name__)
+#         logger = logging.getLogger(__name__)
 
-        patch_data = {
-            "patches": [],
-            "patch_coords": [],
-            "patch_names": [],
-        }
+#         patch_data = {
+#             "patches": [],
+#             "patch_coords": [],
+#             "patch_names": [],
+#         }
 
-        img_array = img.load_img_array()
-        gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+#         img_array = img.load_img_array()
+#         gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+
+#         centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
+
+#         patch_num = 0
+#         num_excluded = 0
+#         for centre in centres:
+#             try:
+#                 patch, patch_coords = self._extract_patch_surrounding_point(img_array, centre, self.patch_size)
+#                 patch_data["patches"].append(patch)
+#                 patch_data["patch_coords"].append(patch_coords)
+#                 patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
+#                 patch_num += 1
+#             except RuntimeError as e:
+#                 num_excluded += 1
         
-        centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
+#         logger.info("BoxExtractor: Excluded {} patches that exceeded the boundaries of the image.".format(num_excluded))
 
-        patch_num = 0
-        num_excluded = 0
-        for centre in centres:
-            try:
-                patch, patch_coords = self._extract_patch_surrounding_point(img_array, centre, self.patch_size)
-                patch_data["patches"].append(patch)
-                patch_data["patch_coords"].append(patch_coords)
-                patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
-                patch_num += 1
-            except RuntimeError as e:
-                num_excluded += 1
-        
-        logger.info("BoxExtractor: Excluded {} patches that exceeded the boundaries of the image.".format(num_excluded))
-
-        return patch_data
+#         return patch_data
 
 
 
@@ -311,6 +340,136 @@ class BoxExtractor(DetectorPatchExtractor):
         return patch, patch_coords
 
 
+class ArtificialTileExtractor(DetectorPatchExtractor):
+    """
+        Always annotates patches.
+    """
+
+    @property
+    def name(self):
+        return 'artificial_tile'
+
+
+    def __init__(self, params):
+        super().__init__(params)
+        self.patch_overlap_pct = params["patch_overlap_percent"]
+        self.artifical_box_num_range = params["artificial_box_num_range"]
+        #self.artificial_plant_min_dist = params["artificial_box_min_dist"]
+
+    def _extract_patches_from_img(self, img, img_set, annotate_patches):
+
+        if not annotate_patches:
+            raise RuntimeError("ArtificialTileExtractor requires annotated patches.")
+
+        # patch_data = {
+        #     "patches": [],
+        #     "patch_coords": [],
+        #     "patch_names": [],
+        # }
+        patch_data_lst = []
+
+
+        img_array = img.load_img_array()
+        img_path = img.img_path
+
+
+        gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+        centres =  np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
+
+        gt_box_patches = extract_gt_boxes(img_array, gt_boxes)
+
+        tile_size = self.patch_size
+        overlap_px = int(m.floor(tile_size * (self.patch_overlap_pct / 100)))
+
+        h, w = img_array.shape[:2]
+        patch_num = 0
+        for row_ind in range(0, h, tile_size - overlap_px):
+            for col_ind in range(0, w, tile_size - overlap_px):
+
+                patch_min_y = row_ind
+                patch_min_x = col_ind
+
+                patch_max_y = row_ind + tile_size
+                if patch_max_y > h:
+                    patch_min_y = h - tile_size
+                    patch_max_y = h
+
+                patch_max_x = col_ind + tile_size
+                if patch_max_x > w:
+                    patch_min_x = w - tile_size
+                    patch_max_x = w
+
+
+
+                patch = img_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
+                patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+                patch_data = {}
+                patch_data["patch"] = patch
+                patch_data["patch_coords"] = patch_coords
+                patch_data["patch_name"] = os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png"
+                
+                contained_inds = get_contained_inds(centres, patch_coords)
+                if contained_inds.size == 0:
+                    num_artificial_gt_boxes = random.randint(self.artifical_box_num_range[0], 
+                                                             self.artifical_box_num_range[1])
+                    add_artificial_gt_boxes(num_artificial_gt_boxes, patch_data, gt_box_patches, gt_classes)
+
+                else:
+                    annotate_patch(patch_data, gt_boxes, gt_classes)
+
+
+                #patch_data["patches"].append(patch)
+                #patch_data["patch_coords"].append(patch_coords)
+                #patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
+                patch_data_lst.append(patch_data)
+                patch_num += 1
+
+        return patch_data_lst
+
+
+def add_artificial_gt_boxes(num_boxes, patch_data, gt_box_patches, gt_classes):
+
+    patch_abs_boxes = []
+    patch_classes = []
+
+    patch = patch_data["patch"]
+    patch_coords = patch_data["patch_coords"]
+    patch_h, patch_w = patch.shape[:2]
+    for i in range(num_boxes):
+        index = random.randrange(len(gt_box_patches))
+        gt_box_patch = gt_box_patches[index]
+        gt_class = gt_classes[index]
+        gt_box_h, gt_box_w = gt_box_patch.shape[:2]
+
+        #while not_found:
+        x_max = patch_w - gt_box_w
+        y_max = patch_h - gt_box_h
+
+        x_loc = random.randrange(x_max)
+        y_loc = random.randrange(y_max)
+
+
+        patch[y_loc:y_loc+gt_box_h, x_loc:x_loc+gt_box_w, :] = gt_box_patch
+        patch_abs_boxes.append([y_loc, x_loc, y_loc+gt_box_h, x_loc+gt_box_w])
+        patch_classes.append(gt_class)
+
+
+    patch_abs_boxes = np.array(patch_abs_boxes)
+    img_abs_boxes = np.stack([patch_abs_boxes[:, 0] + patch_coords[0],
+                              patch_abs_boxes[:, 1] + patch_coords[1],
+                              patch_abs_boxes[:, 2] + patch_coords[0],
+                              patch_abs_boxes[:, 3] + patch_coords[1]], axis=-1)
+
+    patch_normalized_boxes = patch_abs_boxes / patch.shape[0]
+
+    patch_data["img_abs_boxes"] = img_abs_boxes.tolist()
+    patch_data["patch_abs_boxes"] = patch_abs_boxes.tolist()
+    patch_data["patch_normalized_boxes"] = patch_normalized_boxes.tolist()
+    patch_data["patch_classes"] = patch_classes
+
+    return patch_data
+
 class TileExtractor(DetectorPatchExtractor):
 
     @property
@@ -320,19 +479,24 @@ class TileExtractor(DetectorPatchExtractor):
 
     def __init__(self, params):
         super().__init__(params)
-        self.patch_overlap_pct = params["patch_overlap_pct"]
+        self.patch_overlap_pct = params["patch_overlap_percent"]
 
-    def _extract_patches_from_img(self, img, img_set):
+    def _extract_patches_from_img(self, img, img_set, annotate_patches):
 
-        patch_data = {
-            "patches": [],
-            "patch_coords": [],
-            "patch_names": [],
-        }
+        # patch_data = {
+        #     "patches": [],
+        #     "patch_coords": [],
+        #     "patch_names": [],
+        # }
+
+        patch_data_lst = []
 
 
         img_array = img.load_img_array()
         img_path = img.img_path
+
+        if annotate_patches:
+            gt_boxes, gt_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
 
         tile_size = self.patch_size
         overlap_px = int(m.floor(tile_size * (self.patch_overlap_pct / 100)))
@@ -359,15 +523,25 @@ class TileExtractor(DetectorPatchExtractor):
                 patch = img_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
                 patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
 
-                patch_data["patches"].append(patch)
-                patch_data["patch_coords"].append(patch_coords)
-                patch_data["patch_names"].append(os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png")
+                patch_data = {}
+                patch_data["patch"] = patch
+                patch_data["patch_coords"] = patch_coords
+                patch_data["patch_name"] = os.path.basename(img.img_path[:-4]) + "-patch-" + str(patch_num).zfill(5) + ".png"
+                if annotate_patches:
+                    annotate_patch(patch_data, gt_boxes, gt_classes)
+                patch_data_lst.append(patch_data)
                 patch_num += 1
 
-        return patch_data
+        return patch_data_lst
 
 
+def extract_gt_boxes(img_array, gt_boxes):
 
+    gt_patches = []
+    for gt_box in gt_boxes:
+        gt_patch = img_array[gt_box[0]:gt_box[2], gt_box[1]:gt_box[3]]
+        gt_patches.append(gt_patch)
+    return gt_patches
 
 
 def get_contained_inds(centres, patch_coords):
@@ -378,64 +552,104 @@ def get_contained_inds(centres, patch_coords):
                                        centres[:,1] < patch_coords[3])))[0]
 
 
-def annotate_patch_data(img, patch_data, gt_boxes, gt_classes):
 
+def annotate_patch(patch_data, gt_boxes, gt_classes):
 
-
-
-    annotated_patch_data = {
-        "patches": [],
-        "patch_coords": [],
-        "patch_names": [],
-        "img_abs_boxes": [],
-        "patch_abs_boxes": [],
-        "patch_normalized_boxes": [],
-        "patch_classes": []
-    }
+    patch = patch_data["patch"]
+    patch_coords = patch_data["patch_coords"]
 
     centres =  np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
+    contained_inds = get_contained_inds(centres, patch_data["patch_coords"])
+    contained_boxes = gt_boxes[contained_inds]
+    contained_classes = gt_classes[contained_inds]
+
+    patch_height = patch_coords[2] - patch_coords[0]
+    patch_width = patch_coords[3] - patch_coords[1]
+    img_abs_boxes = box_utils.clip_and_remove_small_visibility_boxes_np(
+        contained_boxes, patch_coords, min_visibility=0)
+
+    #img_abs_boxes = box_utils.clip_boxes_np(contained_boxes, patch_coords)
+
+    # # boxes are clipped to be contained within the patch
+    # img_abs_boxes = np.stack([np.maximum(contained_boxes[:,0], patch_coords[0]),
+    #                           np.maximum(contained_boxes[:,1], patch_coords[1]),
+    #                           np.minimum(contained_boxes[:,2], patch_coords[2]),
+    #                           np.minimum(contained_boxes[:,3], patch_coords[3])], axis=-1)
+
+    patch_abs_boxes = np.stack([img_abs_boxes[:,0] - patch_coords[0],
+                                img_abs_boxes[:,1] - patch_coords[1],
+                                img_abs_boxes[:,2] - patch_coords[0],
+                                img_abs_boxes[:,3] - patch_coords[1]], axis=-1)
+
+    patch_normalized_boxes = patch_abs_boxes / patch.shape[0]
+
+    patch_data["img_abs_boxes"] = img_abs_boxes.tolist()
+    patch_data["patch_abs_boxes"] = patch_abs_boxes.tolist()
+    patch_data["patch_normalized_boxes"] = patch_normalized_boxes.tolist()
+    patch_data["patch_classes"] = contained_classes.tolist()
+
+    return patch_data
 
 
-    for i in range(len(patch_data["patches"])):
 
-        patch = patch_data["patches"][i]
-        patch_coords = patch_data["patch_coords"][i]
-        patch_name = patch_data["patch_names"][i]
-
-        contained_inds = get_contained_inds(centres, patch_coords)
-        contained_boxes = gt_boxes[contained_inds]
-        contained_classes = gt_classes[contained_inds]
-
-        #if contained_boxes.size == 0:
-        #    continue
-
-
-        # boxes are clipped to be contained within the patch
-        img_abs_boxes = np.stack([np.maximum(contained_boxes[:,0], patch_coords[0]),
-                                  np.maximum(contained_boxes[:,1], patch_coords[1]),
-                                  np.minimum(contained_boxes[:,2], patch_coords[2]),
-                                  np.minimum(contained_boxes[:,3], patch_coords[3])], axis=-1)
+# def annotate_patch_data(img, patch_data, gt_boxes, gt_classes):
 
 
 
-        patch_abs_boxes = np.stack([img_abs_boxes[:,0] - patch_coords[0],
-                                    img_abs_boxes[:,1] - patch_coords[1],
-                                    img_abs_boxes[:,2] - patch_coords[0],
-                                    img_abs_boxes[:,3] - patch_coords[1]], axis=-1)
+
+#     annotated_patch_data = {
+#         "patches": [],
+#         "patch_coords": [],
+#         "patch_names": [],
+#         "img_abs_boxes": [],
+#         "patch_abs_boxes": [],
+#         "patch_normalized_boxes": [],
+#         "patch_classes": []
+#     }
+
+#     centres =  np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
 
 
-        patch_normalized_boxes = patch_abs_boxes / patch.shape[0]
+#     for i in range(len(patch_data["patches"])):
+
+#         patch = patch_data["patches"][i]
+#         patch_coords = patch_data["patch_coords"][i]
+#         patch_name = patch_data["patch_names"][i]
+
+#         contained_inds = get_contained_inds(centres, patch_coords)
+#         contained_boxes = gt_boxes[contained_inds]
+#         contained_classes = gt_classes[contained_inds]
+
+#         #if contained_boxes.size == 0:
+#         #    continue
 
 
-        annotated_patch_data["patches"].append(patch)
-        annotated_patch_data["patch_coords"].append(patch_coords)
-        annotated_patch_data["patch_names"].append(patch_name)
-        annotated_patch_data["img_abs_boxes"].append(img_abs_boxes.tolist())
-        annotated_patch_data["patch_abs_boxes"].append(patch_abs_boxes.tolist())
-        annotated_patch_data["patch_normalized_boxes"].append(patch_normalized_boxes.tolist())
-        annotated_patch_data["patch_classes"].append(contained_classes.tolist())
+#         # boxes are clipped to be contained within the patch
+#         img_abs_boxes = np.stack([np.maximum(contained_boxes[:,0], patch_coords[0]),
+#                                   np.maximum(contained_boxes[:,1], patch_coords[1]),
+#                                   np.minimum(contained_boxes[:,2], patch_coords[2]),
+#                                   np.minimum(contained_boxes[:,3], patch_coords[3])], axis=-1)
 
-    return annotated_patch_data
+
+
+#         patch_abs_boxes = np.stack([img_abs_boxes[:,0] - patch_coords[0],
+#                                     img_abs_boxes[:,1] - patch_coords[1],
+#                                     img_abs_boxes[:,2] - patch_coords[0],
+#                                     img_abs_boxes[:,3] - patch_coords[1]], axis=-1)
+
+
+#         patch_normalized_boxes = patch_abs_boxes / patch.shape[0]
+
+
+#         annotated_patch_data["patches"].append(patch)
+#         annotated_patch_data["patch_coords"].append(patch_coords)
+#         annotated_patch_data["patch_names"].append(patch_name)
+#         annotated_patch_data["img_abs_boxes"].append(img_abs_boxes.tolist())
+#         annotated_patch_data["patch_abs_boxes"].append(patch_abs_boxes.tolist())
+#         annotated_patch_data["patch_normalized_boxes"].append(patch_normalized_boxes.tolist())
+#         annotated_patch_data["patch_classes"].append(contained_classes.tolist())
+
+#     return annotated_patch_data
 
 
 

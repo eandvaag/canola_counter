@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 from models.yolov4.iou import bbox_iou, bbox_ciou
-
+from models.yolov4.encode import Decoder
 
 class YOLOv4Loss:
     """
@@ -69,12 +69,27 @@ class YOLOv4Loss:
         self.strides = config.arch["strides"]
         self.iou_loss_thresh = config.arch["iou_loss_thresh"]
         self.anchors_per_scale = config.arch["anchors_per_scale"]
+        self.num_scales = config.arch["num_scales"]
+        self.decoder = Decoder(config)
 
 
-    def __call__(self, label, bboxes, conv, pred, i):
+    def __call__(self, batch_labels, conv):
 
 
+        pred = self.decoder(conv)
+        ciou_loss = 0
+        obj_loss = 0
+        prob_loss = 0
+        for i in range(self.num_scales):
+            label = batch_labels[i][0]
+            bboxes = batch_labels[i][1]
+            loss_items = self._calculate_loss_for_scale(label, bboxes, conv[i], pred[i], self.strides[i])
+            ciou_loss += loss_items[0]
+            obj_loss += loss_items[1]
+            prob_loss += loss_items[2]
 
+        loss_value = ciou_loss + obj_loss + prob_loss
+        return loss_value
 
 
         # if i == 0:
@@ -91,10 +106,12 @@ class YOLOv4Loss:
         #print("tf.shape(conv)", tf.shape(conv))
         #print("tf.shape(pred)", tf.shape(pred))
 
+
+    def _calculate_loss_for_scale(self, label, bboxes, conv, pred, stride):
         conv_shape = tf.shape(conv)
         batch_size = conv_shape[0]
         output_size = conv_shape[1]
-        input_size = output_size * self.strides[i]
+        input_size = output_size * stride
 
 
         # at this point, both predicted and ground truth boxes are in xywh format
@@ -146,6 +163,19 @@ class YOLOv4Loss:
         # "If the bounding box prior is not the best but does overlap a ground truth object by more
         # than some threshold we ignore the prediction, following [17]. We use a threshold of 0.5.""
 
+
+        # only anchors that are considered "positives" (respond_bbox == 1) contribute to the 
+        # ciou_loss (box regression loss) and prob_loss (classification loss). Unlike RetinaNet, YOLOv4
+        # can assign multiple anchors to the same object. With RetinaNet, only the the anchor with the 
+        # greatest IoU with the object is assigned to the object. With YOLOv4, all anchors 
+        # (from a possible total of num_scales * anchors_per_scale) with IoU greater than 0.3 are considered 
+        # "positives" (this is done in the encoding).
+
+        # For the confidence / objectness loss, both "positive" and "background" anchors contribute to the loss.
+        # Only "ignored" boxes do not contribue to the confidence loss.
+
+        # an apparent difference is that "background" anchors are determined in YOLOv4 using IoU between
+        # *predicted* and ground truth boxes. In RetinaNet, we look at IoU between *anchors* and ground truth boxes.
         respond_bgd = (1.0 - respond_bbox) * tf.cast(max_iou < self.iou_loss_thresh, tf.float32)
 
 
@@ -162,6 +192,9 @@ class YOLOv4Loss:
         #                 +
         #                 respond_bgd * -(respond_bgd * tf.math.log(tf.clip_by_value((1 - pred_conf), eps, 1.0)))
         #                 )
+
+        # essentially: compute cross-entropy loss for all anchors, but only consider contributions from 
+        # "positive" and "background" anchors. Do not consider contributions from ignored anchors
         conf_loss = conf_focal * (
                         respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=respond_bbox, logits=conv_raw_conf)
                         +

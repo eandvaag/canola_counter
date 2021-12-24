@@ -25,6 +25,19 @@ def load_boxes_and_classes(xml_path, class_map):
 
     return np.array(boxes), np.array(classes)
 
+def get_box_counts(xml_paths, class_map):
+
+    box_counts = {k: 0 for k in class_map.keys()}
+
+    for xml_path in xml_paths:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+        for obj in root.findall("object"):
+            obj_class = obj.find("name").text
+            box_counts[obj_class] += 1
+
+    return box_counts
+
 
 def create_class_map(xml_paths):
 

@@ -26,8 +26,20 @@ def build_backbone(config):
 
     else:
 
-        if backbone_type == "resnet50":
-            backbone = resnet50_backbone()
+        if backbone_type == "resnet18":
+            backbone = resnet18_backbone()
+
+        elif backbone_type == "resnet34":
+            backbone = resnet34_backbone()
+
+        elif backbone_type == "resnet50":
+            backbone = resnet50_backbone()            
+
+        elif backbone_type == "resnet101":
+            backbone = resnet101_backbone()
+
+        elif backbone_type == "resnet152":
+            backbone = resnet152_backbone()
 
     if backbone is None:
         raise RuntimeError("Invalid backbone configuration: '{}'.".format(backbone_config))
@@ -173,16 +185,16 @@ class ResNetTypeI(tf.keras.layers.Layer):
         x = tf.nn.relu(x)
         x = self.pool1(x)
         x = self.layer1(x, training=training)
-        x = self.layer2(x, training=training)
-        x = self.layer3(x, training=training)
-        x = self.layer4(x, training=training)
+        l2_out = self.layer2(x, training=training)
+        l3_out = self.layer3(l2_out, training=training)
+        l4_out = self.layer4(l3_out, training=training)
 
         #x = self.transposed_conv_layers(x, training=training)
         #heatmap = self.heatmap_layer(x, training=training)
         #reg = self.reg_layer(x, training=training)
         #wh = self.wh_layer(x, training=training)
 
-        return x #[heatmap, reg, wh]
+        return [l2_out, l3_out, l4_out] #[heatmap, reg, wh]
 
 
 
@@ -281,17 +293,24 @@ class ResNetTypeII(tf.keras.layers.Layer):
 
 
 
+def resnet18_backbone():
+    return ResNetTypeI(layer_params=[2, 2, 2, 2])
 
 
-
-
-
-
-
+def resnet34_backbone():
+    return ResNetTypeI(layer_params=[3, 4, 6, 3])
 
 
 def resnet50_backbone():
     return ResNetTypeII(layer_params=[3, 4, 6, 3])
+
+
+def resnet101_backbone():
+    return ResNetTypeII(layer_params=[3, 4, 23, 3])
+
+
+def resnet152_backbone():
+    return ResNetTypeII(layer_params=[3, 8, 36, 3])
 
 
 #weights_path = keras_utils.get_file(

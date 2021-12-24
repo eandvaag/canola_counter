@@ -46,8 +46,8 @@ class ModelConfig(ABC):
 
         # for cp_key in cp_keys:
         #     self.training[cp_key] = training_config[cp_key]
-
-        class_map_utils.create_and_save_class_map_data(training_config)
+        class_map = self.arch["class_map"] if "class_map" in self.arch else None
+        class_map_utils.create_and_save_class_map_data(training_config, class_map=class_map)
         class_map_data = class_map_utils.load_class_map_data(training_config["model_uuid"])
 
         if self.arch is None:

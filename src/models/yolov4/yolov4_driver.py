@@ -6,7 +6,7 @@ import shutil
 import tqdm
 import logging
 import time
-
+import random
 
 from image_set import ImgSet
 
@@ -52,26 +52,26 @@ from io_utils import tf_record_io
 
 #     return boxes, scores, classes
 
-def post_process_sample(detections, resize_ratios, index, config):
+def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nms=True):
 
-    detections = np.array(detections[index])
+    detections = np.array(detections)
 
     pred_xywh = detections[:, 0:4]
     pred_conf = detections[:, 4]
     pred_prob = detections[:, 5:]
 
-    pred_coor = (box_utils.swap_xy_tf(box_utils.convert_to_corners_tf(pred_xywh))).numpy()
+    pred_boxes = (box_utils.swap_xy_tf(box_utils.convert_to_corners_tf(pred_xywh))).numpy()
 
-    pred_coor = np.stack([
-            pred_coor[:, 0] * resize_ratios[index][0],
-            pred_coor[:, 1] * resize_ratios[index][1],
-            pred_coor[:, 2] * resize_ratios[index][0],
-            pred_coor[:, 3] * resize_ratios[index][1]
+    pred_boxes = np.stack([
+            pred_boxes[:, 0] * resize_ratio[0],
+            pred_boxes[:, 1] * resize_ratio[1],
+            pred_boxes[:, 2] * resize_ratio[0],
+            pred_boxes[:, 3] * resize_ratio[1]
     ], axis=-1)
 
 
-    invalid_mask = np.logical_or((pred_coor[:, 0] > pred_coor[:, 2]), (pred_coor[:, 1] > pred_coor[:, 3]))
-    pred_coor[invalid_mask] = 0
+    invalid_mask = np.logical_or((pred_boxes[:, 0] > pred_boxes[:, 2]), (pred_boxes[:, 1] > pred_boxes[:, 3]))
+    pred_boxes[invalid_mask] = 0
 
     # # (4) discard some invalid boxes
     #bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
@@ -79,36 +79,198 @@ def post_process_sample(detections, resize_ratios, index, config):
 
 
     score_threshold = 0.5
-    classes = np.argmax(pred_prob, axis=-1)
-    scores = pred_conf * pred_prob[np.arange(len(pred_coor)), classes]
-    score_mask = scores > score_threshold
+    pred_classes = np.argmax(pred_prob, axis=-1)
+    pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
+    score_mask = pred_scores > score_threshold
     #mask = np.logical_and(scale_mask, score_mask)
     mask = score_mask
-    coors, scores, classes = pred_coor[mask], scores[mask], classes[mask]
+    pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
 
     #print("coors: ", coors)
     #print("scores: ", scores)
     #print("classes", classes)
-    coors = np.rint(coors).astype(np.int32)
-    scores = scores.astype(np.float32)
-    classes = classes.astype(np.int32)
+    pred_boxes = np.rint(pred_boxes).astype(np.int32)
+    pred_scores = pred_scores.astype(np.float32)
+    pred_classes = pred_classes.astype(np.int32)
 
-    coors, classes, scores = box_utils.non_max_suppression(
-        coors,
-        classes,
-        scores,
-        iou_thresh=config.inference["active"]["patch_nms_iou_thresh"])
-
-    return coors, scores, classes
-
+    if apply_nms:
+        pred_boxes, pred_classes, pred_scores = box_utils.non_max_suppression_with_classes(
+            pred_boxes,
+            pred_classes,
+            pred_scores,
+            iou_thresh=config.inference["active"]["patch_nms_iou_thresh"])
 
 
+    # # TODO: need to fix to not do this when patches are on the edge of the image
+    # if "patch_border_buffer" in config.inference["active"]:
+    #     patch_wh = (patch_coords[2] - patch_coords[1])
+    #     pct_buf = config.inference["active"]["patch_border_buffer_percent"]
+    #     pix_buf = (pct_buf / 100 ) * patch_wh
+                    
 
+    #     #mask = np.logical_or(
+    #     #            pred_boxes[:, 0] < patch_coords[0] + buf,
+    #     #            pred_boxes[:, 1] < patch_coords[1] + buf,
+    #     #            pred_boxes[:, 2] > patch_coords[2] - buf,
+    #     #            pred_boxes[:, 3] > patch_coords[3] - buf)
+
+    #     mask = np.logical_and(
+    #                 pred_boxes[:, 0] > patch_coords[0] + buf,
+    #                 pred_boxes[:, 1] > patch_coords[1] + buf,
+    #                 pred_boxes[:, 2] < patch_coords[2] - buf,
+    #                 pred_boxes[:, 3] < patch_coords[3] - buf)        
+    #     pred_boxes = pred_boxes[mask]
+    #     pred_scores = pred_scores[mask]
+    #     pred_classes = pred_classes[mask]
+
+    return pred_boxes, pred_scores, pred_classes
+
+
+
+def find_optimal_iou(img_set, dataset, config):
+
+    logger = logging.getLogger(__name__)
+    
+    driver_utils.set_active_inference_params(config, 0)
+    dataset_name = "training"
+    patch_dir, _ = driver_utils.create_patches(config.inference["active"]["inference_patch_extraction_params"], 
+                                                        img_set, dataset_name)
+
+    tf_record_path = os.path.join(patch_dir, "patches-record.tfrec")
+
+    data_loader = data_load.InferenceDataLoader(tf_record_path, config)
+    tf_dataset, tf_dataset_size = data_loader.create_dataset()
+
+    if config.arch["model_type"] == "yolov4":
+        yolov4 = YOLOv4(config)
+    elif config.arch["model_type"] == "yolov4_tiny":
+        yolov4 = YOLOv4Tiny(config)
+    decoder = Decoder(config)
+
+    input_shape = (config.inference["active"]["batch_size"], *(data_loader.get_model_input_shape()))
+    # *(config.arch["input_img_shape"]))
+    yolov4.build(input_shape=input_shape)
+
+    model_io.load_all_weights(yolov4, config)
+
+    predictions = {"image_predictions": {}, "patch_predictions": {}}
+    steps = np.sum([1 for i in tf_dataset])
+
+
+    logger.info("{} ('{}'): Running inference on {} images.".format(config.arch["model_type"], 
+                                                                    config.arch["model_name"], 
+                                                                    tf_dataset_size))
+
+    inference_times = []
+    for step, batch_data in enumerate(tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
+
+        batch_images, batch_ratios, batch_info = data_loader.read_batch_data(batch_data, dataset.is_annotated)
+        batch_size = batch_images.shape[0]
+
+
+        start_inference_time = time.time()
+        pred = yolov4(batch_images, training=False)
+        detections = decoder(pred)
+        #print("detections shape", [tf.shape(x) for x in detections])
+        pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+        #print("(1) pred_bbox shape", [tf.shape(x) for x in pred_bbox])
+
+        pred_bbox = tf.concat(pred_bbox, axis=1)
+
+        #print("(2) pred_bbox shape", tf.shape(pred_bbox))
+        #detections = decoder(batch_images, pred)
+        end_inference_time = time.time()
+
+        inference_times.append(end_inference_time - start_inference_time)
+
+        for i in range(batch_size):
+
+            pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = post_process_sample(
+                pred_bbox, batch_ratios, i, config, apply_nms=False)
+
+            patch_info = batch_info[i]
+
+            img_path = bytes.decode((patch_info["img_path"]).numpy())
+            patch_path = bytes.decode((patch_info["patch_path"]).numpy())
+            img_name = os.path.basename(img_path)[:-4]
+            patch_name = os.path.basename(patch_path)[:-4]
+            patch_coords = tf.sparse.to_dense(patch_info["patch_coords"]).numpy().astype(np.int32)
+
+            if dataset.is_annotated:
+                patch_boxes = tf.reshape(tf.sparse.to_dense(patch_info["patch_abs_boxes"]), shape=(-1, 4)).numpy().tolist()
+                patch_classes = tf.sparse.to_dense(patch_info["patch_classes"]).numpy().tolist()
+
+            if pred_patch_abs_boxes.size == 0:
+                pred_img_abs_boxes = np.array([], dtype=np.int32)
+            else:
+                pred_img_abs_boxes = (np.array(pred_patch_abs_boxes) + \
+                                      np.tile(patch_coords[:2], 2)).astype(np.int32)
+
+            predictions["patch_predictions"][patch_name] = {
+                "img_name": img_name,
+                "img_path": img_path,
+                "patch_coords": patch_coords.tolist(),
+                "pred_patch_abs_boxes": pred_patch_abs_boxes.tolist(),
+                "pred_scores": pred_patch_scores.tolist(),
+                "pred_classes": pred_patch_classes.tolist()
+            }
+            #if dataset.is_annotated:
+            predictions["patch_predictions"][patch_name]["patch_abs_boxes"] = patch_boxes
+            predictions["patch_predictions"][patch_name]["patch_classes"] = patch_classes
+
+
+    best_thresh = search_for_iou(predictions, config)
+    #predictions[""]
+
+def search_for_iou(predictions, config):
+    thresh_vals = np.arange(0, 1.05, 0.05)
+
+    best = float("inf")
+    best_thresh = 0.5
+
+
+
+    for thresh_val in thresh_vals:
+        annotated_counts = []
+        pred_counts = []
+        for patch_name, patch_data in predictions["patch_predictions"].items():
+            #print(patch_data["pred_patch_abs_boxes"])
+            #print(patch_data["pred_classes"])
+            boxes = patch_data["pred_patch_abs_boxes"]
+            classes = patch_data["pred_classes"]
+            scores = patch_data["pred_scores"]
+
+            if len(classes) > 0:
+                boxes, classes, scores = box_utils.non_max_suppression_with_classes(
+                    np.array(boxes),
+                    np.array(classes),
+                    np.array(scores),
+                    iou_thresh=float(thresh_val))
+
+            annotated_counts.append(len(patch_data["patch_classes"]))
+            pred_counts.append(len(classes))
+
+        mean_abs_diff = inference_metrics.mean_abs_DiC(np.array(annotated_counts), np.array(pred_counts))
+        print("{}: mean_abs_diff: {}".format(thresh_val, mean_abs_diff))
+        if mean_abs_diff < best:
+            best = mean_abs_diff
+            best_thresh = thresh_val
+    print("---")
+    print("Best thresh is {}".format(best_thresh))
+    return best_thresh
 
 
 def generate_predictions(config):
 
     logger = logging.getLogger(__name__)
+
+    if config.inference["shared_default"]["patch_nms_iou_thresh"] == "find_optimal":
+        img_set_conf = config.inference["image_sets"][0]
+        img_set = ImgSet(img_set_conf["farm_name"], img_set_conf["field_name"], 
+                         img_set_conf["mission_date"])
+        find_optimal_iou(img_set, img_set.datasets["training"], config)
+        exit()
+    
 
     dataset_index = 0
     for img_set_num, img_set_conf in enumerate(config.inference["image_sets"]):
@@ -145,7 +307,8 @@ def generate_predictions(config):
 
             model_io.load_all_weights(yolov4, config)
 
-            predictions = {"image_predictions": {}, "patch_predictions": {}}
+            predictions = driver_utils.create_predictions_skeleton(img_set, dataset)
+
             steps = np.sum([1 for i in tf_dataset])
 
 
@@ -164,10 +327,10 @@ def generate_predictions(config):
                 pred = yolov4(batch_images, training=False)
                 detections = decoder(pred)
                 #print("detections shape", [tf.shape(x) for x in detections])
-                pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+                batch_pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
                 #print("(1) pred_bbox shape", [tf.shape(x) for x in pred_bbox])
 
-                pred_bbox = tf.concat(pred_bbox, axis=1)
+                batch_pred_bbox = tf.concat(batch_pred_bbox, axis=1)
 
                 #print("(2) pred_bbox shape", tf.shape(pred_bbox))
                 #detections = decoder(batch_images, pred)
@@ -177,7 +340,8 @@ def generate_predictions(config):
 
                 for i in range(batch_size):
 
-                    pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = post_process_sample(pred_bbox, batch_ratios, i, config)
+                    pred_bbox = batch_pred_bbox[i]
+                    ratio = batch_ratios[i]
 
                     patch_info = batch_info[i]
 
@@ -190,6 +354,11 @@ def generate_predictions(config):
                     if dataset.is_annotated:
                         patch_boxes = tf.reshape(tf.sparse.to_dense(patch_info["patch_abs_boxes"]), shape=(-1, 4)).numpy().tolist()
                         patch_classes = tf.sparse.to_dense(patch_info["patch_classes"]).numpy().tolist()
+
+
+                    pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = \
+                            post_process_sample(pred_bbox, ratio, patch_coords, config)
+
 
                     if pred_patch_abs_boxes.size == 0:
                         pred_img_abs_boxes = np.array([], dtype=np.int32)
@@ -227,58 +396,12 @@ def generate_predictions(config):
             driver_utils.clip_img_boxes(predictions["image_predictions"])
             driver_utils.apply_nms_to_img_boxes(predictions["image_predictions"], 
                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
-            driver_utils.add_class_detections(predictions["image_predictions"], config)
+            driver_utils.add_class_detections(predictions["image_predictions"], img_set)
 
-            # for img_name in predictions["image_predictions"].keys():
-            #     if len(predictions["image_predictions"][img_name]["pred_img_abs_boxes"]) > 0:
-            #         pred_img_abs_boxes = np.array(predictions["image_predictions"][img_name]["pred_img_abs_boxes"])
-            #         pred_classes = np.array(predictions["image_predictions"][img_name]["pred_classes"])
-            #         pred_scores = np.array(predictions["image_predictions"][img_name]["pred_scores"])
-            #         img_width, img_height = imagesize.get(predictions["image_predictions"][img_name]["img_path"])
-            #         pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, img_width, img_height)
-            #         predictions["image_predictions"][img_name]["pred_img_abs_boxes"] = pred_img_abs_boxes.tolist()
-
-            #         nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression(
-            #                                                 pred_img_abs_boxes,
-            #                                                 pred_classes,
-            #                                                 pred_scores,
-            #                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
-            #     else:
-            #         nms_boxes = np.array([])
-            #         nms_classes = np.array([])
-            #         nms_scores = np.array([])
-
-            #     predictions["image_predictions"][img_name]["nms_pred_img_abs_boxes"] = nms_boxes.tolist()
-            #     predictions["image_predictions"][img_name]["nms_pred_classes"] = nms_classes.tolist()
-            #     predictions["image_predictions"][img_name]["nms_pred_scores"] = nms_scores.tolist()
-            #     unique, counts = np.unique(nms_classes, return_counts=True)
-            #     class_num_to_count = dict(zip(unique, counts))
-            #     pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
-            #     pred_class_boxes = {}
-            #     for class_num in class_num_to_count.keys():
-            #         class_name = config.arch["reverse_class_map"][class_num]
-            #         pred_class_counts[class_name] = int(class_num_to_count[class_num])
-            #         pred_class_boxes[class_name] = (nms_boxes[class_num == nms_classes]).tolist()
-
-
-            #     predictions["image_predictions"][img_name]["pred_class_counts"] = pred_class_counts
-            #     predictions["image_predictions"][img_name]["pred_class_boxes"] = pred_class_boxes
-
-
-            total_inference_time = float(np.sum(inference_times))
-            per_patch_inference_time = float(total_inference_time / tf_dataset_size)
-            per_image_inference_time = float(total_inference_time / len(predictions["image_predictions"]))
-
-            predictions["metrics"] = {}
-            predictions["metrics"]["Total Inference Time (s)"] = {}
-            predictions["metrics"]["Total Inference Time (s)"]["---"] = total_inference_time
-            predictions["metrics"]["Per-Image Inference Time (s)"] = {}
-            predictions["metrics"]["Per-Image Inference Time (s)"]["---"] = per_image_inference_time
-            predictions["metrics"]["Per-Patch Inference Time (s)"] = {}
-            predictions["metrics"]["Per-Patch Inference Time (s)"]["---"] = per_patch_inference_time
-
+            inference_metrics.collect_statistics(predictions, img_set, dataset,
+                                                 inference_times=inference_times)
             if dataset.is_annotated:
-                inference_metrics.collect_metrics(predictions, dataset, config)
+                inference_metrics.collect_metrics(predictions, img_set, dataset)
 
             pred_dirname = os.path.basename(patch_dir)
             pred_dir = os.path.join(config.model_dir, "predictions", pred_dirname)
@@ -287,7 +410,7 @@ def generate_predictions(config):
             json_io.save_json(pred_path, predictions)
 
             excel_path = os.path.join(pred_dir, "results.xlsx")
-            driver_utils.output_excel(excel_path, predictions, img_set, dataset_name, config)
+            driver_utils.output_excel(excel_path, predictions, img_set, dataset_name)
 
             inference_entry = {
                 "farm_name": farm_name,
@@ -312,13 +435,20 @@ def generate_predictions(config):
 
 def train(config):
 
+    tf.keras.backend.clear_session()
+
     logger = logging.getLogger(__name__)
+
 
 
     for seq_num in range(len(config.training["training_sequence"])):
 
         training_tf_record_paths = []
         validation_tf_record_paths = []
+        training_tf_record_paths_obj = []
+        training_tf_record_paths_bg = []
+        validation_tf_record_paths_obj = []
+        validation_tf_record_paths_bg = []
 
         driver_utils.set_active_training_params(config, seq_num)
 
@@ -329,29 +459,38 @@ def train(config):
             validation_patch_dir, _ = driver_utils.create_patches(
                 config.training["active"]["validation_patch_extraction_params"], img_set, "validation")
 
-            training_tf_record_paths.append(os.path.join(training_patch_dir, "patches-with-boxes-record.tfrec"))
-            validation_tf_record_paths.append(os.path.join(validation_patch_dir, "patches-with-boxes-record.tfrec"))
+            training_tf_record_paths_obj.append(os.path.join(training_patch_dir, "patches-with-boxes-record.tfrec"))
+            validation_tf_record_paths_obj.append(os.path.join(validation_patch_dir, "patches-with-boxes-record.tfrec"))
+            training_tf_record_paths_bg.append(os.path.join(training_patch_dir, "patches-with-no-boxes-record.tfrec"))
+            validation_tf_record_paths_bg.append(os.path.join(validation_patch_dir, "patches-with-no-boxes-record.tfrec"))
+            training_tf_record_paths.append(os.path.join(training_patch_dir, "patches-record.tfrec"))
+            validation_tf_record_paths.append(os.path.join(validation_patch_dir, "patches-record.tfrec"))
+
+        data_loader_type = config.training["active"]["data_loader"]["type"]
+        if data_loader_type == "default":
+            train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+            val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
+        elif data_loader_type == "split":
+            train_data_loader = data_load.SplitDataLoader(training_tf_record_paths_obj, training_tf_record_paths_bg,
+                                                          config, shuffle=True, augment=True)
+            val_data_loader = data_load.SplitDataLoader(validation_tf_record_paths_obj, validation_tf_record_paths_bg,
+                                                          config, shuffle=False, augment=False)
+        else:
+            raise RuntimeError("Unrecognized data loader type: {}".format(data_loader_type))
 
 
-        train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
-        train_dataset, train_dataset_size = train_data_loader.create_batched_dataset(
+        train_dataset, num_train_images = train_data_loader.create_batched_dataset(
                                                 take_percent=config.training["active"]["percent_of_training_set_used"])
 
-        val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
-        #val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=True, augment=True)
-        val_dataset, val_dataset_size = val_data_loader.create_batched_dataset(
+        val_dataset, num_val_images = val_data_loader.create_batched_dataset(
                                                 take_percent=config.training["active"]["percent_of_validation_set_used"])
 
-
-        
         if config.arch["model_type"] == "yolov4":
             yolov4 = YOLOv4(config)
         elif config.arch["model_type"] == "yolov4_tiny":
             yolov4 = YOLOv4Tiny(config)
 
         loss_fn = YOLOv4Loss(config)
-        decoder = Decoder(config)
-
 
 
         input_shape = (config.training["active"]["batch_size"], *(train_data_loader.get_model_input_shape()))
@@ -372,29 +511,17 @@ def train(config):
         train_loss_metric = tf.metrics.Mean()
         val_loss_metric = tf.metrics.Mean()
 
+        #@tf.function
         def train_step(batch_images, batch_labels):
             with tf.GradientTape() as tape:
                 conv = yolov4(batch_images, training=True)
-                #print("pred", pred)
-                pred = decoder(conv)
-                #print("dec_pred", dec_pred)
+                loss_value = loss_fn(batch_labels, conv)
 
-                ciou_loss = 0
-                obj_loss = 0
-                prob_loss = 0
-                for i in range(config.arch["num_scales"]):
-                    label = batch_labels[i][0]
-                    bboxes = batch_labels[i][1]
-                    loss_items = loss_fn(label, bboxes, conv[i], pred[i], i)
-                    ciou_loss += loss_items[0]
-                    obj_loss += loss_items[1]
-                    prob_loss += loss_items[2]
-
-                total_loss = ciou_loss + obj_loss + prob_loss
-
-            gradients = tape.gradient(target=total_loss, sources=yolov4.trainable_variables)
+            if np.isnan(loss_value):
+                raise RuntimeError("NaN loss has occurred.")
+            gradients = tape.gradient(target=loss_value, sources=yolov4.trainable_variables)
             optimizer.apply_gradients(grads_and_vars=zip(gradients, yolov4.trainable_variables))
-            train_loss_metric.update_state(values=total_loss)
+            train_loss_metric.update_state(values=loss_value)
 
 
 
@@ -412,72 +539,45 @@ def train(config):
         }
 
         logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
-                     config.arch["model_type"], config.arch["model_name"], train_dataset_size, val_dataset_size))
+                     config.arch["model_type"], config.arch["model_name"], num_train_images, num_val_images))
 
 
         max_num_epochs = config.training["active"]["max_num_epochs"]
         steps_taken = 0
+        #with tf.profiler.experimental.Profile('logdir'):
         for epoch in range(max_num_epochs):
 
 
             train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
             for batch_data in train_bar:
+            #for step in tqdm.trange(train_steps_per_epoch):
+
+                #with tf.profiler.experimental.Trace('train', step_num=steps_taken, _r=1):
+
+                #batch_data = next(iter(train_dataset))
 
                 optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
 
                 batch_images, batch_labels = train_data_loader.read_batch_data(batch_data)
-                #print("num batch labels", (batch_labels.numpy()[:,:,4]).size)
-                #print("num -1", np.sum(batch_labels.numpy()[:,:,4] == -1))
-                #print("num not -1", np.sum(batch_labels.numpy()[:,:,4] != -1))
+
                 train_step(batch_images, batch_labels)
                 train_bar.set_description("Epoch: {}/{} | t. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                           epoch, max_num_epochs-1, train_loss_metric.result(), 
                                           loss_record["training_loss"]["best"]["value"],
                                           loss_record["training_loss"]["best"]["epoch"]))
                 steps_taken += 1
-                #exit()
 
 
             val_bar = tqdm.tqdm(val_dataset, total=val_steps_per_epoch)
-            #v_i = 0
+            
             for batch_data in val_bar:
                 batch_images, batch_labels = val_data_loader.read_batch_data(batch_data)
-
-                #pred = retinanet(batch_images, training=True)
                 conv = yolov4(batch_images, training=False)
-                pred = decoder(conv)
-                
-                ciou_loss = 0
-                obj_loss = 0
-                prob_loss = 0
-                for i in range(config.arch["num_scales"]):
-                    label = batch_labels[i][0]
-                    bboxes = batch_labels[i][1]
-                    loss_items = loss_fn(label, bboxes, conv[i], pred[i], i)
-                    ciou_loss += loss_items[0]
-                    obj_loss += loss_items[1]
-                    prob_loss += loss_items[2]
+                loss_value = loss_fn(batch_labels, conv)
+                if np.isnan(loss_value):
+                    raise RuntimeError("NaN loss has occurred.")
 
-                loss_value = ciou_loss + obj_loss + prob_loss
-
-
-                #loss_value = loss_fn(y_true=batch_labels, y_pred=pred)
-                #prev_val_loss = float(val_loss_metric.result())
                 val_loss_metric.update_state(values=loss_value)
-                # if v_i > 0:
-                #     if val_loss_metric.result() - prev_val_loss > 1:
-                #         print("sudden upward spike")
-                #         print("updated_state_value", float(val_loss_metric.result()))
-                #         print("loss_value", loss_value)
-                #         print("prev_val_loss", prev_val_loss)
-                #         print("batch_images", batch_images)
-                #         print("batch_labels", batch_labels)
-                #         print("pred", pred)
-                #         print("num batch labels", (batch_labels.numpy()[:,:,4]).size)
-                #         print("num -1", np.sum(batch_labels.numpy()[:,:,4] == -1))
-                #         print("num not -1", np.sum(batch_labels.numpy()[:,:,4] != -1))
-                #         exit()
-                # v_i += 1
 
                 val_bar.set_description("Epoch: {}/{} | v. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                         epoch, max_num_epochs-1, val_loss_metric.result(), 

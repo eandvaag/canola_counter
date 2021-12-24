@@ -66,7 +66,53 @@ def convert_to_openseadragon_format(boxes, img_width, img_height):
     return np.stack([min_x, min_y, w, h], axis=-1)
 
 
-def non_max_suppression(boxes, classes, scores, iou_thresh):
+def box_areas_np(boxes):
+    """
+        boxes: min_y, min_x, max_y, max_x format
+    """
+
+    return (boxes[:,2] - boxes[:,0]) * (boxes[:,3] - boxes[:,1])
+
+def box_visibilities_np(boxes, clipped_boxes):
+
+    box_areas = box_areas_np(boxes)
+    clipped_box_areas = box_areas_np(clipped_boxes)
+    visibilities = np.divide(clipped_box_areas, box_areas, out=np.zeros_like(clipped_box_areas, dtype="float64"), where=box_areas!=0)
+    return visibilities
+
+def clip_and_remove_small_visibility_boxes_np(boxes, patch_coords, min_visibility):
+
+    clipped_boxes = clip_boxes_np(boxes, patch_coords)
+    box_visibilities = box_visibilities_np(boxes, clipped_boxes)
+    mask = box_visibilities > min_visibility
+    return clipped_boxes[mask]
+
+    
+# def clip_boxes_np(boxes, img_width, img_height):
+#     """
+#         boxes: min_y, min_x, max_y, max_x format
+#     """
+
+#     boxes = np.concatenate([np.maximum(boxes[:, :2], [0, 0]),
+#                             np.minimum(boxes[:, 2:], [img_height-1, img_width-1])], axis=-1)
+#     return boxes
+
+
+def clip_boxes_np(boxes, patch_coords):
+    """
+        boxes: min_y, min_x, max_y, max_x format
+    """
+
+    #boxes = np.stack([np.maximum(boxes[:,0], patch_coords[0]),
+    #                           np.maximum(boxes[:,1], patch_coords[1]),
+    #                           np.minimum(boxes[:,2], patch_coords[2]-1),
+    #                           np.minimum(boxes[:,3], patch_coords[3]-1)], axis=-1)
+
+    boxes = np.concatenate([np.maximum(boxes[:, :2], [patch_coords[0], patch_coords[1]]),
+                            np.minimum(boxes[:, 2:], [patch_coords[2]-1, patch_coords[3]-1])], axis=-1)
+    return boxes
+
+def non_max_suppression_with_classes(boxes, classes, scores, iou_thresh):
 
     sel_indices = tf.image.non_max_suppression(boxes, scores, boxes.shape[0], iou_thresh)
     sel_boxes = tf.gather(boxes, sel_indices).numpy()
@@ -75,13 +121,56 @@ def non_max_suppression(boxes, classes, scores, iou_thresh):
     
     return sel_boxes, sel_classes, sel_scores
 
+def non_max_suppression(boxes, scores, iou_thresh):
+
+    sel_indices = tf.image.non_max_suppression(boxes, scores, boxes.shape[0], iou_thresh)
+    sel_boxes = tf.gather(boxes, sel_indices).numpy()
+    sel_scores = tf.gather(scores, sel_indices).numpy()
+
+    return sel_boxes, sel_scores
 
 
-def clip_boxes_np(boxes, img_width, img_height):
+def compute_iou(boxes1, boxes2, box_format="xywh"):
+    """Computes pairwise IOU matrix for given two sets of boxes
+
+    Arguments:
+      boxes1: A tensor with shape `(N, 4)` representing bounding boxes
+        where each box is of the format `[x, y, width, height]`.
+        boxes2: A tensor with shape `(M, 4)` representing bounding boxes
+        where each box is of the format `[x, y, width, height]`.
+
+      box_format: "xywh" or "corners_xy" or "corner_yx"
+    Returns:
+      pairwise IOU matrix with shape `(N, M)`, where the value at ith row
+        jth column holds the IOU between ith box and jth box from
+        boxes1 and boxes2 respectively.
     """
-        boxes: min_y, min_x, max_y, max_x format
-    """
+    if box_format == "xywh":
+        boxes1_corners = convert_to_corners_tf(boxes1)
+        boxes2_corners = convert_to_corners_tf(boxes2)
+        #boxes1_area = boxes1[:, 2] * boxes1[:, 3]
+        #boxes2_area = boxes2[:, 2] * boxes2[:, 3]
+    elif box_format == "corners_yx":
+        boxes1_corners = swap_xy_tf(tf.convert_to_tensor(boxes1, dtype=tf.float32))
+        boxes2_corners = swap_xy_tf(tf.convert_to_tensor(boxes2, dtype=tf.float32))
+    elif box_format == "corners_xy":
+        boxes1_corners = boxes1
+        boxes2_corners = boxes2
+    else:
+        raise RuntimeError("Unrecognized box format")
 
-    boxes = np.concatenate([np.maximum(boxes[:, :2], [0, 0]),
-                            np.minimum(boxes[:, 2:], [img_height-1, img_width-1])], axis=-1)
-    return boxes
+    boxes1_area = (boxes1_corners[:,2] - boxes1_corners[:,0]) * (boxes1_corners[:,3] - boxes1_corners[:,1])
+    boxes2_area = (boxes2_corners[:,2] - boxes2_corners[:,0]) * (boxes2_corners[:,3] - boxes2_corners[:,1])
+
+    print("boxes1_corners", boxes1_corners)
+    lu = tf.maximum(boxes1_corners[:, None, :2], boxes2_corners[:, :2])
+    rd = tf.minimum(boxes1_corners[:, None, 2:], boxes2_corners[:, 2:])
+    intersection = tf.maximum(0.0, rd - lu)
+    intersection_area = intersection[:, :, 0] * intersection[:, :, 1]
+
+    union_area = tf.maximum(
+        boxes1_area[:, None] + boxes2_area - intersection_area, 1e-8
+    )
+    return tf.clip_by_value(intersection_area / union_area, 0.0, 1.0)
+
+

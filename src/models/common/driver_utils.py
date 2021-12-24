@@ -2,12 +2,14 @@ import os
 import logging
 import pandas as pd
 import pandas.io.formats.excel
+from natsort import index_natsorted
 import numpy as np
-import imagesize
 
 from io_utils import xml_io
 import extract_patches as ep
+from image_set import Img
 from models.common import box_utils
+
 
 
 def create_patches(extraction_params, img_set, dataset_name):
@@ -20,6 +22,20 @@ def create_patches(extraction_params, img_set, dataset_name):
 
     patch_dir = os.path.join(img_set.patch_dir, scenario_id)
     return patch_dir, dataset.is_annotated
+
+
+# def constant_learning_rate_function(steps_taken, training_steps_per_epoch, config):
+#     return config.training["active"]["learning_rate_schedule"]["learning_rate"]
+
+# def get_learning_rate_function(config):
+
+#     schedule = config.training["active"]["learning_rate_schedule"]
+#     schedule_type = schedule["schedule_type"]
+
+#     if schedule_type == "constant"
+#         f = constant_learning_rate_function
+
+
 
 
 def get_learning_rate(steps_taken, training_steps_per_epoch, config):
@@ -44,6 +60,8 @@ def get_learning_rate(steps_taken, training_steps_per_epoch, config):
         else:
             cur_lr = lr_end + 0.5 * (lr_init - lr_end) * (
                   (1 + np.cos(((steps_taken - warm_up_steps) / (total_steps - warm_up_steps)) * np.pi)))
+
+    #elif schedule_type == "piecewise_constant_decay"
     else:
         raise RuntimeError("Unknown schedule type: '{}'.".format(schedule_type))
 
@@ -60,7 +78,7 @@ def get_weight_names(model, input_shape):
 
 
 
-def output_excel(out_path, predictions, img_set, dataset_name, config):
+def output_excel(out_path, predictions, img_set, dataset_name):
 
     farm_name = img_set.farm_name
     field_name = img_set.field_name
@@ -75,7 +93,7 @@ def output_excel(out_path, predictions, img_set, dataset_name, config):
         "dataset_name": [],
         "image_id": [],
     }
-    for class_name in config.arch["class_map"].keys():
+    for class_name in img_set.class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
         d["model_" + class_name + "_count"] = []
 
@@ -86,17 +104,18 @@ def output_excel(out_path, predictions, img_set, dataset_name, config):
         d["dataset_name"].append(dataset_name)
         d["image_id"].append(img.img_name)
 
-        if dataset.is_annotated:
-            img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, config.arch["class_map"])
+        if img.is_annotated:
+            img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map) #config.arch["class_map"])
             unique, counts = np.unique(img_classes, return_counts=True)
             class_num_to_count = dict(zip(unique, counts))
-            cur_img_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
+            cur_img_class_counts = {k: 0 for k in img_set.class_map.keys()} #config.arch["class_map"].keys()}
             for class_num in class_num_to_count.keys():
-                cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
+                cur_img_class_counts[img_set.reverse_class_map[class_num]] = class_num_to_count[class_num]
+                #cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
         cur_img_pred_class_counts = predictions["image_predictions"][img.img_name]["pred_class_counts"]
-        for class_name in config.arch["class_map"].keys():
-            if dataset.is_annotated:
+        for class_name in img_set.class_map.keys(): #config.arch["class_map"].keys():
+            if img.is_annotated:
                 d["annotated_" + class_name + "_count"].append(cur_img_class_counts[class_name])
             else:
                 d["annotated_" + class_name + "_count"].append(np.nan)
@@ -105,10 +124,11 @@ def output_excel(out_path, predictions, img_set, dataset_name, config):
     
     pandas.io.formats.excel.ExcelFormatter.header_style = None
     df = pd.DataFrame(data=d)
+    df.sort_values(by="image_id", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_id"])))
     writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
     #df.to_excel(writer, index=False, sheet_name="Sheet1")
     #for sheetname, df in dfs.items():  # loop through `dict` of dataframes
-    df.to_excel(writer, index=False, sheet_name="Sheet1")  # send df to writer
+    df.to_excel(writer, index=False, sheet_name="Sheet1", na_rep='NA')  # send df to writer
     worksheet = writer.sheets["Sheet1"]  # pull worksheet object
     for idx, col in enumerate(df):  # loop through all columns
         series = df[col]
@@ -187,8 +207,8 @@ def clip_img_boxes(img_predictions):
 
         if len(img_predictions[img_name]["pred_img_abs_boxes"]) > 0:
             pred_img_abs_boxes = np.array(img_predictions[img_name]["pred_img_abs_boxes"])
-            img_width, img_height = imagesize.get(img_predictions[img_name]["img_path"])
-            pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, img_width, img_height)
+            img_width, img_height = Img(img_predictions[img_name]["img_path"]).get_wh()
+            pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, [0, 0, img_height, img_width])
             img_predictions[img_name]["pred_img_abs_boxes"] = pred_img_abs_boxes.tolist()
 
 def apply_nms_to_img_boxes(img_predictions, iou_thresh):
@@ -199,7 +219,7 @@ def apply_nms_to_img_boxes(img_predictions, iou_thresh):
             pred_classes = np.array(img_predictions[img_name]["pred_classes"])
             pred_scores = np.array(img_predictions[img_name]["pred_scores"])
 
-            nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression(
+            nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression_with_classes(
                                                     pred_img_abs_boxes,
                                                     pred_classes,
                                                     pred_scores,
@@ -214,18 +234,20 @@ def apply_nms_to_img_boxes(img_predictions, iou_thresh):
         img_predictions[img_name]["pred_scores"] = nms_scores.tolist()
 
 
-def add_class_detections(img_predictions, config):
+def add_class_detections(img_predictions, img_set):
     for img_name in img_predictions.keys():
         pred_boxes = np.array(img_predictions[img_name]["pred_img_abs_boxes"])
         pred_classes = np.array(img_predictions[img_name]["pred_classes"])
         pred_scores = np.array(img_predictions[img_name]["pred_scores"])
         unique, counts = np.unique(pred_classes, return_counts=True)
         class_num_to_count = dict(zip(unique, counts))
-        pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
-        pred_class_boxes = {}
-        pred_class_scores = {}
+        #pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
+        pred_class_counts = {k: 0 for k in img_set.class_map.keys()}
+        pred_class_boxes = {k: [] for k in img_set.class_map.keys()}
+        pred_class_scores = {k: [] for k in img_set.class_map.keys()}
         for class_num in class_num_to_count.keys():
-            class_name = config.arch["reverse_class_map"][class_num]
+            class_name = img_set.reverse_class_map[class_num]
+            #class_name = config.arch["reverse_class_map"][class_num]
             pred_class_counts[class_name] = int(class_num_to_count[class_num])
             pred_class_boxes[class_name] = (pred_boxes[class_num == pred_classes]).tolist()
             pred_class_scores[class_name] = (pred_scores[class_num == pred_classes]).tolist()
@@ -235,3 +257,16 @@ def add_class_detections(img_predictions, config):
         img_predictions[img_name]["pred_class_boxes"] = pred_class_boxes
         img_predictions[img_name]["pred_class_scores"] = pred_class_scores
 
+
+
+def create_predictions_skeleton(img_set, dataset):
+
+    return {"farm_name": img_set.farm_name,
+            "field_name": img_set.field_name,
+            "mission_date": img_set.mission_date,
+            "dataset_name": dataset.name,
+            "image_predictions": {}, 
+            "patch_predictions": {},
+            "metrics": {"point": {},
+                        "boxplot": {}}
+            }

@@ -1,6 +1,6 @@
 import os
 
-from models.common import model_interface, group_interface
+from models.common import model_interface, group_interface, ensemble
 import image_set
 
 def handle_request(req):
@@ -28,6 +28,9 @@ def handle_request(req):
 
     elif req_type == "destroy_group":
         group_interface.destroy_group(req_args)
+
+    elif req_type == "ensemble_predictions":
+        ensemble.ensemble_predictions(req_args)
 
     else:
         raise RuntimeError("Unknown request type: '{}'.".format(req_type))
