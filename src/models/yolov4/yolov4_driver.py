@@ -286,9 +286,8 @@ def generate_predictions(config):
 
             dataset = img_set.datasets[dataset_name]
 
-            patch_dir, _ = driver_utils.create_patches(config.inference["active"]["inference_patch_extraction_params"], 
+            patch_dir, _ = driver_utils.create_patches(img_set_conf["inference_patch_extraction_params"], 
                                                         img_set, dataset_name)
-
 
             tf_record_path = os.path.join(patch_dir, "patches-record.tfrec")
 
@@ -308,6 +307,12 @@ def generate_predictions(config):
             model_io.load_all_weights(yolov4, config)
 
             predictions = driver_utils.create_predictions_skeleton(img_set, dataset)
+
+
+            if "patch_border_buffer_percent" in config.inference["active"]:
+                buffer_pct = config.inference["active"]["patch_border_buffer_percent"]
+            else:
+                buffer_pct = None
 
             steps = np.sum([1 for i in tf_dataset])
 
@@ -360,11 +365,13 @@ def generate_predictions(config):
                             post_process_sample(pred_bbox, ratio, patch_coords, config)
 
 
-                    if pred_patch_abs_boxes.size == 0:
-                        pred_img_abs_boxes = np.array([], dtype=np.int32)
-                    else:
-                        pred_img_abs_boxes = (np.array(pred_patch_abs_boxes) + \
-                                              np.tile(patch_coords[:2], 2)).astype(np.int32)
+
+
+                    # if pred_patch_abs_boxes.size == 0:
+                    #     pred_img_abs_boxes = np.array([], dtype=np.int32)
+                    # else:
+                    #     pred_img_abs_boxes = (np.array(pred_patch_abs_boxes) + \
+                    #                           np.tile(patch_coords[:2], 2)).astype(np.int32)
 
                     predictions["patch_predictions"][patch_name] = {
                         "img_name": img_name,
@@ -387,13 +394,23 @@ def generate_predictions(config):
                             "patch_coords": []
                         }
 
+                    pred_img_abs_boxes, pred_img_scores, pred_img_classes = \
+                        driver_utils.get_img_detections(pred_patch_abs_boxes, 
+                                                        pred_patch_scores, 
+                                                        pred_patch_classes, 
+                                                        patch_coords, 
+                                                        img_path, 
+                                                        buffer_pct=buffer_pct)
+
+
                     predictions["image_predictions"][img_name]["pred_img_abs_boxes"].extend(pred_img_abs_boxes.tolist())
-                    predictions["image_predictions"][img_name]["pred_scores"].extend(pred_patch_scores.tolist())
-                    predictions["image_predictions"][img_name]["pred_classes"].extend(pred_patch_classes.tolist())
+                    predictions["image_predictions"][img_name]["pred_scores"].extend(pred_img_scores.tolist())
+                    predictions["image_predictions"][img_name]["pred_classes"].extend(pred_img_classes.tolist())
                     predictions["image_predictions"][img_name]["patch_coords"].append(patch_coords.tolist())
 
 
             driver_utils.clip_img_boxes(predictions["image_predictions"])
+
             driver_utils.apply_nms_to_img_boxes(predictions["image_predictions"], 
                                                 iou_thresh=config.inference["active"]["image_nms_iou_thresh"])
             driver_utils.add_class_detections(predictions["image_predictions"], img_set)
@@ -455,9 +472,9 @@ def train(config):
         for img_set_conf in config.training["training_sequence"][seq_num]["image_sets"]:
             img_set = ImgSet(img_set_conf["farm_name"], img_set_conf["field_name"], img_set_conf["mission_date"])
             training_patch_dir, _ = driver_utils.create_patches(
-                config.training["active"]["training_patch_extraction_params"], img_set, "training")
+                img_set_conf["training_patch_extraction_params"], img_set, "training")
             validation_patch_dir, _ = driver_utils.create_patches(
-                config.training["active"]["validation_patch_extraction_params"], img_set, "validation")
+                img_set_conf["validation_patch_extraction_params"], img_set, "validation")
 
             training_tf_record_paths_obj.append(os.path.join(training_patch_dir, "patches-with-boxes-record.tfrec"))
             validation_tf_record_paths_obj.append(os.path.join(validation_patch_dir, "patches-with-boxes-record.tfrec"))

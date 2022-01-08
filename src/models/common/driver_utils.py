@@ -201,6 +201,49 @@ def set_active_inference_params(config, img_set_num):
 
 
 
+def get_img_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coords, 
+                      img_path, buffer_pct=None):
+
+    if patch_abs_boxes.size == 0:
+        img_abs_boxes = np.array([], dtype=np.int32)
+        img_scores = np.array([], dtype=np.float32)
+        img_classes = np.array([], dtype=np.int32)
+
+    else:
+        img_width, img_height = Img(img_path).get_wh()
+
+        img_abs_boxes = (np.array(patch_abs_boxes) + \
+                         np.tile(patch_coords[:2], 2)).astype(np.int32)
+
+        if buffer_pct is not None:
+            patch_wh = (patch_coords[2] - patch_coords[0])
+            buffer_px = (buffer_pct / 100 ) * patch_wh
+
+            mask = np.logical_and(
+                    np.logical_and(
+                     np.logical_or(img_abs_boxes[:, 0] > patch_coords[0] + buffer_px, img_abs_boxes[:, 0] <= buffer_px),
+                     np.logical_or(img_abs_boxes[:, 1] > patch_coords[1] + buffer_px, img_abs_boxes[:, 1] <= buffer_px)),
+                    np.logical_and(
+                     np.logical_or(img_abs_boxes[:, 2] < patch_coords[2] - buffer_px, img_abs_boxes[:, 2] >= img_height - buffer_px),
+                     np.logical_or(img_abs_boxes[:, 3] < patch_coords[3] - buffer_px, img_abs_boxes[:, 3] >= img_width - buffer_px))
+                )
+
+            img_abs_boxes = img_abs_boxes[mask]
+            img_scores = patch_scores[mask]
+            img_classes = patch_classes[mask]
+        else:
+            img_scores = patch_scores
+            img_classes = patch_classes
+
+        #print("img_abs_boxes", img_abs_boxes)
+        #print("img_scores", img_scores)
+
+    return img_abs_boxes, img_scores, img_classes
+
+
+
+
+
 def clip_img_boxes(img_predictions):
 
     for img_name in img_predictions.keys():
@@ -210,6 +253,7 @@ def clip_img_boxes(img_predictions):
             img_width, img_height = Img(img_predictions[img_name]["img_path"]).get_wh()
             pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, [0, 0, img_height, img_width])
             img_predictions[img_name]["pred_img_abs_boxes"] = pred_img_abs_boxes.tolist()
+
 
 def apply_nms_to_img_boxes(img_predictions, iou_thresh):
 

@@ -1,11 +1,13 @@
+import logging
 import os
 import shutil
-import cv2
 import tqdm
 import imagesize
-import logging
+import numpy as np
+import cv2
 
 from io_utils import json_io, xml_io
+from models.common import box_utils
 
 
 
@@ -28,12 +30,16 @@ class ImgSet(object):
 
         img_set_config_path = os.path.join(self.root_dir, "image_set_config.json")
         img_set_info = json_io.load_json(img_set_config_path)
-
+        
+        self.class_map = img_set_info["class_map"]
+        self.reverse_class_map = {v: k for k, v in self.class_map.items()}
+        self.num_classes = img_set_info["num_classes"]
+        
         self.datasets = {
-            "training": DataSet(img_set_info["training_image_paths"], "training"),
-            "validation": DataSet(img_set_info["validation_image_paths"], "validation"),
-            "test": DataSet(img_set_info["test_image_paths"], "test"),
-            "all": DataSet(img_set_info["all_image_paths"], "all")
+            "training": DataSet(img_set_info["training_image_paths"], self.class_map, "training"),
+            "validation": DataSet(img_set_info["validation_image_paths"], self.class_map, "validation"),
+            "test": DataSet(img_set_info["test_image_paths"], self.class_map, "test"),
+            "all": DataSet(img_set_info["all_image_paths"], self.class_map, "all")
 
         }
 
@@ -43,9 +49,7 @@ class ImgSet(object):
 
            raise RuntimeError("Training, validation, and test datasets must only contain annotated images.")
 
-        self.class_map = img_set_info["class_map"]
-        self.reverse_class_map = {v: k for k, v in self.class_map.items()}
-        self.num_classes = img_set_info["num_classes"]
+
         #img_width, img_height = imagesize.get(img_set_info["training_image_paths"][0])
         #self.img_width = img_width
         #self.img_height = img_height
@@ -60,11 +64,12 @@ class ImgSet(object):
 
 class DataSet(object):
 
-    def __init__(self, img_paths, name):
+    def __init__(self, img_paths, class_map, name):
 
         self.imgs = []
-        self.is_annotated = True
+        self.class_map = class_map
 
+        self.is_annotated = True
         for img_path in img_paths:
             img = Img(img_path)
             if not img.is_annotated:
@@ -74,12 +79,20 @@ class DataSet(object):
 
         self.name = name
 
-    def get_box_counts(self, class_map):
+    def get_box_counts(self):
         xml_paths = [img.xml_path for img in self.imgs if img.is_annotated]
-        box_counts = xml_io.get_box_counts(xml_paths, class_map)
+        box_counts = xml_io.get_box_counts(xml_paths, self.class_map)
         return box_counts
 
 
+    def get_mean_box_area(self):
+        box_areas = []
+
+        for img in self.imgs:
+            boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, self.class_map)
+            box_areas.extend(box_utils.box_areas_np(boxes).tolist())
+
+        return np.mean(box_areas)
 
 class Img(object):
 
@@ -125,8 +138,6 @@ class Img(object):
         img_width, img_height = self.get_wh()
         area_m2 = (img_width * gsd) * (img_height * gsd)
         return area_m2
-
-
 
 
 def register_image_set(req_args):
@@ -211,7 +222,6 @@ def register_image_set(req_args):
 
         num_training = m.floor(img_set_config["num_annotations"] * req_args["training_pct"])
         num_validation = m.floor(img_set_config["num_annotations"] * req_args["validation_pct"])
-        num_test = m.floor(img_set_config["num_annotations"] * req_args["test_pct"])
 
         shuffled = random.sample(img_set_config["all_annotation_paths"], img_set_config["num_annotations"])
 
@@ -232,11 +242,11 @@ def register_image_set(req_args):
 
 
 
-    #all_img_paths = []
-    #all_img_paths.extend(img_set_config["training_image_paths"])
-    #all_img_paths.extend(img_set_config["validation_image_paths"]) 
-    #all_img_paths.extend(img_set_config["test_image_paths"])
-    all_img_paths = img_set_config["all_image_paths"]
+    all_img_paths = []
+    all_img_paths.extend(img_set_config["training_image_paths"])
+    all_img_paths.extend(img_set_config["validation_image_paths"]) 
+    all_img_paths.extend(img_set_config["test_image_paths"])
+    #all_img_paths = img_set_config["all_image_paths"]
 
     conversion_tmp_dir = os.path.join(img_set_dzi_dir, "conversion_tmp")
     os.mkdir(conversion_tmp_dir)
