@@ -1,7 +1,98 @@
 import uuid
 import os
 
-from io_utils import xml_io
+import numpy as np
+
+from io_utils import xml_io, json_io
+
+
+def load_annotations(w3c_path, class_map):
+
+    annotations = json_io.load_json(w3c_path)
+    prefix_len = len("xywh=pixel:")
+
+    #boxes = {}
+    #classes = {}
+    ret_annotations = {}
+
+    for image_name in annotations.keys():
+        ret_annotations[image_name] = {
+            "status": annotations[image_name]["status"],
+            "boxes": [],
+            "classes": []
+        }
+        #boxes[image_name] = []
+        #classes[image_name] = []
+        for annotation in annotations[image_name]["annotations"]:
+            px_str = annotation["target"]["selector"]["value"]
+            cls_str = annotation["body"][0]["value"]
+            xywh = [int(round(float(x))) for x in px_str[prefix_len:].split(",")]
+
+            min_y = xywh[1]
+            min_x = xywh[0]
+            max_y = min_y + xywh[3]
+            max_x = min_x + xywh[2]
+            ret_annotations[image_name]["boxes"].append([min_y, min_x, max_y, max_x])
+            ret_annotations[image_name]["classes"].append(class_map[cls_str])
+
+
+
+        ret_annotations[image_name]["boxes"] = np.array(ret_annotations[image_name]["boxes"])
+        ret_annotations[image_name]["classes"] = np.array(ret_annotations[image_name]["classes"])
+
+    return ret_annotations #boxes, classes
+
+            
+def save_annotations(annotations_path, predictions, config):
+
+    annotations = {}
+    reverse_class_map = {v: k for k, v in config.arch["class_map"].items()}
+
+    for image_name in predictions["image_predictions"].keys():
+
+        annotations[image_name] = {}
+        annotations[image_name]["annotations"] = []
+
+        for i in range(len(predictions["image_predictions"][image_name]["pred_image_abs_boxes"])):
+
+            annotation_uuid = str(uuid.uuid4())
+
+            pred_class_num = predictions["image_predictions"][image_name]["pred_classes"][i]
+
+            min_y = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][0]
+            min_x = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][1]
+            max_y = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][2]
+            max_x = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][3]
+
+            h = max_y - min_y
+            w = max_x - min_x
+
+            box_str = ",".join([str(min_x), str(min_y), str(w), str(h)])
+
+            w3c_annotation = {
+                "type": "Annotation",
+                "body": [{
+                    "type": "TextualBody",
+                    "purpose": "class",
+                    "value": reverse_class_map[pred_class_num]
+                }],
+                "target": {
+                    "source": "",
+                    "selector": {
+                        "type": "FragmentSelector",
+                        "conformsTo": "http://www.w3.org/TR/media-frags/",
+                        "value": "xywh=pixel:" + box_str
+                    }
+                },
+                "@context": "http://www.w3.org/ns/anno.jsonld",
+                "id": annotation_uuid
+            }
+
+
+            annotations[image_name]["annotations"].append(w3c_annotation)
+
+
+    json_io.save_json(annotations_path, annotations)
 
 
 
@@ -24,32 +115,36 @@ def convert_xml_files_to_w3c(xml_dir, class_map):
         boxes, classes = xml_io.load_boxes_and_classes(xml_path, class_map)
 
         for (box, cls_num) in zip(boxes, classes):
-            annotation_uuid = str(uuid.uuid4())
 
-            box_h = box[2] - box[0]
-            box_w = box[3] - box[1]
-            box_str = ",".join([str(box[1]), str(box[0]), str(box_w), str(box_h)])
+            if reverse_class_map[cls_num] == "plant":
+                annotation_uuid = str(uuid.uuid4())
 
-            w3c_annotation = {
-                "type": "Annotation",
-                "body": [{
-                    "type": "TextualBody",
-                    "purpose": "class",
-                    "value": reverse_class_map[cls_num]
-                }],
-                "target": {
-                    "source": "",
-                    "selector": {
-                        "type": "FragmentSelector",
-                        "conformsTo": "http://www.w3.org/TR/media-frags/",
-                        "value": "xywh=pixel:" + box_str
-                    }
-                },
-                "@context": "http://www.w3.org/ns/anno.jsonld",
-                "id": annotation_uuid
-            }
+                box_h = box[2] - box[0]
+                box_w = box[3] - box[1]
+                box_str = ",".join([str(box[1]), str(box[0]), str(box_w), str(box_h)])
 
-            res[extensionless_name].append(w3c_annotation)
+                w3c_annotation = {
+                    "type": "Annotation",
+                    "body": [{
+                        "type": "TextualBody",
+                        "purpose": "class",
+                        "value": reverse_class_map[cls_num]
+                    }],
+                    "target": {
+                        "source": "",
+                        "selector": {
+                            "type": "FragmentSelector",
+                            "conformsTo": "http://www.w3.org/TR/media-frags/",
+                            "value": "xywh=pixel:" + box_str
+                        }
+                    },
+                    "@context": "http://www.w3.org/ns/anno.jsonld",
+                    "id": annotation_uuid
+                }
+
+                res[extensionless_name].append(w3c_annotation)
+            else:
+                print("skipping weed")
 
     return res
 

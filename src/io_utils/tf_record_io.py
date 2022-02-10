@@ -15,14 +15,14 @@ def int_feature_list(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
-def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, require_box=False, require_no_box=False):
+def create_patch_tf_records_for_image(image, patch_data, out_dir, is_annotated, require_box=False, require_no_box=False):
 
     patch_tf_records = []
 
     for i in range(len(patch_data["patches"])):
 
         patch_tf_record = {
-            "img_path": bytes_feature(img.img_path),
+            "image_path": bytes_feature(image.image_path),
             "patch_path": bytes_feature(os.path.join(out_dir, patch_data["patch_names"][i])),
             #"scenario_uuid": bytes_feature(scenario_uuid),
             "patch_coords": int_feature_list(list(np.array(patch_data["patch_coords"][i]).astype(np.int64)))
@@ -36,7 +36,7 @@ def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, requ
             patch_tf_record.update({
                 "patch_normalized_boxes": float_feature_list(list(np.array(patch_data["patch_normalized_boxes"][i]).astype(np.float32).flatten())),
                 "patch_abs_boxes": int_feature_list(list(np.array(patch_data["patch_abs_boxes"][i]).astype(np.int64).flatten())),
-                "img_abs_boxes": int_feature_list(list(np.array(patch_data["img_abs_boxes"][i]).astype(np.int64).flatten())),
+                "image_abs_boxes": int_feature_list(list(np.array(patch_data["image_abs_boxes"][i]).astype(np.int64).flatten())),
                 "patch_classes": int_feature_list(np.array(patch_data["patch_classes"][i]).astype(np.int64))
 
             })
@@ -46,14 +46,14 @@ def create_patch_tf_records_for_img(img, patch_data, out_dir, is_annotated, requ
     return patch_tf_records
 
 
-def create_patch_tf_records_for_img(img, patch_data_lst, out_dir, is_annotated, require_box=False, require_no_box=False):
+def create_patch_tf_records_for_image(image, patch_data_lst, out_dir, is_annotated, require_box=False, require_no_box=False):
 
     patch_tf_records = []
 
     for patch_data in patch_data_lst:
 
         patch_tf_record = {
-            "img_path": bytes_feature(img.img_path),
+            "image_path": bytes_feature(image.image_path),
             "patch_path": bytes_feature(os.path.join(out_dir, patch_data["patch_name"])),
             #"scenario_uuid": bytes_feature(scenario_uuid),
             "patch_coords": int_feature_list(list(np.array(patch_data["patch_coords"]).astype(np.int64)))
@@ -67,7 +67,7 @@ def create_patch_tf_records_for_img(img, patch_data_lst, out_dir, is_annotated, 
             patch_tf_record.update({
                 "patch_normalized_boxes": float_feature_list(list(np.array(patch_data["patch_normalized_boxes"]).astype(np.float32).flatten())),
                 "patch_abs_boxes": int_feature_list(list(np.array(patch_data["patch_abs_boxes"]).astype(np.int64).flatten())),
-                "img_abs_boxes": int_feature_list(list(np.array(patch_data["img_abs_boxes"]).astype(np.int64).flatten())),
+                "image_abs_boxes": int_feature_list(list(np.array(patch_data["image_abs_boxes"]).astype(np.int64).flatten())),
                 "patch_classes": int_feature_list(np.array(patch_data["patch_classes"]).astype(np.int64))
 
             })
@@ -84,7 +84,7 @@ def create_patch_tf_records_for_img(img, patch_data_lst, out_dir, is_annotated, 
 #     for i in range(len(patch_data)):
 
 #         patch_tf_record = {
-#             "img_path": bytes_feature(patch_data[i]["img_path"]),
+#             "image_path": bytes_feature(patch_data[i]["image_path"]),
 #             "patch_path": bytes_feature(patch_data[i]["patch_path"]),
 #             #"scenario_uuid": bytes_feature(patch_data[i]["scenario_uuid"]),
 #             "patch_coords": int_feature_list(list(np.array(patch_data[i]["patch_coords"]).astype(np.int64))),
@@ -112,7 +112,7 @@ def output_patch_tf_records(out_path, patch_tf_records):
 def parse_sample_from_tf_record(tf_sample, is_annotated):
 
     schema = {
-        "img_path": tf.io.FixedLenFeature([], tf.string),
+        "image_path": tf.io.FixedLenFeature([], tf.string),
         "patch_path": tf.io.FixedLenFeature([], tf.string),
         #"scenario_uuid": tf.io.FixedLenFeature([], tf.string),
         "patch_coords": tf.io.VarLenFeature(tf.int64)
@@ -121,7 +121,7 @@ def parse_sample_from_tf_record(tf_sample, is_annotated):
         schema.update({
             "patch_normalized_boxes": tf.io.VarLenFeature(tf.float32),
             "patch_abs_boxes": tf.io.VarLenFeature(tf.int64),
-            "img_abs_boxes": tf.io.VarLenFeature(tf.int64),
+            "image_abs_boxes": tf.io.VarLenFeature(tf.int64),
             "patch_classes": tf.io.VarLenFeature(tf.int64)
         })
 

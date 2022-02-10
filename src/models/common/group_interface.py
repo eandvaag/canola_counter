@@ -4,9 +4,10 @@ import logging
 import copy
 import randomname
 import uuid
+import datetime
 
 from io_utils import json_io
-from models.common import model_interface, inference_record_io
+from models.common import model_interface #, inference_record_io
 
 
 ADDED_TO_GROUP = "added_to_group"
@@ -73,7 +74,8 @@ def create_model_configs(group_config, model_index):
 
 
 def generate_model_names(num):
-    return [randomname.get_name() for _ in range(num)]
+    return ["model_" + str(i+1) for i in range(num)]
+    #return [randomname.get_name() for _ in range(num)]
 
 
 def generate_model_uuids(num):
@@ -109,6 +111,8 @@ def run_group(req_args):
 
     group_uuid = str(uuid.uuid4())
     group_config = copy.deepcopy(req_args)
+
+    group_config["start_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     group_config["group_uuid"] = group_uuid
     group_config["model_info"] = {}
 
@@ -166,6 +170,9 @@ def run_group(req_args):
         else:
             raise e
 
+
+    group_config["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    json_io.save_json(group_config_path, group_config)
     logger.info("Finished processing group '{}' (uuid: {}).".format(group_config["group_name"], group_uuid))
 
 
@@ -246,15 +253,15 @@ def retrieve_inference_entries_for_model(model_uuid):
     inference_config = json_io.load_json(inference_config_path)
     image_set_confs = inference_config["image_sets"]
     for image_set_conf in image_set_confs:
-        for dataset_name in image_set_conf["datasets"]:
+        #for dataset_name in image_set_conf["datasets"]:
 
-            inference_entries.append({
-                "farm_name": image_set_conf["farm_name"],
-                "field_name": image_set_conf["field_name"],
-                "mission_date": image_set_conf["mission_date"],
-                "dataset_name": dataset_name,
-                "model_uuid": model_uuid
-            })
+        inference_entries.append({
+            "farm_name": image_set_conf["farm_name"],
+            "field_name": image_set_conf["field_name"],
+            "mission_date": image_set_conf["mission_date"],
+            #"dataset_name": dataset_name,
+            "model_uuid": model_uuid
+        })
 
     return inference_entries
 
@@ -291,7 +298,7 @@ def destroy_group(req_args):
             shutil.rmtree(model_dir)
 
 
-    inference_record_io.remove_entries_from_inference_record(all_inference_entries)
+    #inference_record_io.remove_entries_from_inference_record(all_inference_entries)
     os.remove(group_config_path)
 
 

@@ -5,24 +5,30 @@ import pandas.io.formats.excel
 from natsort import index_natsorted
 import numpy as np
 
-from io_utils import xml_io
+from io_utils import w3c_io
 import extract_patches as ep
-from image_set import Img
+import extract_patches_2 as ep2
+from image_set import Image
 from models.common import box_utils
 
 
 
-def create_patches(extraction_params, img_set, dataset_name):
-    dataset = img_set.datasets[dataset_name]
+def create_patches(extraction_params, image_set, dataset_name):
+    dataset = image_set.datasets[dataset_name]
 
     scenario_id = ep.extract_patches(extraction_params,
-                                     img_set,
+                                     image_set,
                                      dataset,
                                      annotate_patches=dataset.is_annotated)
 
-    patch_dir = os.path.join(img_set.patch_dir, scenario_id)
+    patch_dir = os.path.join(image_set.patch_dir, scenario_id)
     return patch_dir, dataset.is_annotated
 
+
+
+def extract_patches(dataset, config):
+    patch_dir = ep2.extract_patches(dataset, config)
+    return patch_dir
 
 # def constant_learning_rate_function(steps_taken, training_steps_per_epoch, config):
 #     return config.training["active"]["learning_rate_schedule"]["learning_rate"]
@@ -78,13 +84,14 @@ def get_weight_names(model, input_shape):
 
 
 
-def output_excel(out_path, predictions, img_set, dataset_name):
+def output_excel(out_path, predictions, image_set, config):
 
-    farm_name = img_set.farm_name
-    field_name = img_set.field_name
-    mission_date = img_set.mission_date
+    class_map = config.arch["class_map"]
+    reverse_class_map = {v: k for k, v in class_map.items()}
 
-    dataset = img_set.datasets[dataset_name]
+    farm_name = image_set.farm_name
+    field_name = image_set.field_name
+    mission_date = image_set.mission_date
 
     d = {
         "farm_name": [],
@@ -93,33 +100,48 @@ def output_excel(out_path, predictions, img_set, dataset_name):
         "dataset_name": [],
         "image_id": [],
     }
-    for class_name in img_set.class_map.keys(): #config.arch["class_map"].keys():
+    for class_name in class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
         d["model_" + class_name + "_count"] = []
 
-    for img in dataset.imgs:
+    annotations = w3c_io.load_annotations(image_set.annotations_path, class_map)
+
+    for image in image_set.all_dataset.images:
+
+        if image.image_name in image_set.training_dataset.image_names:
+            dataset_name = "training"
+        elif image.image_name in image_set.validation_dataset.image_names:
+            dataset_name = "validation"
+        elif image.image_name in image_set.test_dataset.image_names:
+            dataset_name = "test"
+        else:
+            dataset_name = "NA"
+
         d["farm_name"].append(farm_name)
         d["field_name"].append(field_name)
         d["mission_date"].append(mission_date)
         d["dataset_name"].append(dataset_name)
-        d["image_id"].append(img.img_name)
+        d["image_id"].append(image.image_name)
 
-        if img.is_annotated:
-            img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map) #config.arch["class_map"])
-            unique, counts = np.unique(img_classes, return_counts=True)
+        #if image.is_annotated:
+        if annotations[image.image_name]["status"] == "completed":
+            #image_abs_boxes, image_classes = xml_io.load_boxes_and_classes(image.xml_path, image_set.class_map) #config.arch["class_map"])
+            image_abs_boxes = annotations[image.image_name]["boxes"]
+            image_classes = annotations[image.image_name]["classes"]
+            unique, counts = np.unique(image_classes, return_counts=True)
             class_num_to_count = dict(zip(unique, counts))
-            cur_img_class_counts = {k: 0 for k in img_set.class_map.keys()} #config.arch["class_map"].keys()}
+            cur_image_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
             for class_num in class_num_to_count.keys():
-                cur_img_class_counts[img_set.reverse_class_map[class_num]] = class_num_to_count[class_num]
-                #cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
+                cur_image_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
+                #cur_image_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
-        cur_img_pred_class_counts = predictions["image_predictions"][img.img_name]["pred_class_counts"]
-        for class_name in img_set.class_map.keys(): #config.arch["class_map"].keys():
-            if img.is_annotated:
-                d["annotated_" + class_name + "_count"].append(cur_img_class_counts[class_name])
+        cur_image_pred_class_counts = predictions["image_predictions"][image.image_name]["pred_class_counts"]
+        for class_name in class_map.keys(): #config.arch["class_map"].keys():
+            if annotations[image.image_name]["status"] == "completed":
+                d["annotated_" + class_name + "_count"].append(cur_image_class_counts[class_name])
             else:
                 d["annotated_" + class_name + "_count"].append(np.nan)
-            d["model_" + class_name + "_count"].append(cur_img_pred_class_counts[class_name])
+            d["model_" + class_name + "_count"].append(cur_image_pred_class_counts[class_name])
 
     
     pandas.io.formats.excel.ExcelFormatter.header_style = None
@@ -178,41 +200,52 @@ def stop_early(config, loss_tracker):
 def set_active_training_params(config, seq_num):
 
     config.training["active"] = {}
-
-    for k in config.training["shared_default"]:
-        config.training["active"][k] = config.training["shared_default"][k]
-
     for k in config.training["training_sequence"][seq_num]:
         config.training["active"][k] = config.training["training_sequence"][seq_num][k]
 
+# def set_active_training_params(config, seq_num):
 
-def set_active_inference_params(config, img_set_num):
+#     config.training["active"] = {}
 
-    config.inference["active"] = {}
+#     for k in config.training["shared_default"]:
+#         config.training["active"][k] = config.training["shared_default"][k]
 
-    for k in config.inference["shared_default"]:
-        config.inference["active"][k] = config.inference["shared_default"][k]
-
-    for k in config.inference["image_sets"][img_set_num]:
-        config.inference["active"][k] = config.inference["image_sets"][img_set_num][k]
-
+#     for k in config.training["training_sequence"][seq_num]:
+#         config.training["active"][k] = config.training["training_sequence"][seq_num][k]
 
 
+# def set_active_inference_params(config):
+#     config.inference["active"] = {}
+#     for k in config.inference:
+#         config.inference["active"][k] = config.inference[k]
+
+# def set_active_inference_params(config, image_set_num):
+
+#     config.inference["active"] = {}
+
+#     for k in config.inference["shared_default"]:
+#         config.inference["active"][k] = config.inference["shared_default"][k]
+
+#     for k in config.inference["image_sets"][image_set_num]:
+#         config.inference["active"][k] = config.inference["image_sets"][image_set_num][k]
 
 
 
-def get_img_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coords, 
-                      img_path, buffer_pct=None):
+
+
+
+def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coords, 
+                      image_path, buffer_pct=None):
 
     if patch_abs_boxes.size == 0:
-        img_abs_boxes = np.array([], dtype=np.int32)
-        img_scores = np.array([], dtype=np.float32)
-        img_classes = np.array([], dtype=np.int32)
+        image_abs_boxes = np.array([], dtype=np.int32)
+        image_scores = np.array([], dtype=np.float32)
+        image_classes = np.array([], dtype=np.int32)
 
     else:
-        img_width, img_height = Img(img_path).get_wh()
+        image_width, image_height = Image(image_path).get_wh()
 
-        img_abs_boxes = (np.array(patch_abs_boxes) + \
+        image_abs_boxes = (np.array(patch_abs_boxes) + \
                          np.tile(patch_coords[:2], 2)).astype(np.int32)
 
         if buffer_pct is not None:
@@ -221,50 +254,50 @@ def get_img_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coord
 
             mask = np.logical_and(
                     np.logical_and(
-                     np.logical_or(img_abs_boxes[:, 0] > patch_coords[0] + buffer_px, img_abs_boxes[:, 0] <= buffer_px),
-                     np.logical_or(img_abs_boxes[:, 1] > patch_coords[1] + buffer_px, img_abs_boxes[:, 1] <= buffer_px)),
+                     np.logical_or(image_abs_boxes[:, 0] > patch_coords[0] + buffer_px, image_abs_boxes[:, 0] <= buffer_px),
+                     np.logical_or(image_abs_boxes[:, 1] > patch_coords[1] + buffer_px, image_abs_boxes[:, 1] <= buffer_px)),
                     np.logical_and(
-                     np.logical_or(img_abs_boxes[:, 2] < patch_coords[2] - buffer_px, img_abs_boxes[:, 2] >= img_height - buffer_px),
-                     np.logical_or(img_abs_boxes[:, 3] < patch_coords[3] - buffer_px, img_abs_boxes[:, 3] >= img_width - buffer_px))
+                     np.logical_or(image_abs_boxes[:, 2] < patch_coords[2] - buffer_px, image_abs_boxes[:, 2] >= image_height - buffer_px),
+                     np.logical_or(image_abs_boxes[:, 3] < patch_coords[3] - buffer_px, image_abs_boxes[:, 3] >= image_width - buffer_px))
                 )
 
-            img_abs_boxes = img_abs_boxes[mask]
-            img_scores = patch_scores[mask]
-            img_classes = patch_classes[mask]
+            image_abs_boxes = image_abs_boxes[mask]
+            image_scores = patch_scores[mask]
+            image_classes = patch_classes[mask]
         else:
-            img_scores = patch_scores
-            img_classes = patch_classes
+            image_scores = patch_scores
+            image_classes = patch_classes
 
-        #print("img_abs_boxes", img_abs_boxes)
-        #print("img_scores", img_scores)
+        #print("image_abs_boxes", image_abs_boxes)
+        #print("image_scores", image_scores)
 
-    return img_abs_boxes, img_scores, img_classes
-
-
+    return image_abs_boxes, image_scores, image_classes
 
 
 
-def clip_img_boxes(img_predictions):
-
-    for img_name in img_predictions.keys():
-
-        if len(img_predictions[img_name]["pred_img_abs_boxes"]) > 0:
-            pred_img_abs_boxes = np.array(img_predictions[img_name]["pred_img_abs_boxes"])
-            img_width, img_height = Img(img_predictions[img_name]["img_path"]).get_wh()
-            pred_img_abs_boxes = box_utils.clip_boxes_np(pred_img_abs_boxes, [0, 0, img_height, img_width])
-            img_predictions[img_name]["pred_img_abs_boxes"] = pred_img_abs_boxes.tolist()
 
 
-def apply_nms_to_img_boxes(img_predictions, iou_thresh):
+def clip_image_boxes(image_predictions):
 
-    for img_name in img_predictions.keys():
-        if len(img_predictions[img_name]["pred_img_abs_boxes"]) > 0:
-            pred_img_abs_boxes = np.array(img_predictions[img_name]["pred_img_abs_boxes"])
-            pred_classes = np.array(img_predictions[img_name]["pred_classes"])
-            pred_scores = np.array(img_predictions[img_name]["pred_scores"])
+    for image_name in image_predictions.keys():
+
+        if len(image_predictions[image_name]["pred_image_abs_boxes"]) > 0:
+            pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
+            image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
+            pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+            image_predictions[image_name]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+
+
+def apply_nms_to_image_boxes(image_predictions, iou_thresh):
+
+    for image_name in image_predictions.keys():
+        if len(image_predictions[image_name]["pred_image_abs_boxes"]) > 0:
+            pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
+            pred_classes = np.array(image_predictions[image_name]["pred_classes"])
+            pred_scores = np.array(image_predictions[image_name]["pred_scores"])
 
             nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression_with_classes(
-                                                    pred_img_abs_boxes,
+                                                    pred_image_abs_boxes,
                                                     pred_classes,
                                                     pred_scores,
                                                     iou_thresh=iou_thresh)
@@ -273,44 +306,68 @@ def apply_nms_to_img_boxes(img_predictions, iou_thresh):
             nms_classes = np.array([])
             nms_scores = np.array([])
 
-        img_predictions[img_name]["pred_img_abs_boxes"] = nms_boxes.tolist()
-        img_predictions[img_name]["pred_classes"] = nms_classes.tolist()
-        img_predictions[img_name]["pred_scores"] = nms_scores.tolist()
+        image_predictions[image_name]["pred_image_abs_boxes"] = nms_boxes.tolist()
+        image_predictions[image_name]["pred_classes"] = nms_classes.tolist()
+        image_predictions[image_name]["pred_scores"] = nms_scores.tolist()
 
 
-def add_class_detections(img_predictions, img_set):
-    for img_name in img_predictions.keys():
-        pred_boxes = np.array(img_predictions[img_name]["pred_img_abs_boxes"])
-        pred_classes = np.array(img_predictions[img_name]["pred_classes"])
-        pred_scores = np.array(img_predictions[img_name]["pred_scores"])
+def add_class_detections(image_predictions, config):
+
+    class_map = config.arch["class_map"]
+    reverse_class_map = {v: k for k, v in class_map.items()}
+
+    for image_name in image_predictions.keys():
+        pred_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
+        pred_classes = np.array(image_predictions[image_name]["pred_classes"])
+        pred_scores = np.array(image_predictions[image_name]["pred_scores"])
         unique, counts = np.unique(pred_classes, return_counts=True)
         class_num_to_count = dict(zip(unique, counts))
         #pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
-        pred_class_counts = {k: 0 for k in img_set.class_map.keys()}
-        pred_class_boxes = {k: [] for k in img_set.class_map.keys()}
-        pred_class_scores = {k: [] for k in img_set.class_map.keys()}
+        pred_class_counts = {k: 0 for k in class_map.keys()}
+        pred_class_boxes = {k: [] for k in class_map.keys()}
+        pred_class_scores = {k: [] for k in class_map.keys()}
         for class_num in class_num_to_count.keys():
-            class_name = img_set.reverse_class_map[class_num]
+            class_name = reverse_class_map[class_num]
             #class_name = config.arch["reverse_class_map"][class_num]
             pred_class_counts[class_name] = int(class_num_to_count[class_num])
             pred_class_boxes[class_name] = (pred_boxes[class_num == pred_classes]).tolist()
             pred_class_scores[class_name] = (pred_scores[class_num == pred_classes]).tolist()
 
 
-        img_predictions[img_name]["pred_class_counts"] = pred_class_counts
-        img_predictions[img_name]["pred_class_boxes"] = pred_class_boxes
-        img_predictions[img_name]["pred_class_scores"] = pred_class_scores
+        image_predictions[image_name]["pred_class_counts"] = pred_class_counts
+        image_predictions[image_name]["pred_class_boxes"] = pred_class_boxes
+        image_predictions[image_name]["pred_class_scores"] = pred_class_scores
 
 
 
-def create_predictions_skeleton(img_set, dataset):
+def create_predictions_skeleton(image_set):
 
-    return {"farm_name": img_set.farm_name,
-            "field_name": img_set.field_name,
-            "mission_date": img_set.mission_date,
-            "dataset_name": dataset.name,
+    return {"farm_name": image_set.farm_name,
+            "field_name": image_set.field_name,
+            "mission_date": image_set.mission_date,
             "image_predictions": {}, 
             "patch_predictions": {},
-            "metrics": {"point": {},
-                        "boxplot": {}}
+            "metrics": 
+                {
+                    "training": 
+                    {
+                        "point": {},
+                        "boxplot": {}
+                    },
+                    "validation":
+                    {
+                        "point": {},
+                        "boxplot": {}
+                    },
+                    "test":
+                    {
+                        "point": {},
+                        "boxplot": {}
+                    },
+                    "all":
+                    {
+                        "point": {},
+                        "boxplot": {}
+                    },                    
+                }
             }

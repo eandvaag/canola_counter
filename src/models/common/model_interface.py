@@ -155,6 +155,8 @@ def create_model(req_args, on_found="raise"):
     logger.info("Instantiated new model: '{}' (uuid: {})".format(model_name, model_uuid))
 
 
+
+
 def handle_existing_training_data(model_uuid, model_name, on_found):
 
     model_dir = os.path.join("usr", "data", "models", model_uuid)

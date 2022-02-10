@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import glob
 import tqdm
 import imagesize
 import numpy as np
@@ -28,26 +29,26 @@ class ImgSet(object):
         self.patch_dir = os.path.join(self.root_dir, "patches")
         self.dzi_dir = os.path.join(self.root_dir, "dzi_images")
 
-        img_set_config_path = os.path.join(self.root_dir, "image_set_config.json")
-        img_set_info = json_io.load_json(img_set_config_path)
+        img_set_data_path = os.path.join(self.root_dir, "image_set_data.json")
+        img_set_data = json_io.load_json(img_set_data_path)
         
-        self.class_map = img_set_info["class_map"]
+        self.class_map = img_set_data["class_map"]
         self.reverse_class_map = {v: k for k, v in self.class_map.items()}
-        self.num_classes = img_set_info["num_classes"]
+        self.num_classes = img_set_data["num_classes"]
         
         self.datasets = {
-            "training": DataSet(img_set_info["training_image_paths"], self.class_map, "training"),
-            "validation": DataSet(img_set_info["validation_image_paths"], self.class_map, "validation"),
-            "test": DataSet(img_set_info["test_image_paths"], self.class_map, "test"),
-            "all": DataSet(img_set_info["all_image_paths"], self.class_map, "all")
+            "training": DataSet(img_set_data["training_image_paths"], self.class_map, "training"),
+            "validation": DataSet(img_set_data["validation_image_paths"], self.class_map, "validation"),
+            "test": DataSet(img_set_data["test_image_paths"], self.class_map, "test"),
+            "all": DataSet(img_set_data["all_image_paths"], self.class_map, "all")
 
         }
 
-        if (not self.datasets["training"].is_annotated) or \
-           (not self.datasets["validation"].is_annotated) or \
-           (not self.datasets["test"].is_annotated):
+        # if (not self.datasets["training"].is_annotated) or \
+        #    (not self.datasets["validation"].is_annotated) or \
+        #    (not self.datasets["test"].is_annotated):
 
-           raise RuntimeError("Training, validation, and test datasets must only contain annotated images.")
+        #    raise RuntimeError("Training, validation, and test datasets must only contain annotated images.")
 
 
         #img_width, img_height = imagesize.get(img_set_info["training_image_paths"][0])
@@ -55,89 +56,171 @@ class ImgSet(object):
         #self.img_height = img_height
         #self.flight_metadata = img_set_info["flight_metadata"]
 
-    def get_box_counts(self):
+    # def get_box_counts(self):
 
-        box_counts = {}
-        for dataset_name, dataset in self.datasets.items():
-            box_counts[dataset_name] = dataset.get_box_counts(self.class_map)
-        return box_counts
+    #     box_counts = {}
+    #     for dataset_name, dataset in self.datasets.items():
+    #         box_counts[dataset_name] = dataset.get_box_counts(self.class_map)
+    #     return box_counts
+
+class ImageSet(object):
+    def __init__(self, imageset_conf):
+
+        usr_data_root = os.path.join("usr", "data")
+
+        self.farm_name = imageset_conf["farm_name"]
+        self.field_name = imageset_conf["field_name"]
+        self.mission_date = imageset_conf["mission_date"]
+        self.patch_extraction_params = imageset_conf["patch_extraction_params"]
+
+        self.image_set_root = os.path.join(usr_data_root, "image_sets", 
+                                      self.farm_name, self.field_name, self.mission_date)
+        
+        self.annotations_path = os.path.join(self.image_set_root, "annotations", "annotations_w3c.json")
+        self.images_root = os.path.join(self.image_set_root, "images")
+
+        template = {
+            "farm_name": self.farm_name,
+            "field_name": self.field_name,
+            "mission_date": self.mission_date,
+            "patch_extraction_params": self.patch_extraction_params
+        }
+
+        template["image_names"] = imageset_conf["training_image_names"]
+        self.training_dataset = DataSet(template)
+        template["image_names"] = imageset_conf["validation_image_names"]
+        self.validation_dataset = DataSet(template)
+        template["image_names"] = imageset_conf["test_image_names"]
+        self.test_dataset = DataSet(template)
+
+        self.all_dataset = DataSet(template, all_images=True)        
+
 
 class DataSet(object):
+    def __init__(self, dataset_conf, all_images=False):
 
-    def __init__(self, img_paths, class_map, name):
+        usr_data_root = os.path.join("usr", "data")
 
-        self.imgs = []
-        self.class_map = class_map
+        self.farm_name = dataset_conf["farm_name"]
+        self.field_name = dataset_conf["field_name"]
+        self.mission_date = dataset_conf["mission_date"]
+        self.patch_extraction_params = dataset_conf["patch_extraction_params"]
 
-        self.is_annotated = True
-        for img_path in img_paths:
-            img = Img(img_path)
-            if not img.is_annotated:
-                self.is_annotated = False
-            self.imgs.append(img)
+        self.image_set_root = os.path.join(usr_data_root, "image_sets", 
+                                      self.farm_name, self.field_name, self.mission_date)
+        
+        self.annotations_path = os.path.join(self.image_set_root, "annotations", "annotations_w3c.json")
+        self.images_root = os.path.join(self.image_set_root, "images")
 
-
-        self.name = name
-
-    def get_box_counts(self):
-        xml_paths = [img.xml_path for img in self.imgs if img.is_annotated]
-        box_counts = xml_io.get_box_counts(xml_paths, self.class_map)
-        return box_counts
-
-
-    def get_mean_box_area(self):
-        box_areas = []
-
-        for img in self.imgs:
-            boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, self.class_map)
-            box_areas.extend(box_utils.box_areas_np(boxes).tolist())
-
-        return np.mean(box_areas)
-
-class Img(object):
-
-    def __init__(self, img_path):
-
-        self.img_name = os.path.basename(img_path)[:-4]
-        self.img_path = img_path
-        self.xml_path = img_path[:-3] + "xml"
-        self.is_annotated = os.path.exists(self.xml_path)
+        if all_images:
+            self.image_names = [os.path.basename(f)[:-4] for f in glob.glob(os.path.join(self.images_root, "*"))]
+        else:
+            self.image_names = dataset_conf["image_names"]
 
 
-    def load_img_array(self):
-        return cv2.cvtColor(cv2.imread(self.img_path), cv2.COLOR_BGR2RGB)
+        self.images = []
+        for image_name in self.image_names:
+            print("adding", image_name)
+            full_path = glob.glob(os.path.join(self.images_root, image_name + ".*"))[0]
+            print("full_path", full_path)
+            image = Image(full_path)
+            self.images.append(image)
+
+
+
+
+# class DataSet(object):
+
+#     def __init__(self, img_paths, class_map, name):
+
+#         self.imgs = []
+#         self.class_map = class_map
+
+#         # self.is_annotated = True
+#         for img_path in img_paths:
+#             img = Img(img_path)
+#             # if not img.is_annotated:
+#             #     self.is_annotated = False
+#             self.imgs.append(img)
+            
+#         self.name = name
+
+#     # def get_box_counts(self):
+#     #     xml_paths = [img.xml_path for img in self.imgs if img.is_annotated]
+#     #     box_counts = xml_io.get_box_counts(xml_paths, self.class_map)
+#     #     return box_counts
+
+
+#     # def get_mean_box_area(self):
+#     #     box_areas = []
+
+#     #     for img in self.imgs:
+#     #         boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, self.class_map)
+#     #         box_areas.extend(box_utils.box_areas_np(boxes).tolist())
+
+#     #     return np.mean(box_areas)
+
+class Image(object):
+
+    def __init__(self, image_path):
+
+        self.image_name = os.path.basename(image_path)[:-4]
+        self.image_path = image_path
+        # self.xml_path = img_path[:-3] + "xml"
+        # self.is_annotated = os.path.exists(self.xml_path)
+
+
+    def load_image_array(self):
+        return cv2.cvtColor(cv2.imread(self.image_path), cv2.COLOR_BGR2RGB)
 
     def get_wh(self):
-        w, h = imagesize.get(self.img_path)
+        w, h = imagesize.get(self.image_path)
         return w, h
 
-    def get_gsd(self, flight_metadata=None, prioritize_exif=False):
-        metadata = exif_io.get_exif_metadata(self.img_path)
+# class Img(object):
 
-        # TODO
-        #sensor_x_res = metadata["EXIF:FocalPlaneXResolution"]
-        #sensor_y_res = metadata["EXIF:FocalPlaneYResolution"]
-        #focal_length = metadata["EXIF:FocalLength"]
+#     def __init__(self, img_path):
 
-        flight_height = flight_metadata["flight_height_m"]
-        sensor_height = flight_metadata["sensor_height_mm"] * 1000
-        sensor_width = flight_metadata["sensor_width_mm"] * 1000
-        focal_length = flight_metadata["focal_length_mm"] * 1000
+#         self.img_name = os.path.basename(img_path)[:-4]
+#         self.img_path = img_path
+#         # self.xml_path = img_path[:-3] + "xml"
+#         # self.is_annotated = os.path.exists(self.xml_path)
 
-        img_width, img_height = self.get_wh()
 
-        gsd_h = (flight_height * sensor_height) / (focal_length * img_height)
-        gsd_w = (flight_height * sensor_width) / (focal_length * img_width)
-        gsd = max(gsd_h, gsd_w)
+#     def load_img_array(self):
+#         return cv2.cvtColor(cv2.imread(self.img_path), cv2.COLOR_BGR2RGB)
+
+#     def get_wh(self):
+#         w, h = imagesize.get(self.img_path)
+#         return w, h
+
+    # def get_gsd(self, flight_metadata=None, prioritize_exif=False):
+    #     metadata = exif_io.get_exif_metadata(self.img_path)
+
+    #     # TODO
+    #     #sensor_x_res = metadata["EXIF:FocalPlaneXResolution"]
+    #     #sensor_y_res = metadata["EXIF:FocalPlaneYResolution"]
+    #     #focal_length = metadata["EXIF:FocalLength"]
+
+    #     flight_height = flight_metadata["flight_height_m"]
+    #     sensor_height = flight_metadata["sensor_height_mm"] * 1000
+    #     sensor_width = flight_metadata["sensor_width_mm"] * 1000
+    #     focal_length = flight_metadata["focal_length_mm"] * 1000
+
+    #     img_width, img_height = self.get_wh()
+
+    #     gsd_h = (flight_height * sensor_height) / (focal_length * img_height)
+    #     gsd_w = (flight_height * sensor_width) / (focal_length * img_width)
+    #     gsd = max(gsd_h, gsd_w)
         
-        return gsd
+    #     return gsd
 
-    def get_area_m2(self, flight_metadata=None, prioritize_exif=False):
+    # def get_area_m2(self, flight_metadata=None, prioritize_exif=False):
 
-        gsd = self.get_gsd(flight_metadata=flight_metadata, prioritize_exif=prioritize_exif)
-        img_width, img_height = self.get_wh()
-        area_m2 = (img_width * gsd) * (img_height * gsd)
-        return area_m2
+    #     gsd = self.get_gsd(flight_metadata=flight_metadata, prioritize_exif=prioritize_exif)
+    #     img_width, img_height = self.get_wh()
+    #     area_m2 = (img_width * gsd) * (img_height * gsd)
+    #     return area_m2
 
 
 def register_image_set(req_args):

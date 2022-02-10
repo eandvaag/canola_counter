@@ -212,7 +212,7 @@ class JitterBoxExtractor(DetectorPatchExtractor):
 
 
         img_array = img.load_img_array()
-        gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
+        #gt_boxes, _ = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map)
 
         centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
 

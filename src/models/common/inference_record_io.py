@@ -7,7 +7,7 @@ def add_entry_to_inference_record(entry):
     farm_name = entry["farm_name"]
     field_name = entry["field_name"]
     mission_date = entry["mission_date"]
-    dataset_name = entry["dataset_name"]
+    #dataset_name = entry["dataset_name"]
     model_uuid = entry["model_uuid"]
     value = entry["value"]
 
@@ -28,10 +28,10 @@ def add_entry_to_inference_record(entry):
         d[mission_date] = {}
 
     d = d[mission_date]
-    if dataset_name not in d:
-        d[dataset_name] = {}
+    #if dataset_name not in d:
+    #    d[dataset_name] = {}
 
-    d = d[dataset_name]
+    #d = d[dataset_name]
     d[model_uuid] = value
 
     json_io.save_json(inference_lookup_path, inference_lookup)
@@ -47,12 +47,12 @@ def remove_entries_from_inference_record(entries):
         farm_name = entry["farm_name"]
         field_name = entry["field_name"]
         mission_date = entry["mission_date"]
-        dataset_name = entry["dataset_name"]
+        #dataset_name = entry["dataset_name"]
         model_uuid = entry["model_uuid"]
 
 
         try:
-            inference_entries = inference_lookup["inference_runs"][farm_name][field_name][mission_date][dataset_name]
+            inference_entries = inference_lookup["inference_runs"][farm_name][field_name][mission_date] #[dataset_name]
         except KeyError:
             continue
 
