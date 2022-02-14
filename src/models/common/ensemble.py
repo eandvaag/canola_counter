@@ -154,7 +154,6 @@ def ensemble_predictions(req_args):
 
 
     ensemble_uuid = req_args["ensemble_uuid"]
-    #group_config = copy.deepcopy(req_args)
     model_uuids = req_args["model_uuids"]
     prediction_dirnames = req_args["prediction_dirnames"]
     ensemble_method = req_args["ensemble_method"]

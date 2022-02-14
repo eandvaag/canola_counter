@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import time
+import sys
 import os
 import shutil
 import tqdm
@@ -435,8 +436,8 @@ def search_for_iou(predictions, config):
 #                 "dataset_name": dataset_name,
 #                 "model_uuid": config.arch["model_uuid"],
 #                 "value": {
-#                     "group_uuid": config.arch["group_uuid"],
-#                     "group_name": config.arch["group_name"],
+#                     "job_uuid": config.arch["job_uuid"],
+#                     "job_name": config.arch["job_name"],
 #                     "model_uuid": config.arch["model_uuid"],
 #                     "model_name": config.arch["model_name"],
 #                     "prediction_dirname": pred_dirname,
@@ -641,7 +642,6 @@ def generate_predictions(config):
     #data_loader = data_load.InferenceDataLoader(tf_record_path, config)
 
 
-
     for image_set_conf in config.inference["image_sets"]:
 
         #driver_utils.set_active_inference_params(config)
@@ -774,7 +774,7 @@ def generate_predictions(config):
 
         results_dir = os.path.join("usr", "data", "results",
                                    image_set.farm_name, image_set.field_name, image_set.mission_date,
-                                   config.arch["group_uuid"],
+                                   config.arch["job_uuid"],
                                    config.arch["model_uuid"])
         os.makedirs(results_dir, exist_ok=True)
 
@@ -797,8 +797,8 @@ def generate_predictions(config):
         #     #"dataset_name": dataset_name,
         #     "model_uuid": config.arch["model_uuid"],
         #     "value": {
-        #         "group_uuid": config.arch["group_uuid"],
-        #         "group_name": config.arch["group_name"],
+        #         "job_uuid": config.arch["job_uuid"],
+        #         "job_name": config.arch["job_name"],
         #         "model_uuid": config.arch["model_uuid"],
         #         "model_name": config.arch["model_name"],
         #         "prediction_dirname": pred_dirname,
@@ -961,8 +961,8 @@ def generate_predictions(config):
         #         "dataset_name": dataset_name,
         #         "model_uuid": config.arch["model_uuid"],
         #         "value": {
-        #             "group_uuid": config.arch["group_uuid"],
-        #             "group_name": config.arch["group_name"],
+        #             "job_uuid": config.arch["job_uuid"],
+        #             "job_name": config.arch["job_name"],
         #             "model_uuid": config.arch["model_uuid"],
         #             "model_name": config.arch["model_name"],
         #             "prediction_dirname": pred_dirname,
@@ -1001,6 +1001,8 @@ def train(config):
             ds = DataSet(dataset_conf)
             training_patch_dir = driver_utils.extract_patches(ds, config)
             training_tf_record_paths.append(os.path.join(training_patch_dir, "annotated-patches-record.tfrec"))
+            training_tf_record_paths_obj.append(os.path.join(training_patch_dir, "annotated-patches-with-boxes-record.tfrec"))
+            training_tf_record_paths_bg.append(os.path.join(training_patch_dir, "annotated-patches-with-no-boxes-record.tfrec"))
 
 
         validation_tf_record_paths = []
@@ -1009,6 +1011,9 @@ def train(config):
             ds = DataSet(dataset_conf)
             validation_patch_dir = driver_utils.extract_patches(ds, config)
             validation_tf_record_paths.append(os.path.join(validation_patch_dir, "annotated-patches-record.tfrec"))
+            validation_tf_record_paths_obj.append(os.path.join(validation_patch_dir, "annotated-patches-with-boxes-record.tfrec"))
+            validation_tf_record_paths_bg.append(os.path.join(validation_patch_dir, "annotated-patches-with-no-boxes-record.tfrec"))
+
       
 
         # print("got patches")
@@ -1098,16 +1103,18 @@ def train(config):
         epochs_since_improvement = 0
         loss_record = {
             "training_loss": { "values": [],
-                               "best": {"epoch": -1, "value": float("inf")},
-                               "epochs_since_improvement": 0},
+                               "best": {"epoch": -1, "value": sys.float_info.max},
+                               "epochs_since_improvement": 0}, 
             "validation_loss": {"values": [],
-                                "best": {"epoch": -1, "value": float("inf")},
+                                "best": {"epoch": -1, "value": sys.float_info.max},
                                 "epochs_since_improvement": 0}
         }
 
         logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
                      config.arch["model_type"], config.arch["model_name"], num_train_images, num_val_images))
 
+
+        loss_record_path = os.path.join(config.loss_records_dir, str(seq_num) + ".json")
 
         max_num_epochs = config.training["active"]["max_num_epochs"]
         steps_taken = 0
@@ -1135,6 +1142,17 @@ def train(config):
                 steps_taken += 1
 
 
+            cur_training_loss = float(train_loss_metric.result())
+
+            cur_training_loss_is_best = driver_utils.update_loss_tracker_entry(loss_record, "training_loss", cur_training_loss, epoch)
+            if cur_training_loss_is_best and config.training["active"]["save_method"] == "best_training_loss":
+                model_io.save_model_weights(yolov4, config, seq_num, epoch)
+
+            json_io.save_json(loss_record_path, loss_record)
+
+            train_loss_metric.reset_states()
+
+
             val_bar = tqdm.tqdm(val_dataset, total=val_steps_per_epoch)
             
             for batch_data in val_bar:
@@ -1151,26 +1169,22 @@ def train(config):
                                         loss_record["validation_loss"]["best"]["value"],
                                         loss_record["validation_loss"]["best"]["epoch"]))
 
-            cur_training_loss = float(train_loss_metric.result())
+            
             cur_validation_loss = float(val_loss_metric.result())
-
-            cur_training_loss_is_best = driver_utils.update_loss_tracker_entry(loss_record, "training_loss", cur_training_loss, epoch)
-            if cur_training_loss_is_best and config.training["active"]["save_method"] == "best_training_loss":
-                model_io.save_model_weights(yolov4, config, seq_num, epoch)
 
             cur_validation_loss_is_best = driver_utils.update_loss_tracker_entry(loss_record, "validation_loss", cur_validation_loss, epoch)
             if cur_validation_loss_is_best and config.training["active"]["save_method"] == "best_validation_loss":
                 model_io.save_model_weights(yolov4, config, seq_num, epoch)    
 
+
+            json_io.save_json(loss_record_path, loss_record)
+            
+            val_loss_metric.reset_states()
+
             if driver_utils.stop_early(config, loss_record):
                 break
 
 
-            train_loss_metric.reset_states()
-            val_loss_metric.reset_states()
 
-
-        loss_record_path = os.path.join(config.loss_records_dir, str(seq_num) + ".json")
-        json_io.save_json(loss_record_path, loss_record)
 
         shutil.rmtree(patches_dir)

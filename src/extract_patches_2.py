@@ -20,11 +20,15 @@ def extract_patches(dataset, config):
     patch_dir = os.path.join(config.model_dir, "patches", str(uuid.uuid4()))
     os.makedirs(patch_dir)
     annotated_patches_record_path = os.path.join(patch_dir, "annotated-patches-record.tfrec")
+    annotated_patches_with_boxes_record_path = os.path.join(patch_dir, "annotated-patches-with-boxes-record.tfrec")
+    annotated_patches_with_no_boxes_record_path = os.path.join(patch_dir, "annotated-patches-with-no-boxes-record.tfrec")
     unannotated_patches_record_path = os.path.join(patch_dir, "unannotated-patches-record.tfrec")
     print("writing patches to {} and {}".format(annotated_patches_record_path, unannotated_patches_record_path))
     
 
     annotated_tf_records = []
+    annotated_tf_records_with_boxes = []
+    annotated_tf_records_with_no_boxes = []
     unannotated_tf_records = []
 
     for image in tqdm.tqdm(dataset.images, desc="Generating patches"):
@@ -35,13 +39,32 @@ def extract_patches(dataset, config):
 
         write_patches(patch_dir, image_patches)
         tf_records_for_image = tf_record_io.create_patch_tf_records_for_image(image, image_patches, patch_dir, is_annotated=is_annotated)
+        
+
+
         if is_annotated:
             annotated_tf_records.extend(tf_records_for_image)
+
+
+            tf_records_for_image_with_boxes = tf_record_io.create_patch_tf_records_for_image(image, image_patches, 
+                                                                                             patch_dir, is_annotated, 
+                                                                                             require_box=True)
+
+            tf_records_for_image_with_no_boxes = tf_record_io.create_patch_tf_records_for_image(image, image_patches, 
+                                                                                             patch_dir, is_annotated, 
+                                                                                             require_no_box=True)
+
+            annotated_tf_records_with_boxes.extend(tf_records_for_image_with_boxes) 
+            annotated_tf_records_with_no_boxes.extend(tf_records_for_image_with_no_boxes)  
+
+
         else:
             unannotated_tf_records.extend(tf_records_for_image)
 
 
     tf_record_io.output_patch_tf_records(annotated_patches_record_path, annotated_tf_records)
+    tf_record_io.output_patch_tf_records(annotated_patches_with_boxes_record_path, annotated_tf_records_with_boxes)
+    tf_record_io.output_patch_tf_records(annotated_patches_with_no_boxes_record_path, annotated_tf_records_with_no_boxes)
     tf_record_io.output_patch_tf_records(unannotated_patches_record_path, unannotated_tf_records)
 
 
