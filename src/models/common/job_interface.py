@@ -5,16 +5,24 @@ import copy
 import randomname
 import uuid
 import datetime
+import signal
 
-from io_utils import json_io
+import math as m
+import random
+import numpy as np
+
+from io_utils import json_io, w3c_io
 from models.common import model_interface #, inference_record_io
 
 
-ADDED_TO_JOB = "added_to_job"
-FINISHED_ARCH = "finished_arch"
-FINISHED_TRAINING = "finished_training"
-FINISHED_INFERENCE = "finished_inference"
-
+#ADDED_TO_JOB = "added_to_job"
+#FINISHED_ARCH = "finished_arch"
+#FINISHED_TRAINING = "finished_training"
+#FINISHED_INFERENCE = "finished_inference"
+ENQUEUED = "Enqueued"
+TRAINING = "Training"
+PREDICTING = "Predicting"
+FINISHED = "Finished"
 
 
 def create_model_configs(job_config, model_index):
@@ -94,48 +102,257 @@ def add_models_to_job_config(job_config):
 
     job_config["model_info"] = []
 
-
     for (model_uuid, model_name) in zip(model_uuids, model_names):
         job_config["model_info"].append({
             "model_uuid": model_uuid,
             "model_name": model_name,
-            "stage": ADDED_TO_JOB,
+            "stage": ENQUEUED,
         })
 
 
 
-def run_job(req_args):
+def get_completed_images(annotations):
+    return [img for img in annotations.keys() \
+            if annotations[img]["status"] == "completed"]
+
+def partition_datasets(farm_name, field_name, mission_date):
+
+    annotations_path = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date,
+                                     "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+    completed_images = get_completed_images(annotations)
+    num_completed_images = len(completed_images)
+
+    training_partition_map = {
+        2: 1,
+        3: 2,
+        4: 3,
+        5: 4,
+        6: 5,
+        7: 5,
+        8: 6,
+        9: 6,
+        10: 7,
+        11: 7,
+        12: 8
+    }
+
+    if num_completed_images < 2:
+        raise RuntimeError("Insufficient number of fully annotated images. At least 2 fully annotated images are required.") 
+    elif num_completed_images in training_partition_map:
+        num_training = training_partition_map[num_completed_images]
+    else:
+        training_percent = 60
+        num_training = m.floor(num_completed_images * (training_percent / 100))
+
+    shuffled = random.sample(completed_images, num_completed_images)
+    training_images = shuffled[:num_training]
+    validation_images = shuffled[num_training:] #(num_training+num_validation)]
+
+    return training_images, validation_images
+
+
+
+
+def get_patch_hw(farm_name, field_name, mission_date):
+
+    annotations_path = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date,
+                                     "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+    box_areas = []
+    for img_name in annotations.keys():
+        boxes = annotations[img_name]["boxes"]
+        if boxes.size > 0:
+            img_box_areas = ((boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])).tolist()
+            box_areas.extend(img_box_areas)
+    
+    if len(box_areas) < 32:
+        raise RuntimeError("Insufficient number of annotations provided. At least 32 annotations are required.") 
+
+    patch_area = np.median(box_areas) * (90000 / 2509.44)
+    patch_hw = round(m.sqrt(patch_area))
+    print("patch_hw", patch_hw)
+    return patch_hw
+    
+
+
+def fill_job_config(job_config, farm_name, field_name, mission_date):
+
+    training_images, validation_images = partition_datasets(farm_name, field_name, mission_date)
+    patch_hw = get_patch_hw(farm_name, field_name, mission_date)
+
+    
+    job_config.update({
+        "replications": 1,
+
+        "arch_config": {
+
+            "model_type": "yolov4_tiny",
+            "backbone_config": {
+                "backbone_type": "csp_darknet53_tiny"
+            },
+            "neck_config": {
+                "neck_type": "yolov4_tiny_deconv"
+            },
+            "max_detections": 50,
+            "input_image_shape": [416, 416, 3],
+            "class_map": {"plant": 0}
+        },
+
+
+        "training_config": {
+            "training_sequence": [
+
+                {
+                    "training_datasets": [
+                        {
+                            "farm_name": farm_name,
+                            "field_name": field_name,
+                            "mission_date": mission_date,
+                            "image_names": training_images,
+                            "patch_extraction_params": {
+                                "method": "tile",
+                                "patch_size": patch_hw,
+                                "patch_overlap_percent": 50
+                            }
+                        }
+                    ],
+                    "validation_datasets": [
+                        {
+                            "farm_name": farm_name,
+                            "field_name": field_name,
+                            "mission_date": mission_date,
+                            "image_names": validation_images,
+                            "patch_extraction_params": {
+                                "method": "tile",
+                                "patch_size": patch_hw,
+                                "patch_overlap_percent": 50
+                            }
+                        }
+                    ],
+
+
+                    "data_loader": {
+                        "type": "default"
+                        #"percent_of_batch_with_objects": 50
+                    },
+
+                    "learning_rate_schedule": {
+                        "schedule_type": "constant",
+                        "learning_rate": 0.0001
+                    },
+
+
+                    "data_augmentations": [
+                        {
+                            "type": "flip_vertical", 
+                            "parameters": {
+                                "probability": 0.5
+                            }
+                        },
+                        {
+                            "type": "flip_horizontal", 
+                            "parameters": {
+                                "probability": 0.5
+                            }
+                        },
+                        {
+                            "type": "rotate_90", 
+                            "parameters": {
+                                "probability": 0.5
+                            }
+                        }                   
+                    ],
+
+                    "min_num_epochs": 15,
+                    "max_num_epochs": 300,
+                    "early_stopping": {
+                        "apply": True,
+                        "monitor": "validation_loss",
+                        "num_epochs_tolerance": 15
+                    },
+                    "batch_size": 16,
+
+                    "save_method": "best_validation_loss",
+                    "percent_of_training_set_used": 100,
+                    "percent_of_validation_set_used": 100                    
+
+                }
+            ]
+        },
+
+
+        "inference_config": {
+
+
+            "image_sets": [
+                {
+                    "farm_name": farm_name,
+                    "field_name": field_name,
+                    "mission_date": mission_date,
+                    "training_image_names": training_images,
+                    "validation_image_names": validation_images,
+                    "test_image_names": [],
+                    "patch_extraction_params": {
+                        "method": "tile",
+                        "patch_size": patch_hw,
+                        "patch_overlap_percent": 50
+                    }
+                },
+            ],
+
+            "patch_border_buffer_percent": 0.10,
+            "batch_size": 16,
+            "patch_nms_iou_thresh": 0.4,
+            "image_nms_iou_thresh": 0.4,
+            "score_thresh": 0.5
+        }
+    })
+
+    add_models_to_job_config(job_config)
+    return job_config
+
+
+def run_job(job_uuid, job_name, farm_name, field_name, mission_date):
+
 
     logger = logging.getLogger(__name__)
 
+    #job_uuid = str(uuid.uuid4())
 
-    job_uuid = str(uuid.uuid4())
-    job_config = copy.deepcopy(req_args)
+    def signal_handler(sig, frame):
+        print("you pressed CTRL+C")
+        raise_job_exception(job_uuid, Exception("Interrupted by user"))
+    signal.signal(signal.SIGINT, signal_handler)
+
+    job_config = {} #copy.deepcopy(req_args)
 
     job_config["start_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     job_config["job_uuid"] = job_uuid
-    job_config["model_info"] = {}
-
-    job_name = job_config["job_name"]
+    job_config["job_name"] = job_name
 
     logger.info("Started processing job '{}' (uuid: {}).".format(job_name, job_uuid))
 
-    add_models_to_job_config(job_config)
-
-    # Save the job before training the models. If aborted, the job can now be destroyed.
-    job_config["status"] = "Running"
-    job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
-    json_io.save_json(job_config_path, job_config)
-
-
-    if "variation_config" in job_config:
-        outer_loop_range = len(job_config["variation_config"]["param_values"])
-    else:
-        outer_loop_range = 1
-
-    exception_handle_method = job_config["on_exception"] if "on_exception" in job_config else "raise"
-    model_index = 0
     try:
+        # Save the job before training the models. If aborted, the job can now be destroyed.
+        job_config["status"] = "Running"
+        job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+        json_io.save_json(job_config_path, job_config)
+
+        fill_job_config(job_config, farm_name, field_name, mission_date)
+        json_io.save_json(job_config_path, job_config)
+
+
+        if "variation_config" in job_config:
+            outer_loop_range = len(job_config["variation_config"]["param_values"])
+        else:
+            outer_loop_range = 1
+
+        exception_handle_method = job_config["on_exception"] if "on_exception" in job_config else "raise"
+        model_index = 0
+
         for _ in range(outer_loop_range):
             for _ in range(job_config["replications"]):
 
@@ -145,17 +362,16 @@ def run_job(req_args):
                 m = job_config["model_info"][model_index]
 
                 model_interface.create_model(arch_config)
-                m["stage"] = FINISHED_ARCH
+
+                m["stage"] = TRAINING
                 json_io.save_json(job_config_path, job_config)
-
-
                 model_interface.train_model(training_config)
-                m["stage"] = FINISHED_TRAINING
+
+                m["stage"] = PREDICTING
                 json_io.save_json(job_config_path, job_config)
-
-
                 model_interface.run_inference(inference_config)
-                m["stage"] = FINISHED_INFERENCE
+
+                m["stage"] = FINISHED
                 json_io.save_json(job_config_path, job_config)
 
                 logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
@@ -163,14 +379,14 @@ def run_job(req_args):
                 model_index += 1
 
     except Exception as e:
-        if exception_handle_method == "raise":
+        #if exception_handle_method == "raise":
             #raise e
-            raise_job_exception(job_uuid, e)
+        raise_job_exception(job_uuid, e)
         #elif exception_handle_method == "destroy_and_raise":
         #    destroy_job({"job_uuid": job_uuid})
         #    raise e
-        else:
-            raise e
+        #else:
+        #    raise e
 
 
     job_config["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

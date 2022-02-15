@@ -11,7 +11,7 @@ import argparse
 import logging
 
 #import handler
-import auto_handler
+from models.common import job_interface #auto_handler
 
 from io_utils import json_io
 
@@ -21,7 +21,7 @@ from io_utils import json_io
 def main():
     logging.basicConfig(level=logging.INFO)
     #handler.handle_request(req)
-    auto_handler.run(args.job_uuid, args.job_name, args.farm_name, args.field_name, args.mission_date)
+    job_interface.run_job(args.job_uuid, args.job_name, args.farm_name, args.field_name, args.mission_date)
 
 
 if __name__ == "__main__":

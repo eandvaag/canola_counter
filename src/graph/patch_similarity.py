@@ -30,6 +30,18 @@ def get_model():
     return model
 
 from sklearn.neighbors import NearestNeighbors
+
+
+
+
+def construct_graph(target_farm_name, target_field_name, target_mission_date):
+    pass
+
+
+
+
+
+
 def test():
 
 
