@@ -72,7 +72,7 @@ class YOLOv4Loss:
         self.num_scales = config.arch["num_scales"]
         self.decoder = Decoder(config)
 
-
+    @tf.function
     def __call__(self, batch_labels, conv):
 
 
@@ -87,6 +87,29 @@ class YOLOv4Loss:
             ciou_loss += loss_items[0]
             obj_loss += loss_items[1]
             prob_loss += loss_items[2]
+
+        # label = batch_labels[0][0]
+        # bboxes = batch_labels[0][1]
+        # loss_items = self._calculate_loss_for_scale(label, bboxes, conv[0], pred[0], self.strides[0])
+        # ciou_loss += loss_items[0]
+        # obj_loss += loss_items[1]
+        # prob_loss += loss_items[2]
+
+        # label = batch_labels[1][0]
+        # bboxes = batch_labels[1][1]
+        # loss_items = self._calculate_loss_for_scale(label, bboxes, conv[1], pred[1], self.strides[1])
+        # ciou_loss += loss_items[0]
+        # obj_loss += loss_items[1]
+        # prob_loss += loss_items[2]
+
+
+        # label = batch_labels[2][0]
+        # bboxes = batch_labels[2][1]
+        # loss_items = self._calculate_loss_for_scale(label, bboxes, conv[2], pred[2], self.strides[2])
+        # ciou_loss += loss_items[0]
+        # obj_loss += loss_items[1]
+        # prob_loss += loss_items[2]
+
 
         loss_value = ciou_loss + obj_loss + prob_loss
         return loss_value
@@ -106,12 +129,12 @@ class YOLOv4Loss:
         #print("tf.shape(conv)", tf.shape(conv))
         #print("tf.shape(pred)", tf.shape(pred))
 
-
+    #@tf.function
     def _calculate_loss_for_scale(self, label, bboxes, conv, pred, stride):
         conv_shape = tf.shape(conv)
         batch_size = conv_shape[0]
         output_size = conv_shape[1]
-        input_size = output_size * stride
+        input_size = output_size * tf.cast(stride, dtype=tf.int32)
 
 
         # at this point, both predicted and ground truth boxes are in xywh format
@@ -127,7 +150,7 @@ class YOLOv4Loss:
 
         label_xywh = label[:, :, :, :, 0:4]
         respond_bbox = label[:, :, :, :, 4:5]
-        label_prob = label[:, :, :, :, 5: ]
+        label_prob = label[:, :, :, :, 5:]
 
         # respond_bbox: if the bounding box prior has been assigned to a ground truth object,
         # the value will be 1.0. Otherwise, the value is 0.
@@ -148,7 +171,8 @@ class YOLOv4Loss:
         # (?? I cannot find this concept of bbox_loss_scale in any paper)
         ciou_loss = respond_bbox * bbox_loss_scale * (1 - ciou)
 
-        iou = bbox_iou(pred_xywh[:, :, :, :, np.newaxis, :], bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :])
+        #iou = bbox_iou(pred_xywh[:, :, :, :, np.newaxis, :], bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :])
+        iou = bbox_iou(pred_xywh[:, :, :, :, tf.newaxis, :], bboxes[:, tf.newaxis, tf.newaxis, tf.newaxis, :, :])
 
         # (??) Find the predicted box with the largest IoU value from the ground truth box
         # (Possibly: for each predicted box, find the ground truth box with the largest IoU)
@@ -212,32 +236,40 @@ class YOLOv4Loss:
         #                            +
         #                            (1 - label_prob) * tf.math.log(tf.clip_by_value((1 - pred_prob), eps, 1.0)))
 
+
         prob_loss = respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
         
         save_ciou_loss = ciou_loss
         save_conf_loss = conf_loss
         save_prob_loss = prob_loss
 
+        #tf.print("ciou_loss", ciou_loss)
+        #tf.print("conf_loss", conf_loss)
+        #tf.print("prob_loss", prob_loss)
 
         ciou_loss = tf.reduce_mean(tf.reduce_sum(ciou_loss, axis=[1, 2, 3, 4]))
         conf_loss = tf.reduce_mean(tf.reduce_sum(conf_loss, axis=[1, 2, 3, 4]))
         prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1, 2, 3, 4]))
+
+        #tf.print("ciou_loss", ciou_loss)
+        #tf.print("conf_loss", conf_loss)
+        #tf.print("prob_loss", prob_loss)
         
-        if tf.math.is_nan(ciou_loss) or tf.math.is_nan(conf_loss) or tf.math.is_nan(prob_loss):
+        # if tf.math.is_nan(ciou_loss) or tf.math.is_nan(conf_loss) or tf.math.is_nan(prob_loss):
 
-            print("NaN loss has occurred")
+        #     print("NaN loss has occurred")
 
-            print("pred", pred)
+        #     print("pred", pred)
 
-            print("ciou_loss", save_ciou_loss)
-            print("conf_loss", save_conf_loss)
-            print("prob_loss", save_prob_loss)
+        #     print("ciou_loss", save_ciou_loss)
+        #     print("conf_loss", save_conf_loss)
+        #     print("prob_loss", save_prob_loss)
 
-            print("final ciou_loss", ciou_loss)
-            print("final conf_loss", conf_loss)
-            print("final prob_loss", prob_loss)
+        #     print("final ciou_loss", ciou_loss)
+        #     print("final conf_loss", conf_loss)
+        #     print("final prob_loss", prob_loss)
 
-            exit()
+        #     exit()
 
         return ciou_loss, conf_loss, prob_loss
 

@@ -1,6 +1,7 @@
 import uuid
 import os
 
+import math as m
 import numpy as np
 
 from io_utils import xml_io, json_io
@@ -58,6 +59,7 @@ def save_annotations(annotations_path, predictions, config):
             annotation_uuid = str(uuid.uuid4())
 
             pred_class_num = predictions["image_predictions"][image_name]["pred_classes"][i]
+            pred_score = predictions["image_predictions"][image_name]["pred_scores"][i]
 
             min_y = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][0]
             min_x = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][1]
@@ -75,6 +77,11 @@ def save_annotations(annotations_path, predictions, config):
                     "type": "TextualBody",
                     "purpose": "class",
                     "value": reverse_class_map[pred_class_num]
+                },
+                {
+                    "type": "TextualBody",
+                    "purpose": "score",
+                    "value": str(round(pred_score, 2))
                 }],
                 "target": {
                     "source": "",
@@ -148,4 +155,37 @@ def convert_xml_files_to_w3c(xml_dir, class_map):
 
     return res
 
+
+
+def get_completed_images(annotations):
+    return [image_name for image_name in annotations.keys() \
+            if annotations[image_name]["status"] == "completed"]
+
+
+def get_num_annotations(annotations, require_completed=True):
+    num_annotations = 0
+    for image_name in annotations.keys():
+        if annotations[image_name]["status"] == "completed" or not require_completed:
+            boxes = annotations[image_name]["boxes"]
+            num_annotations += np.shape(boxes)[0]
+    return num_annotations
+
+
+def get_patch_size(annotations):
+    
+    box_areas = []
+    for img_name in annotations.keys():
+        boxes = annotations[img_name]["boxes"]
+        if boxes.size > 0:
+            img_box_areas = ((boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])).tolist()
+            box_areas.extend(img_box_areas)
+
+    if len(box_areas) == 0:
+        raise RuntimeError("No annotations found.") 
+
+    patch_area = np.median(box_areas) * (90000 / 2500)
+    patch_size = round(m.sqrt(patch_area))
+    print("patch_size", patch_size)
+    return patch_size
+    
 

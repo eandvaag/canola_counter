@@ -2,13 +2,16 @@ from abc import ABC, abstractmethod
 import os
 import shutil
 import random
-import randomname
+#import randomname
 import logging
 import uuid
 
 from io_utils import json_io
 
 from models.common import model_config
+
+import extract_patches as ep
+import build_datasets
 
 from models.retinanet import retinanet_driver
 from models.centernet import centernet_driver
@@ -24,12 +27,12 @@ class DetectorWrapper(ABC):
 
     def train_model(self, train_config):
         self.config.add_training_config(train_config)
+        build_datasets.build_training_datasets(self.config)
         self.custom_train_model()
-
-
 
     def run_inference(self, inference_config):
         self.config.add_inference_config(inference_config)
+        build_datasets.build_inference_datasets(self.config)
         return self.custom_run_inference()
 
 
@@ -124,7 +127,7 @@ def handle_existing_arch_data(model_uuid, model_name, on_found):
 
 
 
-def create_model(req_args, on_found="raise"):
+def create_model(arch_config, on_found="replace"):
     """
         on_found:
             "raise": raise a RuntimeError
@@ -135,14 +138,14 @@ def create_model(req_args, on_found="raise"):
 
     usr_data_root = os.path.join("usr", "data")
 
-    if "model_uuid" not in req_args:
-        req_args["model_uuid"] = str(uuid.uuid4())
+    if "model_uuid" not in arch_config:
+        arch_config["model_uuid"] = str(uuid.uuid4())
 
-    if "model_name" not in req_args:
-        req_args["model_name"] = randomname.get_name()
+    if "model_name" not in arch_config:
+        arch_config["model_name"] = randomname.get_name()
 
-    model_uuid = req_args["model_uuid"]
-    model_name = req_args["model_name"]
+    model_uuid = arch_config["model_uuid"]
+    model_name = arch_config["model_name"]
     model_dir = os.path.join(usr_data_root, "models", model_uuid)
     arch_config_path = os.path.join(model_dir, "arch_config.json")
 
@@ -150,7 +153,7 @@ def create_model(req_args, on_found="raise"):
 
     os.makedirs(model_dir)
     
-    json_io.save_json(arch_config_path, req_args)
+    json_io.save_json(arch_config_path, arch_config)
 
     logger.info("Instantiated new model: '{}' (uuid: {})".format(model_name, model_uuid))
 
@@ -165,7 +168,9 @@ def handle_existing_training_data(model_uuid, model_name, on_found):
         os.path.join(model_dir, "weights"),
         os.path.join(model_dir, "loss_records"),
         os.path.join(model_dir, "training_config.json"),
-        os.path.join(model_dir, "class_map.json")]
+        os.path.join(model_dir, "class_map.json"),
+        os.path.join(model_dir, "source_patches")
+    ]
 
     for item in training_data:
         if os.path.exists(item):
@@ -178,13 +183,13 @@ def handle_existing_training_data(model_uuid, model_name, on_found):
                 else:
                     os.remove(item)
 
-def train_model(req_args, on_found="raise"):
+def train_model(training_config, on_found="replace"):
 
     logger = logging.getLogger(__name__)
 
     usr_data_root = os.path.join("usr", "data")
-    model_uuid = req_args["model_uuid"]
-    model_name = req_args["model_name"]
+    model_uuid = training_config["model_uuid"]
+    model_name = training_config["model_name"]
 
     handle_existing_training_data(model_uuid, model_name, on_found)
 
@@ -196,14 +201,18 @@ def train_model(req_args, on_found="raise"):
     loss_records_dir = os.path.join(model_dir, "loss_records")
     os.makedirs(loss_records_dir)
 
+    #training_patch_dir, validation_patch_dir = 
+    #ep.create_source_patches(training_config)
+    #req_args["training_sequence"][0]["training_patch_dir"] = training_patch_dir
+    #req_args["training_sequence"][0]["validation_patch_dir"] = validation_patch_dir
 
-    train_config = req_args
-    train_config_path = os.path.join(model_dir, "training_config.json")
-    json_io.save_json(train_config_path, train_config)
+
+    training_config_path = os.path.join(model_dir, "training_config.json")
+    json_io.save_json(training_config_path, training_config)
 
     model_wrapper = create_model_wrapper(model_dir)
 
-    model_wrapper.train_model(train_config)
+    model_wrapper.train_model(training_config)
 
     logger.info("Finished training model: '{}' (uuid: {})".format(model_name, model_uuid))
     
@@ -215,7 +224,8 @@ def handle_existing_inference_data(model_uuid, model_name, on_found):
     model_dir = os.path.join("usr", "data", "models", model_uuid)
 
     inference_data = [
-        os.path.join(model_dir, "predictions")
+        os.path.join(model_dir, "predictions"),
+        os.path.join(model_dir, "target_patches")
     ]
 
     for item in inference_data:
@@ -230,23 +240,25 @@ def handle_existing_inference_data(model_uuid, model_name, on_found):
                     os.remove(item)
 
 
-def run_inference(req_args, on_found="raise"):
+def run_inference(inference_config, on_found="replace"):
 
     logger = logging.getLogger(__name__)
 
     usr_data_root = os.path.join("usr", "data")
-    model_uuid = req_args["model_uuid"]
-    model_name = req_args["model_name"]
+    model_uuid = inference_config["model_uuid"]
+    model_name = inference_config["model_name"]
 
     handle_existing_inference_data(model_uuid, model_name, on_found)
 
     logger.info("Started running inference with: '{}' (uuid: {})".format(model_name, model_uuid))
 
     model_dir = os.path.join(usr_data_root, "models", model_uuid)
-    predictions_dir = os.path.join(model_dir, "predictions")
-    os.makedirs(predictions_dir)
+    #predictions_dir = os.path.join(model_dir, "predictions")
+    #os.makedirs(predictions_dir)
 
-    inference_config = req_args
+    #inference_patch_dir = ep.create_target_patches(inference_config)
+    #inference_config["inference_patch_dir"] = inference_patch_dir
+
     inference_config_path = os.path.join(model_dir, "inference_config.json")
     json_io.save_json(inference_config_path, inference_config)
 

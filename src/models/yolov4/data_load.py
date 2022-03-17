@@ -191,6 +191,182 @@ class TrainDataLoader(DataLoader):
 
 
 
+
+
+class PreLoadedTrainDataLoader(DataLoader):
+
+    def __init__(self, tf_record_paths, config, shuffle, augment):
+
+        super().__init__(tf_record_paths, config)
+        self.batch_size = config.training["active"]["batch_size"]
+        #self.max_detections = config.arch["max_detections"]
+        self.label_encoder = LabelEncoder(config)
+        self.shuffle = shuffle
+        self.augment = augment
+        self.data_augmentations = config.training["active"]["data_augmentations"]
+        #self.pct_of_training_set_used = config.pct_of_training_set_used
+        self.dataset_data = {}
+
+    def create_batched_dataset(self, take_percent=100):
+
+        dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
+
+
+        for i, tf_sample in enumerate(dataset):
+            sample = tf_record_io.parse_sample_from_tf_record(tf_sample, is_annotated=True)
+            image_path = bytes.decode((sample["patch_path"]).numpy())
+            image = (cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)).astype(np.uint8)
+            boxes = (box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))).numpy().astype(np.float32)
+            classes = tf.sparse.to_dense(sample["patch_classes"]).numpy().astype(np.uint8)
+            
+            
+            #image = tf.convert_to_tensor(image, dtype=tf.float32)
+            #boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
+            #classes = tf.convert_to_tensor(classes, dtype=tf.uint8) #tf.float32)
+            #image, _ = self._image_preprocess(image)
+            image = tf.image.resize(images=image, size=self.input_image_shape[:2]).numpy().astype(np.uint8)
+            #boxes = self._box_preprocess(boxes)
+
+            self.dataset_data[i] = {
+                "image": image,
+                "boxes": boxes,
+                "classes": classes
+            }
+        
+        #dataset = tf.data.Dataset.from_tensor_slices(np.arange())
+
+
+        dataset_size = np.sum([1 for _ in dataset])
+        dataset = tf.data.Dataset.from_tensor_slices(np.arange(dataset_size))
+        if self.shuffle:
+            dataset = dataset.shuffle(dataset_size, reshuffle_each_iteration=True)
+
+        dataset = dataset.take(dataset_size * (take_percent / 100))
+        num_images = np.sum([1 for _ in dataset])
+
+        dataset = dataset.batch(batch_size=self.batch_size)
+
+        autotune = tf.data.experimental.AUTOTUNE
+        dataset = dataset.prefetch(autotune)
+
+
+        # for i, batch_data in enumerate(dataset):
+
+        #     for tf_sample in batch_data:
+        #         sample = tf_record_io.parse_sample_from_tf_record(tf_sample, is_annotated=True)
+        #         image_path = bytes.decode((sample["patch_path"]).numpy())
+        #         boxes = (box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))).numpy().astype(np.float32)
+        #         print("sample: {} {}".format(image_path, boxes))
+        #     if i == 0:
+        #         break
+
+
+        return dataset, num_images
+
+    
+    def read_batch_data(self, batch_data):
+
+        batch_images = []
+        batch_boxes = []
+        batch_classes = []
+
+        for tf_sample in batch_data:
+            #sample = tf_record_io.parse_sample_from_tf_record(tf_sample, is_annotated=True)
+            image, boxes, classes = self._preprocess(self.dataset_data[tf_sample.numpy()])
+            batch_images.append(image)
+            batch_boxes.append(boxes)
+            batch_classes.append(classes)
+
+        batch_images = tf.stack(values=batch_images, axis=0)
+        #batch_images = tf.convert_to_tensor(batch_images, dtype=tf.float32)
+        #batch_boxes = tf.stack(batch_boxes, axis=0)
+        #batch_boxes = tf.convert_to_tensor(batch_boxes, dtype=tf.float32)
+        #batch_boxes = self._batch_box_preprocess(batch_boxes)
+        #batch_classes = tf.convert_to_tensor(batch_classes, dtype=tf.uint8)
+
+
+
+        return self.label_encoder.encode_batch(batch_images, batch_boxes, batch_classes)
+
+    
+    def _preprocess(self, data):
+        #image_path = bytes.decode((sample["patch_path"]).numpy())
+
+        #data = self.dataset_data[sample_num]
+        image = data["image"]
+        boxes = data["boxes"]
+        classes = data["classes"]
+
+        # #image = (cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)).astype(np.uint8)
+        # #image = self.dataset_images[image_path]
+        # #image = tf.io.read_file(filename=image_path)
+        # #image = tf.image.decode_image(contents=image, channels=3, dtype=tf.dtypes.float32)
+
+        # h, w = image.shape[:2]
+        # #boxes = tf.cast(box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_abs_boxes"]), shape=(-1, 4))), tf.float32)
+
+
+        if self.augment:
+            image, boxes, classes = data_augment.apply_augmentations(self.data_augmentations, image, boxes, classes)
+
+
+        #print("image.dtype", image.dtype)
+        image = tf.convert_to_tensor(image, dtype=tf.float32)
+        boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
+        classes = tf.convert_to_tensor(classes, dtype=tf.uint8) #tf.float32)
+
+
+        # image, _ = self._image_preprocess(image)
+        boxes = self._box_preprocess(boxes)
+
+        # #num_boxes = boxes.shape[0]
+        # #num_pad_boxes = self.max_detections - num_boxes
+
+        # #pad_boxes = np.zeros((num_pad_boxes, 4))
+        # #pad_classes = np.full(num_pad_boxes, -1)
+
+        # #boxes = np.vstack([boxes, pad_boxes]).astype(np.float32)
+        # #classes = np.concatenate([classes, pad_classes]).astype(np.uint8) #float32)
+
+        return image, boxes, classes
+
+    def _batch_box_preprocess(self, boxes):
+
+        #resize_ratio = [self.input_image_shape[0] / h, self.input_image_shape[1] / w]
+
+        boxes = tf.math.round(
+            tf.stack([
+                boxes[..., 0] * self.input_image_shape[1], #resize_ratio[1],
+                boxes[..., 1] * self.input_image_shape[0], #resize_ratio[0],
+                boxes[..., 2] * self.input_image_shape[1], #resize_ratio[1],
+                boxes[..., 3] * self.input_image_shape[0], #resize_ratio[0]
+
+            ], axis=-1)
+        )
+        boxes = box_utils.convert_to_xywh_tf(boxes)
+        #boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
+        return boxes
+
+    def _box_preprocess(self, boxes):
+
+        #resize_ratio = [self.input_image_shape[0] / h, self.input_image_shape[1] / w]
+
+        boxes = tf.math.round(
+            tf.stack([
+                boxes[:, 0] * self.input_image_shape[1], #resize_ratio[1],
+                boxes[:, 1] * self.input_image_shape[0], #resize_ratio[0],
+                boxes[:, 2] * self.input_image_shape[1], #resize_ratio[1],
+                boxes[:, 3] * self.input_image_shape[0], #resize_ratio[0]
+
+            ], axis=-1)
+        )
+        boxes = box_utils.convert_to_xywh_tf(boxes)
+        return boxes
+
+
+
+
+
 class SplitDataLoader(TrainDataLoader):
 
     def __init__(self, tf_record_paths_obj, tf_record_paths_bg, config, shuffle, augment):

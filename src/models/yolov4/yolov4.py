@@ -79,7 +79,7 @@ class YOLOv4(tf.keras.Model):
         self.head_m._name = "yolov4_head_m"
         self.head_l._name = "yolov4_head_l"
 
-
+    @tf.function
     def call(self, images, training=None):
 
         x = self.backbone(images, training=training)

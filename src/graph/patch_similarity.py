@@ -11,7 +11,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 
-import extract_patches_2 as ep2
+import extract_patches as ep
 from image_set import DataSet
 
 
@@ -179,10 +179,10 @@ def patch_similarity():
     patch_dir_2 = "/home/eaa299/Documents/work/graph_prj/g_2"
     patch_dir_3 = "/home/eaa299/Documents/work/graph_prj/g_3"
     patch_dir_4 = "/home/eaa299/Documents/work/graph_prj/g_4"
-    ep2.extract_patches_for_graph(ds, patch_dir_1)
-    ep2.extract_patches_for_graph(ds2, patch_dir_2)
-    ep2.extract_patches_for_graph(ds3, patch_dir_3)
-    ep2.extract_patches_for_graph(ds4, patch_dir_4)
+    ep.extract_patches_for_graph(ds, patch_dir_1)
+    ep.extract_patches_for_graph(ds2, patch_dir_2)
+    ep.extract_patches_for_graph(ds3, patch_dir_3)
+    ep.extract_patches_for_graph(ds4, patch_dir_4)
     #training_tf_record_path = os.path.join(patch_dir, "patches-record.tfrec")
 
     patch_dirs = [patch_dir_1, patch_dir_2, patch_dir_3, patch_dir_4]

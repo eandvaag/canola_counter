@@ -2,8 +2,30 @@
 import numpy as np
 import tensorflow as tf
 
-
 def bbox_iou(boxes1, boxes2):
+    #boxes1 = np.array(boxes1)
+    #boxes2 = np.array(boxes2)
+
+    boxes1_area = boxes1[..., 2] * boxes1[..., 3]
+    boxes2_area = boxes2[..., 2] * boxes2[..., 3]
+
+    boxes1 = tf.concat([boxes1[..., :2] - boxes1[..., 2:] * 0.5,
+                             boxes1[..., :2] + boxes1[..., 2:] * 0.5], axis=-1)
+    boxes2 = tf.concat([boxes2[..., :2] - boxes2[..., 2:] * 0.5,
+                             boxes2[..., :2] + boxes2[..., 2:] * 0.5], axis=-1)
+
+    left_up = tf.maximum(boxes1[..., :2], boxes2[..., :2])
+    right_down = tf.minimum(boxes1[..., 2:], boxes2[..., 2:])
+
+    inter_section = tf.maximum(right_down - left_up, 0.0)
+    inter_area = inter_section[..., 0] * inter_section[..., 1]
+    union_area = boxes1_area + boxes2_area - inter_area
+    iou = tf.math.divide_no_nan(inter_area, union_area)
+    return iou
+
+
+
+def bbox_iou_np(boxes1, boxes2):
     boxes1 = np.array(boxes1)
     boxes2 = np.array(boxes2)
 
@@ -88,7 +110,7 @@ def bbox_diou(boxes1, boxes2, eps=1e-7):
     diou = iou - d
     return diou
 
-
+#@tf.function
 def bbox_ciou(boxes1, boxes2, eps=1e-7):
     boxes1_coor = tf.concat([boxes1[..., :2] - boxes1[..., 2:] * 0.5,
                              boxes1[..., :2] + boxes1[..., 2:] * 0.5], axis=-1)

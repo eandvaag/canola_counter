@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from models.yolov4.iou import bbox_iou
+from models.yolov4.iou import bbox_iou_np
 
 
 class LabelEncoder:
@@ -66,7 +66,8 @@ class LabelEncoder:
                 # So we can directly compare anchors[i] with bbox_xywh_scaled[i].
                 anchors_xywh[:, 2:4] = self.anchors[i]
 
-                iou_scale = bbox_iou(bbox_xywh_scaled[i][np.newaxis, :], anchors_xywh)
+                
+                iou_scale = bbox_iou_np(bbox_xywh_scaled[i][np.newaxis, :], anchors_xywh)
 
                 iou_lst.append(iou_scale)
                 iou_mask = iou_scale > 0.3

@@ -9,7 +9,7 @@ import logging
 import time
 import random
 
-from image_set import ImageSet, DataSet
+from image_set import DataSet
 
 from models.common import box_utils, \
                           model_io, \
@@ -632,20 +632,21 @@ def generate_predictions(config):
 
     logger = logging.getLogger(__name__)
 
-    patches_dir = os.path.join(config.model_dir, "patches")
-    if not os.path.exists(patches_dir):
-        os.makedirs(patches_dir)
+    # patches_dir = os.path.join(config.model_dir, "patches")
+    # if not os.path.exists(patches_dir):
+    #     os.makedirs(patches_dir)
 
 
 
 
     #data_loader = data_load.InferenceDataLoader(tf_record_path, config)
+    target_patches_dir = os.path.join(config.model_dir, "target_patches") #config.inference["inference_patch_dir"]
 
-
-    for image_set_conf in config.inference["image_sets"]:
+    for dataset_conf in config.inference["datasets"]:
 
         #driver_utils.set_active_inference_params(config)
-        image_set = ImageSet(image_set_conf)
+        #image_set = ImageSet(image_set_conf)
+        dataset = DataSet(dataset_conf)
 
         if config.arch["model_type"] == "yolov4":
             yolov4 = YOLOv4(config)
@@ -653,15 +654,15 @@ def generate_predictions(config):
             yolov4 = YOLOv4Tiny(config)
         decoder = Decoder(config)
 
-        patch_dir = driver_utils.extract_patches(image_set.all_dataset, config)
+        #patch_dir = driver_utils.extract_patches(image_set.all_dataset, config)
         tf_record_names = ["annotated-patches-record.tfrec", "unannotated-patches-record.tfrec"]
 
-        predictions = driver_utils.create_predictions_skeleton(image_set)
+        predictions = driver_utils.create_predictions_skeleton(dataset)
 
 
         for k, tf_record_name in enumerate(tf_record_names):
             is_annotated = k == 0
-            tf_record_path = os.path.join(patch_dir, tf_record_name)
+            tf_record_path = os.path.join(target_patches_dir, tf_record_name)
             data_loader = data_load.InferenceDataLoader(tf_record_path, config)
             tf_dataset, tf_dataset_size = data_loader.create_dataset()
 
@@ -768,12 +769,12 @@ def generate_predictions(config):
                                             iou_thresh=config.inference["image_nms_iou_thresh"])
         driver_utils.add_class_detections(predictions["image_predictions"], config)
 
-        inference_metrics.collect_statistics(predictions, image_set, config, inference_times=inference_times)
+        inference_metrics.collect_statistics(predictions, dataset, config, inference_times=inference_times)
 
-        inference_metrics.collect_metrics(predictions, image_set, config)
+        inference_metrics.collect_metrics(predictions, dataset, config)
 
         results_dir = os.path.join("usr", "data", "results",
-                                   image_set.farm_name, image_set.field_name, image_set.mission_date,
+                                   dataset.farm_name, dataset.field_name, dataset.mission_date,
                                    config.arch["job_uuid"],
                                    config.arch["model_uuid"])
         os.makedirs(results_dir, exist_ok=True)
@@ -788,7 +789,7 @@ def generate_predictions(config):
         w3c_io.save_annotations(annotations_path, predictions, config)
 
         excel_path = os.path.join(results_dir, "results.xlsx")
-        driver_utils.output_excel(excel_path, predictions, image_set, config)
+        driver_utils.output_excel(excel_path, predictions, dataset, config)
 
         # inference_entry = {
         #     "farm_name": image_set.farm_name,
@@ -972,7 +973,7 @@ def generate_predictions(config):
         #     inference_record_io.add_entry_to_inference_record(inference_entry)
 
 
-    shutil.rmtree(patches_dir)
+    shutil.rmtree(target_patches_dir)
 
 def train(config):
 
@@ -980,39 +981,49 @@ def train(config):
 
     logger = logging.getLogger(__name__)
 
-    patches_dir = os.path.join(config.model_dir, "patches")
-    if not os.path.exists(patches_dir):
-        os.makedirs(patches_dir)
+    # patches_dir = os.path.join(config.model_dir, "patches")
+    # if not os.path.exists(patches_dir):
+    #     os.makedirs(patches_dir)
+    source_patches_dir = os.path.join(config.model_dir, "source_patches")
 
     for seq_num in range(len(config.training["training_sequence"])):
 
-        training_tf_record_paths = []
-        validation_tf_record_paths = []
-        training_tf_record_paths_obj = []
-        training_tf_record_paths_bg = []
-        validation_tf_record_paths_obj = []
-        validation_tf_record_paths_bg = []
+        #training_tf_record_paths = config.training["training_sequence"][seq_num]["training_tf_record_paths"]
+        #validation_tf_record_paths = config.training["training_sequence"][seq_num]["validation_tf_record_paths"]       
+        training_patch_dir = os.path.join(source_patches_dir, str(seq_num), "training")
+        validation_patch_dir = os.path.join(source_patches_dir, str(seq_num), "validation")
+
+        training_tf_record_paths = [os.path.join(training_patch_dir, "annotated-patches-record.tfrec")]
+        validation_tf_record_paths = [os.path.join(validation_patch_dir, "annotated-patches-record.tfrec")]
+
+
+        # training_tf_record_paths = []
+        # validation_tf_record_paths = []
+        # training_tf_record_paths_obj = []
+        # training_tf_record_paths_bg = []
+        # validation_tf_record_paths_obj = []
+        # validation_tf_record_paths_bg = []
 
         driver_utils.set_active_training_params(config, seq_num)
 
-        training_tf_record_paths = []
-        for dataset_conf in config.training["training_sequence"][seq_num]["training_datasets"]:
-            #training_datasets.append(MyDataset(dataset_conf))
-            ds = DataSet(dataset_conf)
-            training_patch_dir = driver_utils.extract_patches(ds, config)
-            training_tf_record_paths.append(os.path.join(training_patch_dir, "annotated-patches-record.tfrec"))
-            training_tf_record_paths_obj.append(os.path.join(training_patch_dir, "annotated-patches-with-boxes-record.tfrec"))
-            training_tf_record_paths_bg.append(os.path.join(training_patch_dir, "annotated-patches-with-no-boxes-record.tfrec"))
+        # training_tf_record_paths = []
+        # for dataset_conf in config.training["training_sequence"][seq_num]["training_datasets"]:
+        #     #training_datasets.append(MyDataset(dataset_conf))
+        #     ds = DataSet(dataset_conf)
+        #     training_patch_dir = driver_utils.extract_patches(ds, config)
+        #     training_tf_record_paths.append(os.path.join(training_patch_dir, "annotated-patches-record.tfrec"))
+        #     training_tf_record_paths_obj.append(os.path.join(training_patch_dir, "annotated-patches-with-boxes-record.tfrec"))
+        #     training_tf_record_paths_bg.append(os.path.join(training_patch_dir, "annotated-patches-with-no-boxes-record.tfrec"))
 
 
-        validation_tf_record_paths = []
-        for dataset_conf in config.training["training_sequence"][seq_num]["validation_datasets"]:
-            #training_datasets.append(MyDataset(dataset_conf))
-            ds = DataSet(dataset_conf)
-            validation_patch_dir = driver_utils.extract_patches(ds, config)
-            validation_tf_record_paths.append(os.path.join(validation_patch_dir, "annotated-patches-record.tfrec"))
-            validation_tf_record_paths_obj.append(os.path.join(validation_patch_dir, "annotated-patches-with-boxes-record.tfrec"))
-            validation_tf_record_paths_bg.append(os.path.join(validation_patch_dir, "annotated-patches-with-no-boxes-record.tfrec"))
+        # validation_tf_record_paths = []
+        # for dataset_conf in config.training["training_sequence"][seq_num]["validation_datasets"]:
+        #     #training_datasets.append(MyDataset(dataset_conf))
+        #     ds = DataSet(dataset_conf)
+        #     validation_patch_dir = driver_utils.extract_patches(ds, config)
+        #     validation_tf_record_paths.append(os.path.join(validation_patch_dir, "annotated-patches-record.tfrec"))
+        #     validation_tf_record_paths_obj.append(os.path.join(validation_patch_dir, "annotated-patches-with-boxes-record.tfrec"))
+        #     validation_tf_record_paths_bg.append(os.path.join(validation_patch_dir, "annotated-patches-with-no-boxes-record.tfrec"))
 
       
 
@@ -1040,13 +1051,16 @@ def train(config):
 
         data_loader_type = config.training["active"]["data_loader"]["type"]
         if data_loader_type == "default":
-            train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
-            val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
-        elif data_loader_type == "split":
-            train_data_loader = data_load.SplitDataLoader(training_tf_record_paths_obj, training_tf_record_paths_bg,
-                                                          config, shuffle=True, augment=True)
-            val_data_loader = data_load.SplitDataLoader(validation_tf_record_paths_obj, validation_tf_record_paths_bg,
-                                                          config, shuffle=False, augment=False)
+            #train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+            #val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
+            train_data_loader = data_load.PreLoadedTrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+            val_data_loader = data_load.PreLoadedTrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
+            
+        # elif data_loader_type == "split":
+        #     train_data_loader = data_load.SplitDataLoader(training_tf_record_paths_obj, training_tf_record_paths_bg,
+        #                                                   config, shuffle=True, augment=True)
+        #     val_data_loader = data_load.SplitDataLoader(validation_tf_record_paths_obj, validation_tf_record_paths_bg,
+        #                                                   config, shuffle=False, augment=False)
         else:
             raise RuntimeError("Unrecognized data loader type: {}".format(data_loader_type))
 
@@ -1083,14 +1097,14 @@ def train(config):
         train_loss_metric = tf.metrics.Mean()
         val_loss_metric = tf.metrics.Mean()
 
-        #@tf.function
+        @tf.function
         def train_step(batch_images, batch_labels):
             with tf.GradientTape() as tape:
                 conv = yolov4(batch_images, training=True)
                 loss_value = loss_fn(batch_labels, conv)
 
-            if np.isnan(loss_value):
-                raise RuntimeError("NaN loss has occurred.")
+            #if np.isnan(loss_value):
+            #    raise RuntimeError("NaN loss has occurred.")
             gradients = tape.gradient(target=loss_value, sources=yolov4.trainable_variables)
             optimizer.apply_gradients(grads_and_vars=zip(gradients, yolov4.trainable_variables))
             train_loss_metric.update_state(values=loss_value)
@@ -1099,8 +1113,6 @@ def train(config):
 
         train_steps_per_epoch = np.sum([1 for i in train_dataset])
         val_steps_per_epoch = np.sum([1 for i in val_dataset])
-        best_val_loss = float("inf")
-        epochs_since_improvement = 0
         loss_record = {
             "training_loss": { "values": [],
                                "best": {"epoch": -1, "value": sys.float_info.max},
@@ -1120,6 +1132,12 @@ def train(config):
         steps_taken = 0
         #with tf.profiler.experimental.Profile('logdir'):
         for epoch in range(max_num_epochs):
+            if epoch == 0:
+                disp_training_best = float("inf")
+                disp_validation_best = float("inf")
+            else:
+                disp_training_best = loss_record["training_loss"]["best"]["value"]
+                disp_validation_best = loss_record["validation_loss"]["best"]["value"]
 
 
             train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
@@ -1135,9 +1153,11 @@ def train(config):
                 batch_images, batch_labels = train_data_loader.read_batch_data(batch_data)
 
                 train_step(batch_images, batch_labels)
+                if np.isnan(train_loss_metric.result()):
+                    raise RuntimeError("NaN loss has occurred (training dataset).")
                 train_bar.set_description("Epoch: {}/{} | t. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                           epoch, max_num_epochs-1, train_loss_metric.result(), 
-                                          loss_record["training_loss"]["best"]["value"],
+                                          disp_training_best,
                                           loss_record["training_loss"]["best"]["epoch"]))
                 steps_taken += 1
 
@@ -1159,14 +1179,14 @@ def train(config):
                 batch_images, batch_labels = val_data_loader.read_batch_data(batch_data)
                 conv = yolov4(batch_images, training=False)
                 loss_value = loss_fn(batch_labels, conv)
-                if np.isnan(loss_value):
-                    raise RuntimeError("NaN loss has occurred.")
 
                 val_loss_metric.update_state(values=loss_value)
+                if np.isnan(val_loss_metric.result()):
+                    raise RuntimeError("NaN loss has occurred (validation dataset).")
 
                 val_bar.set_description("Epoch: {}/{} | v. loss: {:.4f} | best: {:.4f} (ep. {})".format(
                                         epoch, max_num_epochs-1, val_loss_metric.result(), 
-                                        loss_record["validation_loss"]["best"]["value"],
+                                        disp_validation_best,
                                         loss_record["validation_loss"]["best"]["epoch"]))
 
             
@@ -1187,4 +1207,4 @@ def train(config):
 
 
 
-        shutil.rmtree(patches_dir)
+    shutil.rmtree(source_patches_dir)

@@ -90,7 +90,7 @@ def boxplot_data(data):
 #            }
 
 
-def collect_statistics(predictions, image_set, config, inference_times=None):
+def collect_statistics(predictions, dataset, config, inference_times=None):
 
 
     # if "metrics" not in predictions:
@@ -107,7 +107,7 @@ def collect_statistics(predictions, image_set, config, inference_times=None):
     #     "validation": image_set.validation_dataset,
     #     "test", image_set.test_dataset
     # }
-    dataset = image_set.all_dataset
+    #dataset = image_set.all_dataset
 
     point_metrics = predictions["metrics"]["all"]["point"]
     boxplot_metrics = predictions["metrics"]["all"]["boxplot"]
@@ -193,25 +193,29 @@ def collect_statistics(predictions, image_set, config, inference_times=None):
 
 
 
-def collect_metrics(predictions, image_set, config,
+def collect_metrics(predictions, dataset, config,
                     collect_patch_metrics=True, calculate_mAP=True):
 
     logger = logging.getLogger(__name__)
 
-    datasets = {}
-    if len(image_set.training_dataset.images) > 0:
-        datasets["training"] = image_set.training_dataset
-    if len(image_set.validation_dataset.images) > 0:
-        datasets["validation"] = image_set.validation_dataset    
-    if len(image_set.test_dataset.images) > 0:
-        datasets["test"] = image_set.test_dataset
+    # datasets = {}
+    # if len(image_set.training_dataset.images) > 0:
+    #     datasets["training"] = image_set.training_dataset
+    # if len(image_set.validation_dataset.images) > 0:
+    #     datasets["validation"] = image_set.validation_dataset    
+    # if len(image_set.test_dataset.images) > 0:
+    #     datasets["test"] = image_set.test_dataset
 
+    # datasets["all"] = image_set.all_dataset
+    # # datasets = {
+    # #     "training": image_set.training_dataset,
+    # #     "validation": image_set.validation_dataset,
+    # #     "test": image_set.test_dataset
+    # # }
 
-    # datasets = {
-    #     "training": image_set.training_dataset,
-    #     "validation": image_set.validation_dataset,
-    #     "test": image_set.test_dataset
-    # }
+    # datasets["all"] = DataSet({
+
+    # })
 
     num_classes = len(config.arch["class_map"].keys())
 
@@ -223,225 +227,226 @@ def collect_metrics(predictions, image_set, config,
 
     image_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=num_classes) #config.arch["num_classes"])
 
-    annotations = w3c_io.load_annotations(image_set.annotations_path, config.arch["class_map"])
+    annotations = w3c_io.load_annotations(dataset.annotations_path, config.arch["class_map"])
 
-    for (dataset_name, dataset) in datasets.items():
-
-        annotated_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
-        pred_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
-
-        for image in dataset.images:
-
-            #img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map) #config.arch["class_map"])
-            image_abs_boxes = annotations[image.image_name]["boxes"]
-            image_classes = annotations[image.image_name]["classes"]
-            
-            
-            unique, counts = np.unique(image_classes, return_counts=True)
-            class_num_to_count = dict(zip(unique, counts))
-            cur_image_class_counts = {k: 0 for k in class_map} #config.arch["class_map"].keys()}
-            for class_num in class_num_to_count.keys():
-                cur_image_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
-                #cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
-
-            cur_image_pred_class_counts = predictions["image_predictions"][image.image_name]["pred_class_counts"]
-
-            for class_name in class_map.keys(): #config.arch["class_map"].keys():
-                annotated_image_counts[class_name].append(cur_image_class_counts[class_name])
-                pred_image_counts[class_name].append(cur_image_pred_class_counts[class_name])
-
-            #annotated_img_count = np.shape(img_abs_boxes)[0]
-
-            #pred_img_count = predictions["image_predictions"][img.img_name]["pred_count"]
-            
-            if calculate_mAP:
-                pred_abs_boxes = np.array(predictions["image_predictions"][image.image_name]["pred_image_abs_boxes"])
-                pred_classes = np.array(predictions["image_predictions"][image.image_name]["pred_classes"])
-                pred_scores = np.array(predictions["image_predictions"][image.image_name]["pred_scores"])
-
-                pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
-                                                                    image_abs_boxes, image_classes)
-                image_metric_fn.add(pred_for_mAP, true_for_mAP)
-
-                #annotated_img_counts.append(annotated_img_count)
-            #pred_img_counts.append(pred_img_count)
+    #for (dataset_name, dataset) in datasets.items():
 
 
-        #annotated_img_counts = np.array(annotated_img_counts)
-        #pred_img_counts = np.array(pred_img_counts)
+    annotated_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
+    pred_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
 
-        # annotated_patch_counts = []
-        # pred_patch_counts = []
+    for image in dataset.completed_images:
 
-        if collect_patch_metrics:
-            annotated_patch_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
-            pred_patch_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
-            for patch_name, patch_pred in predictions["patch_predictions"].items():
-
-                if "patch_classes" in patch_pred:
-                    patch_classes = patch_pred["patch_classes"]
-                    unique, counts = np.unique(patch_classes, return_counts=True)
-                    class_num_to_count = dict(zip(unique, counts))
-                    cur_patch_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
-                    for class_num in class_num_to_count.keys():
-                        cur_patch_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
-                        #cur_patch_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
-
-                    pred_patch_classes = patch_pred["pred_classes"]
-                    pred_unique, pred_counts = np.unique(pred_patch_classes, return_counts=True)
-                    class_num_to_pred_count = dict(zip(pred_unique, pred_counts))
-                    cur_patch_pred_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
-                    for class_num in class_num_to_pred_count.keys():
-                        cur_patch_pred_class_counts[reverse_class_map[class_num]] = class_num_to_pred_count[class_num]
-                        #cur_patch_pred_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_pred_count[class_num]
-
-                    for class_name in class_map.keys(): #config.arch["class_map"].keys():
-                        annotated_patch_counts[class_name].append(cur_patch_class_counts[class_name])
-                        pred_patch_counts[class_name].append(cur_patch_pred_class_counts[class_name])
-
-
-        print("annotated_image_counts", annotated_image_counts)
-        total_obj_count = float(np.sum([np.sum(np.array(annotated_image_counts[class_name])) for class_name in annotated_image_counts.keys()]))
-
-        logger.info("Started calculating count metrics.")
-
-        # if "metrics" not in predictions:
-        #     predictions["metrics"] = {}
-
-        # if "point" not in predictions["metrics"]:
-        #     predictions["metrics"]["point"] = {}
-
-        # if "boxplot" not in predictions["metrics"]:
-        #     predictions["metrics"]["boxplot"] = {}
-
-
-        point_metrics = predictions["metrics"][dataset_name]["point"]
-        boxplot_metrics = predictions["metrics"][dataset_name]["boxplot"]
-
-
-
-        point_metrics["Image Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
-        point_metrics["Image Mean Sq. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
-        point_metrics["Image R Squared"] = {"Cross-Class Weighted Average": 0}
-        point_metrics["Image Non-Zero Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
-        if collect_patch_metrics:
-            point_metrics["Patch Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
-            point_metrics["Patch Mean Sq. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
-            point_metrics["Patch R Squared"] = {"Cross-Class Weighted Average": 0}
-            point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
-
-
-        boxplot_metrics["Difference in Count (Image)"] = {}
-        boxplot_metrics["Absolute Difference in Count (Image)"] = {} #{"Cross-Class Weighted Average": 0}
-        boxplot_metrics["Percent Difference in Count (Image)"] = {} #{"Cross-Class Weighted Average": 0}
-        #boxplot_metrics["Diff. in Count (Patch)"] = {}
-        #boxplot_metrics["Absolute Diff. in Count (Patch)"] = {} #{"Cross-Class Weighted Average": 0}
-        #boxplot_metrics["Percent Diff. in Count (Patch)"] = {} #{"Cross-Class Weighted Average": 0}
+        #img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map) #config.arch["class_map"])
+        image_abs_boxes = annotations[image.image_name]["boxes"]
+        image_classes = annotations[image.image_name]["classes"]
         
-        # boxplot_metrics["Confidence"] = {"Cross-Class Weighted Average": 0}
-        # boxplot_metrics["Box Area"] = {"Cross-Class Weighted Average": 0}
-        # boxplot_metrics["Inference Time (Per Image)"] = {"Cross-Class Weighted Average": 0}
-        # boxplot_metrics["Inference Time (Per Patch)"] = {"Cross-Class Weighted Average": 0}
         
-        #predictions["metrics"]["Patch Five Num. Summary Diff. in Count"] = {}
-        #predictions["metrics"]["Diff. in Count Occurrences"] = {}
+        unique, counts = np.unique(image_classes, return_counts=True)
+        class_num_to_count = dict(zip(unique, counts))
+        cur_image_class_counts = {k: 0 for k in class_map} #config.arch["class_map"].keys()}
+        for class_num in class_num_to_count.keys():
+            cur_image_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
+            #cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
-        for class_name in annotated_image_counts.keys():
+        cur_image_pred_class_counts = predictions["image_predictions"][image.image_name]["pred_class_counts"]
 
-            image_class_annotated_count = np.array(annotated_image_counts[class_name])
-            image_class_pred_count = np.array(pred_image_counts[class_name])
+        for class_name in class_map.keys(): #config.arch["class_map"].keys():
+            annotated_image_counts[class_name].append(cur_image_class_counts[class_name])
+            pred_image_counts[class_name].append(cur_image_pred_class_counts[class_name])
 
-            point_metrics["Image Mean Abs. Diff. in Count"][class_name] = \
-                            float(np.mean(abs_DiC(image_class_annotated_count, image_class_pred_count)))
-            point_metrics["Image Mean Sq. Diff. in Count"][class_name] = \
-                            float(np.mean(squared_DiC(image_class_annotated_count, image_class_pred_count)))
-            point_metrics["Image R Squared"][class_name] = \
-                            r_squared(image_class_annotated_count, image_class_pred_count)
-            point_metrics["Image Non-Zero Mean Abs. Diff. in Count"][class_name] = \
-                            float(np.mean(nonzero_abs_DiC(image_class_annotated_count, image_class_pred_count)))
+        #annotated_img_count = np.shape(img_abs_boxes)[0]
 
-
-            
-
-
-
-            #predictions["metrics"]["Patch Five Num. Summary Diff. in Count"][class_name] = five_num_summary_DiC(patch_class_annotated_count, patch_class_pred_count)
-            #predictions["metrics"]["Diff. in Count Occurrences"][class_name] = DiC_occurrences(patch_class_annotated_count, patch_class_pred_count)
-            
-            boxplot_metrics["Difference in Count (Image)"][class_name] = \
-                        boxplot_data(DiC(image_class_annotated_count, image_class_pred_count))
-
-            boxplot_metrics["Absolute Difference in Count (Image)"][class_name] = \
-                        boxplot_data(abs_DiC(image_class_annotated_count, image_class_pred_count))
-
-            boxplot_metrics["Percent Difference in Count (Image)"][class_name] = \
-                        boxplot_data(pct_DiC(image_class_annotated_count, image_class_pred_count))
-
-            # boxplot_metrics["Diff. in Count (Patch)"][class_name] = \
-            #             boxplot_data(DiC(patch_class_annotated_count, patch_class_pred_count))
-
-            # boxplot_metrics["Absolute Diff. in Count (Patch)"][class_name] = \
-            #             boxplot_data(abs_DiC(patch_class_annotated_count, patch_class_pred_count))
-
-            # boxplot_metrics["Percent Diff. in Count (Patch)"][class_name] = \
-            #             boxplot_data(pct_DiC(patch_class_annotated_count, patch_class_pred_count))
-
-
-
-            
-            total_class_annotated_count = float(np.sum(image_class_annotated_count))
-
-            point_metrics["Image Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
-                (total_class_annotated_count / total_obj_count) * point_metrics["Image Mean Abs. Diff. in Count"][class_name]
-            point_metrics["Image Mean Sq. Diff. in Count"]["Cross-Class Weighted Average"] += \
-                (total_class_annotated_count / total_obj_count) * point_metrics["Image Mean Sq. Diff. in Count"][class_name]
-            point_metrics["Image R Squared"]["Cross-Class Weighted Average"] += \
-                (total_class_annotated_count / total_obj_count) * point_metrics["Image R Squared"][class_name]
-            point_metrics["Image Non-Zero Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
-                (total_class_annotated_count / total_obj_count) * point_metrics["Image Non-Zero Mean Abs. Diff. in Count"][class_name]
-
-
-
-            if collect_patch_metrics:
-
-                patch_class_annotated_count = np.array(annotated_patch_counts[class_name])
-                patch_class_pred_count = np.array(pred_patch_counts[class_name])
-
-                point_metrics["Patch Mean Abs. Diff. in Count"][class_name] = \
-                                float(np.mean(abs_DiC(patch_class_annotated_count, patch_class_pred_count)))
-                point_metrics["Patch Mean Sq. Diff. in Count"][class_name] = \
-                                float(np.mean(squared_DiC(patch_class_annotated_count, patch_class_pred_count)))
-                point_metrics["Patch R Squared"][class_name] = \
-                                r_squared(patch_class_annotated_count, patch_class_pred_count)
-                point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"][class_name] = \
-                                float(np.mean(nonzero_abs_DiC(patch_class_annotated_count, patch_class_pred_count)))
-
-                point_metrics["Patch Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
-                    (total_class_annotated_count / total_obj_count) * point_metrics["Patch Mean Abs. Diff. in Count"][class_name]
-                point_metrics["Patch Mean Sq. Diff. in Count"]["Cross-Class Weighted Average"] += \
-                    (total_class_annotated_count / total_obj_count) * point_metrics["Patch Mean Sq. Diff. in Count"][class_name]
-                point_metrics["Patch R Squared"]["Cross-Class Weighted Average"] += \
-                    (total_class_annotated_count / total_obj_count) * point_metrics["Patch R Squared"][class_name]
-                point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
-                    (total_class_annotated_count / total_obj_count) * point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"][class_name]
-
-
-
-
-        logger.info("Finished calculating count metrics.")
-
+        #pred_img_count = predictions["image_predictions"][img.img_name]["pred_count"]
+        
         if calculate_mAP:
-            logger.info("Started calculating mAP scores.")
+            pred_abs_boxes = np.array(predictions["image_predictions"][image.image_name]["pred_image_abs_boxes"])
+            pred_classes = np.array(predictions["image_predictions"][image.image_name]["pred_classes"])
+            pred_scores = np.array(predictions["image_predictions"][image.image_name]["pred_scores"])
 
-            pascal_voc_mAP = image_metric_fn.value(iou_thresholds=0.5)['mAP']
-            coco_mAP = image_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+            pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
+                                                                image_abs_boxes, image_classes)
+            image_metric_fn.add(pred_for_mAP, true_for_mAP)
 
-            logger.info("Finished calculating mAP scores.")
+            #annotated_img_counts.append(annotated_img_count)
+        #pred_img_counts.append(pred_img_count)
 
-            point_metrics["Image PASCAL VOC mAP"] = {}
-            point_metrics["Image PASCAL VOC mAP"]["---"] = float(pascal_voc_mAP)
-            point_metrics["Image MS COCO mAP"] = {}
-            point_metrics["Image MS COCO mAP"]["---"] = float(coco_mAP)
+
+    #annotated_img_counts = np.array(annotated_img_counts)
+    #pred_img_counts = np.array(pred_img_counts)
+
+    # annotated_patch_counts = []
+    # pred_patch_counts = []
+
+    if collect_patch_metrics:
+        annotated_patch_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
+        pred_patch_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
+        for patch_name, patch_pred in predictions["patch_predictions"].items():
+
+            if "patch_classes" in patch_pred:
+                patch_classes = patch_pred["patch_classes"]
+                unique, counts = np.unique(patch_classes, return_counts=True)
+                class_num_to_count = dict(zip(unique, counts))
+                cur_patch_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
+                for class_num in class_num_to_count.keys():
+                    cur_patch_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
+                    #cur_patch_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
+
+                pred_patch_classes = patch_pred["pred_classes"]
+                pred_unique, pred_counts = np.unique(pred_patch_classes, return_counts=True)
+                class_num_to_pred_count = dict(zip(pred_unique, pred_counts))
+                cur_patch_pred_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
+                for class_num in class_num_to_pred_count.keys():
+                    cur_patch_pred_class_counts[reverse_class_map[class_num]] = class_num_to_pred_count[class_num]
+                    #cur_patch_pred_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_pred_count[class_num]
+
+                for class_name in class_map.keys(): #config.arch["class_map"].keys():
+                    annotated_patch_counts[class_name].append(cur_patch_class_counts[class_name])
+                    pred_patch_counts[class_name].append(cur_patch_pred_class_counts[class_name])
+
+
+    print("annotated_image_counts", annotated_image_counts)
+    total_obj_count = float(np.sum([np.sum(np.array(annotated_image_counts[class_name])) for class_name in annotated_image_counts.keys()]))
+
+    logger.info("Started calculating count metrics.")
+
+    # if "metrics" not in predictions:
+    #     predictions["metrics"] = {}
+
+    # if "point" not in predictions["metrics"]:
+    #     predictions["metrics"]["point"] = {}
+
+    # if "boxplot" not in predictions["metrics"]:
+    #     predictions["metrics"]["boxplot"] = {}
+
+
+    point_metrics = predictions["metrics"]["all"]["point"]
+    boxplot_metrics = predictions["metrics"]["all"]["boxplot"]
+
+
+
+    point_metrics["Image Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
+    point_metrics["Image Mean Sq. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
+    point_metrics["Image R Squared"] = {"Cross-Class Weighted Average": 0}
+    point_metrics["Image Non-Zero Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
+    if collect_patch_metrics:
+        point_metrics["Patch Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
+        point_metrics["Patch Mean Sq. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
+        point_metrics["Patch R Squared"] = {"Cross-Class Weighted Average": 0}
+        point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"] = {"Cross-Class Weighted Average": 0}
+
+
+    boxplot_metrics["Difference in Count (Image)"] = {}
+    boxplot_metrics["Absolute Difference in Count (Image)"] = {} #{"Cross-Class Weighted Average": 0}
+    boxplot_metrics["Percent Difference in Count (Image)"] = {} #{"Cross-Class Weighted Average": 0}
+    #boxplot_metrics["Diff. in Count (Patch)"] = {}
+    #boxplot_metrics["Absolute Diff. in Count (Patch)"] = {} #{"Cross-Class Weighted Average": 0}
+    #boxplot_metrics["Percent Diff. in Count (Patch)"] = {} #{"Cross-Class Weighted Average": 0}
+    
+    # boxplot_metrics["Confidence"] = {"Cross-Class Weighted Average": 0}
+    # boxplot_metrics["Box Area"] = {"Cross-Class Weighted Average": 0}
+    # boxplot_metrics["Inference Time (Per Image)"] = {"Cross-Class Weighted Average": 0}
+    # boxplot_metrics["Inference Time (Per Patch)"] = {"Cross-Class Weighted Average": 0}
+    
+    #predictions["metrics"]["Patch Five Num. Summary Diff. in Count"] = {}
+    #predictions["metrics"]["Diff. in Count Occurrences"] = {}
+
+    for class_name in annotated_image_counts.keys():
+
+        image_class_annotated_count = np.array(annotated_image_counts[class_name])
+        image_class_pred_count = np.array(pred_image_counts[class_name])
+
+        point_metrics["Image Mean Abs. Diff. in Count"][class_name] = \
+                        float(np.mean(abs_DiC(image_class_annotated_count, image_class_pred_count)))
+        point_metrics["Image Mean Sq. Diff. in Count"][class_name] = \
+                        float(np.mean(squared_DiC(image_class_annotated_count, image_class_pred_count)))
+        point_metrics["Image R Squared"][class_name] = \
+                        r_squared(image_class_annotated_count, image_class_pred_count)
+        point_metrics["Image Non-Zero Mean Abs. Diff. in Count"][class_name] = \
+                        float(np.mean(nonzero_abs_DiC(image_class_annotated_count, image_class_pred_count)))
+
+
+        
+
+
+
+        #predictions["metrics"]["Patch Five Num. Summary Diff. in Count"][class_name] = five_num_summary_DiC(patch_class_annotated_count, patch_class_pred_count)
+        #predictions["metrics"]["Diff. in Count Occurrences"][class_name] = DiC_occurrences(patch_class_annotated_count, patch_class_pred_count)
+        
+        boxplot_metrics["Difference in Count (Image)"][class_name] = \
+                    boxplot_data(DiC(image_class_annotated_count, image_class_pred_count))
+
+        boxplot_metrics["Absolute Difference in Count (Image)"][class_name] = \
+                    boxplot_data(abs_DiC(image_class_annotated_count, image_class_pred_count))
+
+        boxplot_metrics["Percent Difference in Count (Image)"][class_name] = \
+                    boxplot_data(pct_DiC(image_class_annotated_count, image_class_pred_count))
+
+        # boxplot_metrics["Diff. in Count (Patch)"][class_name] = \
+        #             boxplot_data(DiC(patch_class_annotated_count, patch_class_pred_count))
+
+        # boxplot_metrics["Absolute Diff. in Count (Patch)"][class_name] = \
+        #             boxplot_data(abs_DiC(patch_class_annotated_count, patch_class_pred_count))
+
+        # boxplot_metrics["Percent Diff. in Count (Patch)"][class_name] = \
+        #             boxplot_data(pct_DiC(patch_class_annotated_count, patch_class_pred_count))
+
+
+
+        
+        total_class_annotated_count = float(np.sum(image_class_annotated_count))
+
+        point_metrics["Image Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
+            (total_class_annotated_count / total_obj_count) * point_metrics["Image Mean Abs. Diff. in Count"][class_name]
+        point_metrics["Image Mean Sq. Diff. in Count"]["Cross-Class Weighted Average"] += \
+            (total_class_annotated_count / total_obj_count) * point_metrics["Image Mean Sq. Diff. in Count"][class_name]
+        point_metrics["Image R Squared"]["Cross-Class Weighted Average"] += \
+            (total_class_annotated_count / total_obj_count) * point_metrics["Image R Squared"][class_name]
+        point_metrics["Image Non-Zero Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
+            (total_class_annotated_count / total_obj_count) * point_metrics["Image Non-Zero Mean Abs. Diff. in Count"][class_name]
+
+
+
+        if collect_patch_metrics:
+
+            patch_class_annotated_count = np.array(annotated_patch_counts[class_name])
+            patch_class_pred_count = np.array(pred_patch_counts[class_name])
+
+            point_metrics["Patch Mean Abs. Diff. in Count"][class_name] = \
+                            float(np.mean(abs_DiC(patch_class_annotated_count, patch_class_pred_count)))
+            point_metrics["Patch Mean Sq. Diff. in Count"][class_name] = \
+                            float(np.mean(squared_DiC(patch_class_annotated_count, patch_class_pred_count)))
+            point_metrics["Patch R Squared"][class_name] = \
+                            r_squared(patch_class_annotated_count, patch_class_pred_count)
+            point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"][class_name] = \
+                            float(np.mean(nonzero_abs_DiC(patch_class_annotated_count, patch_class_pred_count)))
+
+            point_metrics["Patch Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
+                (total_class_annotated_count / total_obj_count) * point_metrics["Patch Mean Abs. Diff. in Count"][class_name]
+            point_metrics["Patch Mean Sq. Diff. in Count"]["Cross-Class Weighted Average"] += \
+                (total_class_annotated_count / total_obj_count) * point_metrics["Patch Mean Sq. Diff. in Count"][class_name]
+            point_metrics["Patch R Squared"]["Cross-Class Weighted Average"] += \
+                (total_class_annotated_count / total_obj_count) * point_metrics["Patch R Squared"][class_name]
+            point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"]["Cross-Class Weighted Average"] += \
+                (total_class_annotated_count / total_obj_count) * point_metrics["Patch Non-Zero Mean Abs. Diff. in Count"][class_name]
+
+
+
+
+    logger.info("Finished calculating count metrics.")
+
+    if calculate_mAP:
+        logger.info("Started calculating mAP scores.")
+
+        pascal_voc_mAP = image_metric_fn.value(iou_thresholds=0.5)['mAP']
+        coco_mAP = image_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+
+        logger.info("Finished calculating mAP scores.")
+
+        point_metrics["Image PASCAL VOC mAP"] = {}
+        point_metrics["Image PASCAL VOC mAP"]["---"] = float(pascal_voc_mAP)
+        point_metrics["Image MS COCO mAP"] = {}
+        point_metrics["Image MS COCO mAP"]["---"] = float(coco_mAP)
 
 
 
@@ -457,7 +462,11 @@ def get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
     pred_scores = np.expand_dims(pred_scores, axis=-1)
     pred = np.hstack([pred_abs_boxes, pred_classes, pred_scores])
 
-    true_abs_boxes = box_utils.swap_xy_np(true_abs_boxes)
+    if true_abs_boxes.size > 0:
+        true_abs_boxes = box_utils.swap_xy_np(true_abs_boxes)
+    else:
+        true_abs_boxes = np.expand_dims(true_abs_boxes, axis=-1)
+    #true_abs_boxes = box_utils.swap_xy_np(true_abs_boxes)
     true_classes = np.expand_dims(true_classes, axis=-1)
     difficult = np.expand_dims(np.zeros(true_classes.size), axis=-1)
     crowd = np.expand_dims(np.zeros(true_classes.size), axis=-1)

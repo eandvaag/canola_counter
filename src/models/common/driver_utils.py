@@ -6,28 +6,28 @@ from natsort import index_natsorted
 import numpy as np
 
 from io_utils import w3c_io
+#import extract_patches as ep
 import extract_patches as ep
-import extract_patches_2 as ep2
 from image_set import Image
 from models.common import box_utils
 
 
 
-def create_patches(extraction_params, image_set, dataset_name):
-    dataset = image_set.datasets[dataset_name]
+# def create_patches(extraction_params, image_set, dataset_name):
+#     dataset = image_set.datasets[dataset_name]
 
-    scenario_id = ep.extract_patches(extraction_params,
-                                     image_set,
-                                     dataset,
-                                     annotate_patches=dataset.is_annotated)
+#     scenario_id = ep.extract_patches(extraction_params,
+#                                      image_set,
+#                                      dataset,
+#                                      annotate_patches=dataset.is_annotated)
 
-    patch_dir = os.path.join(image_set.patch_dir, scenario_id)
-    return patch_dir, dataset.is_annotated
+#     patch_dir = os.path.join(image_set.patch_dir, scenario_id)
+#     return patch_dir, dataset.is_annotated
 
 
 
 def extract_patches(dataset, config):
-    patch_dir = ep2.extract_patches(dataset, config)
+    patch_dir = ep.extract_patches(dataset, config)
     return patch_dir
 
 # def constant_learning_rate_function(steps_taken, training_steps_per_epoch, config):
@@ -84,43 +84,43 @@ def get_weight_names(model, input_shape):
 
 
 
-def output_excel(out_path, predictions, image_set, config):
+def output_excel(out_path, predictions, dataset, config):
 
     class_map = config.arch["class_map"]
     reverse_class_map = {v: k for k, v in class_map.items()}
 
-    farm_name = image_set.farm_name
-    field_name = image_set.field_name
-    mission_date = image_set.mission_date
+    farm_name = dataset.farm_name
+    field_name = dataset.field_name
+    mission_date = dataset.mission_date
 
     d = {
         "farm_name": [],
         "field_name": [],
         "mission_date": [],
-        "dataset_name": [],
+        #"dataset_name": [],
         "image_id": [],
     }
     for class_name in class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
         d["model_" + class_name + "_count"] = []
 
-    annotations = w3c_io.load_annotations(image_set.annotations_path, class_map)
+    annotations = w3c_io.load_annotations(dataset.annotations_path, class_map)
 
-    for image in image_set.all_dataset.images:
+    for image in dataset.images: #image_set.all_dataset.images:
 
-        if image.image_name in image_set.training_dataset.image_names:
-            dataset_name = "training"
-        elif image.image_name in image_set.validation_dataset.image_names:
-            dataset_name = "validation"
-        elif image.image_name in image_set.test_dataset.image_names:
-            dataset_name = "test"
-        else:
-            dataset_name = "NA"
+        # if image.image_name in image_set.training_dataset.image_names:
+        #     dataset_name = "training"
+        # elif image.image_name in image_set.validation_dataset.image_names:
+        #     dataset_name = "validation"
+        # elif image.image_name in image_set.test_dataset.image_names:
+        #     dataset_name = "test"
+        # else:
+        #     dataset_name = "NA"
 
         d["farm_name"].append(farm_name)
         d["field_name"].append(field_name)
         d["mission_date"].append(mission_date)
-        d["dataset_name"].append(dataset_name)
+        # d["dataset_name"].append(dataset_name)
         d["image_id"].append(image.image_name)
 
         #if image.is_annotated:
@@ -340,30 +340,30 @@ def add_class_detections(image_predictions, config):
 
 
 
-def create_predictions_skeleton(image_set):
+def create_predictions_skeleton(dataset):
 
-    return {"farm_name": image_set.farm_name,
-            "field_name": image_set.field_name,
-            "mission_date": image_set.mission_date,
+    return {"farm_name": dataset.farm_name, #config["target_farm_name"],
+            "field_name": dataset.field_name, #config["target_field_name"],
+            "mission_date": dataset.mission_date, #config["target_mission_date"],
             "image_predictions": {}, 
             "patch_predictions": {},
             "metrics": 
                 {
-                    "training": 
-                    {
-                        "point": {},
-                        "boxplot": {}
-                    },
-                    "validation":
-                    {
-                        "point": {},
-                        "boxplot": {}
-                    },
-                    "test":
-                    {
-                        "point": {},
-                        "boxplot": {}
-                    },
+                    # "training": 
+                    # {
+                    #     "point": {},
+                    #     "boxplot": {}
+                    # },
+                    # "validation":
+                    # {
+                    #     "point": {},
+                    #     "boxplot": {}
+                    # },
+                    # "test":
+                    # {
+                    #     "point": {},
+                    #     "boxplot": {}
+                    # },
                     "all":
                     {
                         "point": {},
