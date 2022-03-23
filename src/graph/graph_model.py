@@ -4,7 +4,7 @@ import tensorflow as tf
 
 def get_model():
     weights = 'imagenet'
-    model = tf.keras.applications.ResNet50(
+    model = tf.keras.applications.ResNet50( #101( #ResNet50(
         weights=weights,
         include_top=False, 
         input_shape=[None, None, 3],

@@ -192,6 +192,29 @@ def collect_statistics(predictions, dataset, config, inference_times=None):
         #         (len(confidences[cls_name]) / num_predictions) * max_box_area
 
 
+def calculate_optimal_score_threshold(annotations, predictions):
+
+    # currently assumes only class is plant class
+
+    completed_images = w3c_io.get_completed_images(annotations)
+
+    optimal_thresh_val = None
+    optimal_mean_abs_diff = np.inf
+    thresh_vals = np.arange(0.5, 1.0, 0.01)
+    for thresh_val in tqdm.tqdm(thresh_vals, desc="Calculating optimal threshold value"):
+        abs_diffs = []
+        for image_name in completed_images:
+            num_annotations = annotations[image_name]["boxes"].shape[0]
+            num_predictions = (np.where(np.array(predictions["image_predictions"][image_name]["pred_scores"]) >= thresh_val)[0]).size
+            abs_diffs.append(abs(num_annotations - num_predictions))
+        mean_abs_diff = float(np.mean(abs_diffs))
+        if mean_abs_diff < optimal_mean_abs_diff:
+            optimal_mean_abs_diff = mean_abs_diff
+            optimal_thresh_val = thresh_val
+
+    return optimal_thresh_val, optimal_mean_abs_diff
+
+
 
 def collect_metrics(predictions, dataset, config,
                     collect_patch_metrics=True, calculate_mAP=True):
@@ -230,6 +253,13 @@ def collect_metrics(predictions, dataset, config,
     annotations = w3c_io.load_annotations(dataset.annotations_path, config.arch["class_map"])
 
     #for (dataset_name, dataset) in datasets.items():
+    optimal_thresh_val, optimal_mean_abs_diff = calculate_optimal_score_threshold(annotations, predictions)
+    if optimal_thresh_val is None:
+        optimal_thresh_val = "unknown"
+        optimal_mean_abs_diff = "unknown"
+    predictions["metrics"]["all"]["optimal_score_threshold"] = {}
+    predictions["metrics"]["all"]["optimal_score_threshold"]["threshold_value"] = optimal_thresh_val
+    predictions["metrics"]["all"]["optimal_score_threshold"]["mean_absolute_difference"] = optimal_mean_abs_diff
 
 
     annotated_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}

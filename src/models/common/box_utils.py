@@ -89,16 +89,16 @@ def clip_and_remove_small_visibility_boxes_np(boxes, patch_coords, min_visibilit
     return clipped_boxes[mask]
 
 
-def get_normalized_patch_wh(training_dataset):
+# def get_normalized_patch_wh(training_dataset):
 
-    BOX_PATCH_RATIO = 0.02
+#     BOX_PATCH_RATIO = 0.02
 
-    mean_box_area = training_dataset.get_mean_box_area()
-    patch_area = mean_box_area / BOX_PATCH_RATIO
+#     mean_box_area = training_dataset.get_mean_box_area()
+#     patch_area = mean_box_area / BOX_PATCH_RATIO
 
-    patch_wh = round(m.sqrt(patch_area))
+#     patch_wh = round(m.sqrt(patch_area))
 
-    return patch_wh
+#     return patch_wh
 
 
 # def clip_boxes_np(boxes, img_width, img_height):

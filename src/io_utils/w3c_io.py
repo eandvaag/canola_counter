@@ -81,7 +81,7 @@ def save_annotations(annotations_path, predictions, config):
                 {
                     "type": "TextualBody",
                     "purpose": "score",
-                    "value": str(round(pred_score, 2))
+                    "value": "%.2f" % pred_score
                 }],
                 "target": {
                     "source": "",
@@ -173,6 +173,23 @@ def get_num_annotations(annotations, require_completed=True):
 
 def get_patch_size(annotations):
     
+
+    median_box_area = get_median_box_area(annotations)
+
+    #(40000 / 288) (90000 / 2296) 
+
+
+    #slope = (90000 - 40000) / (2296 - 288)
+    #patch_area = slope * (median_box_area - 288) + 40000
+
+    patch_area = median_box_area * (90000 / 2296)
+    patch_size = round(m.sqrt(patch_area))
+    print("patch_size", patch_size)
+    return patch_size
+    
+
+def get_median_box_area(annotations):
+    
     box_areas = []
     for img_name in annotations.keys():
         boxes = annotations[img_name]["boxes"]
@@ -183,9 +200,5 @@ def get_patch_size(annotations):
     if len(box_areas) == 0:
         raise RuntimeError("No annotations found.") 
 
-    patch_area = np.median(box_areas) * (90000 / 2500)
-    patch_size = round(m.sqrt(patch_area))
-    print("patch_size", patch_size)
-    return patch_size
+    return np.median(box_areas)
     
-

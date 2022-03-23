@@ -331,7 +331,11 @@ def extract_patch_records_with_exg(image, image_annotations, num_patches, patch_
 
     # TODO: change to a random extraction -- just randomly e.g., extract (4 * num_patches) patches from the image
     # and then pick the (num_patches) most green ones
+    w, h = image.get_wh()
+    image_area = w * h
+    patch_area = patch_size * patch_size
 
+    pool_size = max(4 * num_patches, 2 * m.ceil(image_area / patch_area))
     patch_coords_lst = generate_random_patch_coords_lst(image, 4 * num_patches, patch_size)
     patch_records = extract_patch_records_from_image(image, patch_coords_lst, image_annotations)
     #patches = extract_patches_from_image_tiled(image, patch_size, annotations, patch_overlap_percent=85)
@@ -614,44 +618,51 @@ def extract_patches_from_image_array(image_array, patch_coords_lst):
 def get_contained_inds(centres, patch_coords):
     return np.where(np.logical_and(
                         np.logical_and(centres[:,0] > patch_coords[0], 
-                                       centres[:,0] < patch_coords[2]),
+                                        centres[:,0] < patch_coords[2]),
                         np.logical_and(centres[:,1] > patch_coords[1], 
-                                       centres[:,1] < patch_coords[3])))[0]
-
+                                        centres[:,1] < patch_coords[3])))[0]
 
 def annotate_patch(patch_data, gt_boxes, gt_classes):
 
-    patch = patch_data["patch"]
-    patch_coords = patch_data["patch_coords"]
+    if gt_boxes.size == 0:
+        patch_data["image_abs_boxes"] = []
+        patch_data["patch_abs_boxes"] = []
+        patch_data["patch_normalized_boxes"] = []
+        patch_data["patch_classes"] = [] 
 
-    centres =  np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
-    contained_inds = get_contained_inds(centres, patch_data["patch_coords"])
-    contained_boxes = gt_boxes[contained_inds]
-    contained_classes = gt_classes[contained_inds]
+    else:
 
-    patch_height = patch_coords[2] - patch_coords[0]
-    patch_width = patch_coords[3] - patch_coords[1]
-    image_abs_boxes = box_utils.clip_and_remove_small_visibility_boxes_np(
-        contained_boxes, patch_coords, min_visibility=0)
+        patch = patch_data["patch"]
+        patch_coords = patch_data["patch_coords"] 
 
-    #image_abs_boxes = box_utils.clip_boxes_np(contained_boxes, patch_coords)
+        centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
+        contained_inds = get_contained_inds(centres, patch_data["patch_coords"])
+        contained_boxes = gt_boxes[contained_inds]
+        contained_classes = gt_classes[contained_inds]
 
-    # # boxes are clipped to be contained within the patch
-    # image_abs_boxes = np.stack([np.maximum(contained_boxes[:,0], patch_coords[0]),
-    #                           np.maximum(contained_boxes[:,1], patch_coords[1]),
-    #                           np.minimum(contained_boxes[:,2], patch_coords[2]),
-    #                           np.minimum(contained_boxes[:,3], patch_coords[3])], axis=-1)
+        #patch_height = patch_coords[2] - patch_coords[0]
+        #patch_width = patch_coords[3] - patch_coords[1]
+        image_abs_boxes = box_utils.clip_and_remove_small_visibility_boxes_np(
+            contained_boxes, patch_coords, min_visibility=0)
 
-    patch_abs_boxes = np.stack([image_abs_boxes[:,0] - patch_coords[0],
-                                image_abs_boxes[:,1] - patch_coords[1],
-                                image_abs_boxes[:,2] - patch_coords[0],
-                                image_abs_boxes[:,3] - patch_coords[1]], axis=-1)
+        #image_abs_boxes = box_utils.clip_boxes_np(contained_boxes, patch_coords)
 
-    patch_normalized_boxes = patch_abs_boxes / patch.shape[0]
+        # # boxes are clipped to be contained within the patch
+        # image_abs_boxes = np.stack([np.maximum(contained_boxes[:,0], patch_coords[0]),
+        #                           np.maximum(contained_boxes[:,1], patch_coords[1]),
+        #                           np.minimum(contained_boxes[:,2], patch_coords[2]),
+        #                           np.minimum(contained_boxes[:,3], patch_coords[3])], axis=-1)
 
-    patch_data["image_abs_boxes"] = image_abs_boxes.tolist()
-    patch_data["patch_abs_boxes"] = patch_abs_boxes.tolist()
-    patch_data["patch_normalized_boxes"] = patch_normalized_boxes.tolist()
-    patch_data["patch_classes"] = contained_classes.tolist()
+        patch_abs_boxes = np.stack([image_abs_boxes[:,0] - patch_coords[0],
+                                    image_abs_boxes[:,1] - patch_coords[1],
+                                    image_abs_boxes[:,2] - patch_coords[0],
+                                    image_abs_boxes[:,3] - patch_coords[1]], axis=-1)
+
+        patch_normalized_boxes = patch_abs_boxes / patch.shape[0]
+
+        patch_data["image_abs_boxes"] = image_abs_boxes.tolist()
+        patch_data["patch_abs_boxes"] = patch_abs_boxes.tolist()
+        patch_data["patch_normalized_boxes"] = patch_normalized_boxes.tolist()
+        patch_data["patch_classes"] = contained_classes.tolist()
 
     return patch_data

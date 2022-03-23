@@ -131,25 +131,32 @@ def run_fake_job():
 
     subset_type = "graph_subset" #, "even_subset"]
     method_params_lst = [
+        # {
+        #     "match_method": "bipartite_b_matching",
+        #     "extraction_type": "excess_green_box_combo", #"excess_green", #"surrounding_boxes", #"excess_green",
+        #     "patch_size": "image_set_dependent", # alternatively, set to a fixed value
+        #     "source_pool_size": 12000,
+        #     "target_pool_size": 3000
+        # },
+        # {
+        #     #"match_method": "bipartite_b_matching",
+        #     "extraction_type": "excess_green_box_combo",
+        #     "patch_size": "image_set_dependent",
+        #     #"source_pool_size": 12000,
+        #     #"target_pool_size": 3000
+        # },
         {
             "match_method": "bipartite_b_matching",
-            "extraction_type": "excess_green_box_combo", #"excess_green", #"surrounding_boxes", #"excess_green",
-            "patch_size": "image_set_dependent", # alternatively, set to a fixed value
-            "source_pool_size": 12000,
-            "target_pool_size": 3000
-        },
-        {
-            "match_method": "bipartite_b_matching",
-            "extraction_type": "excess_green",
+            "extraction_type": "surrounding_boxes", #"excess_green", #"surounding_boxes", #"excess_green",
             "patch_size": "image_set_dependent",
-            "source_pool_size": 12000,
-            "target_pool_size": 3000
+            "source_pool_size": 1000, #12000,
+            "target_pool_size": 1000 #3000
         },
-        {
-            "match_method": "bipartite_b_matching",
-            "extraction_type": "surrounding_boxes",
-            "patch_size": "image_set_dependent",
-        },
+        # {
+        #     "match_method": "bipartite_b_matching",
+        #     "extraction_type": "surrounding_boxes",
+        #     "patch_size": "image_set_dependent",
+        # },
 
     ]
     #for subset_type in subset_types:
@@ -158,16 +165,17 @@ def run_fake_job():
         job_uuid = str(uuid.uuid4())
         job_config = {
             "job_uuid": job_uuid,
+            "replications": 1,
             "job_name": "fake_name_" + job_uuid,
             "source_construction_params": {
-                "method_name": subset_type,
+                "method_name": "graph_subset", #"direct", #subset_type,
                 "method_params": method_params,
-                "size": 3000,
+                "size": 1000, #2000
 
             },
-            "target_farm_name": "BlaineLake", #"row_spacing",
-            "target_field_name": "HornerWest", #"nasser", 
-            "target_mission_date": "2021-06-09" #"2020-06-08"
+            "target_farm_name": "BlaineLake", #"Biggar", #"row_spacing", #"BlaineLake", #"row_spacing", #"BlaineLake", #"row_spacing",
+            "target_field_name": "HornerWest", #"Dennis3", #"nasser", #"River", #"nasser", #"HornerWest", #"nasser", 
+            "target_mission_date": "2021-06-09" #"2021-06-04" #"2020-06-08" #"2021-06-09" #2020-06-08",  #"2021-06-09" #"2020-06-08"
         }
 
         json_io.save_json(os.path.join("usr", "data", "jobs", job_uuid + ".json"), job_config)

@@ -72,8 +72,8 @@ def build_training_datasets(config):
         build_even_subset(config)
     elif method_name == "graph_subset":
         build_graph_subset(config)
-    elif method_name == "direct_tile":
-        build_direct_tile(config)
+    elif method_name == "direct":
+        build_direct(config)
     else:
         raise RuntimeError("Unrecognized source dataset construction method: {}".format(method_name))
 
@@ -171,18 +171,19 @@ def exg_patches(config, combo):
                     else:
                         image_set_patch_size = patch_size
 
+                    # if is_target:
+                    #     for image in dataset.images:
+                    #         patches = ep.extract_patch_records_with_exg(
+                    #                         image, 
+                    #                         annotations[image.image_name], 
+                    #                         num_patches_per_target_image, 
+                    #                         image_set_patch_size)
+                    #         print("adding {} patches to target dataset".format(len(patches)))
+                    #         data["target_patches"].extend(patches)
+                    # else:
                     if is_target:
-                        for image in dataset.images:
-                            patches = ep.extract_patch_records_with_exg(
-                                            image, 
-                                            annotations[image.image_name], 
-                                            num_patches_per_target_image, 
-                                            image_set_patch_size)
-                            print("adding {} patches to target dataset".format(len(patches)))
-                            data["target_patches"].extend(patches)
-                    else:
                         for image in dataset.completed_images:
-                            
+                        
                             patches = extraction_func(
                                             image, 
                                             annotations[image.image_name], 
@@ -190,6 +191,8 @@ def exg_patches(config, combo):
                                             image_set_patch_size)
                             print("adding {} patches to source dataset".format(len(patches)))
                             data["source_patches"].extend(patches)
+                        
+                            data["target_patches"].extend(patches)
                             
                         
                 except RuntimeError:
@@ -212,7 +215,7 @@ def patches_surrounding_boxes(config):
     
     source_construction_params = config.training["source_construction_params"]
     method_params = source_construction_params["method_params"]
-    patch_size = method_params["patch_size"]    
+    patch_size = method_params["patch_size"]
 
     image_set_root = os.path.join("usr", "data", "image_sets")
 
@@ -229,9 +232,11 @@ def patches_surrounding_boxes(config):
                 mission_date = os.path.basename(mission_path)
 
                 if ((farm_name == target_farm_name and field_name == target_field_name) and mission_date == target_mission_date):
-                    patches = data["target_patches"]
+                    is_target = True
+                    #patches = data["target_patches"]
                 else:
-                    patches = data["source_patches"]
+                    is_target = False
+                    #patches = data["source_patches"]
 
                 dataset = DataSet({
                     "farm_name": farm_name,
@@ -249,11 +254,24 @@ def patches_surrounding_boxes(config):
                     else:
                         image_set_patch_size = patch_size
 
-                    for image in dataset.completed_images:
-                        patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
-                            image, 
-                            annotations[image.image_name], 
-                            image_set_patch_size))
+
+                    if is_target:
+                        for image in dataset.completed_images:
+                            # patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
+                            #     image, 
+                            #     annotations[image.image_name], 
+                            #     image_set_patch_size))
+
+                            patches = ep.extract_patch_records_surrounding_gt_boxes(
+                                image, 
+                                annotations[image.image_name], 
+                                image_set_patch_size)
+
+                            data["source_patches"].extend(patches)
+                            if is_target:
+                                data["target_patches"].extend(patches)
+
+
                 except RuntimeError:
                     pass # patch size cannot be determined due to 0 annotations
 
@@ -335,6 +353,9 @@ def extract_graph_match_data(config):
 
     print("source_features.shape", data["source_features"].shape)
     print("target_features.shape", data["target_features"].shape)
+
+    print("source_patches == target_patches ??: {}".format(np.array_equal(data["source_patches"], data["target_patches"])))
+    print("source_features == target_features ??: {}".format(np.array_equal(data["source_features"], data["target_features"])))
 
     return data
 
@@ -423,6 +444,92 @@ def get_source_annotations(config):
                     annotation_records.append(annotation_record)
 
     return annotation_records, total_annotation_count
+
+def build_direct(config):
+        
+    logger = logging.getLogger(__name__)
+    #source_size = config.training["source_construction_params"]["size"]
+    
+    target_farm_name = config.arch["target_farm_name"]
+    target_field_name = config.arch["target_field_name"]
+    target_mission_date = config.arch["target_mission_date"]
+    
+    source_construction_params = config.training["source_construction_params"]
+    method_params = source_construction_params["method_params"]
+    extraction_type = method_params["extraction_type"]
+    patch_size = method_params["patch_size"]
+
+    image_set_root = os.path.join("usr", "data", "image_sets")
+
+    dataset = DataSet({
+        "farm_name": target_farm_name,
+        "field_name": target_field_name,
+        "mission_date": target_mission_date
+    })
+
+    annotations_path = os.path.join(image_set_root, target_farm_name, target_field_name, target_mission_date,
+                                    "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+    num_annotated_images = len(w3c_io.get_completed_images(annotations))
+    num_annotations = w3c_io.get_num_annotations(annotations, require_completed=True)
+    if num_annotated_images == 0 or num_annotations == 0:
+        raise RuntimeError("Insufficient number of annotations for direct training")
+
+
+    if "size" in source_construction_params:
+        size = source_construction_params["size"]
+        num_patches_per_image = m.ceil(size / num_annotated_images)
+
+
+    patches = []
+    if patch_size == "image_set_dependent":
+        image_set_patch_size = w3c_io.get_patch_size(annotations)
+    else:
+        image_set_patch_size = patch_size
+
+    for image in dataset.completed_images:
+        if extraction_type == "surrounding_boxes":
+            patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
+                image, 
+                annotations[image.image_name], 
+                image_set_patch_size))
+        elif extraction_type == "excess_green":
+            patches.extend(ep.extract_patch_records_with_exg(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image, 
+                image_set_patch_size))
+        elif extraction_type == "excess_green_box_combo":
+            patches.extend(ep.extract_patch_records_with_exg_box_combo(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image, 
+                image_set_patch_size))
+        else:
+            raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
+
+    patches = np.array(patches)
+
+
+    usr_data_root = os.path.join("usr", "data")
+    patches_dir = os.path.join(usr_data_root, "models", config.arch["model_uuid"], "source_patches", "0")
+    training_patches_dir = os.path.join(patches_dir, "training")
+    validation_patches_dir = os.path.join(patches_dir, "validation")
+    os.makedirs(training_patches_dir)
+    os.makedirs(validation_patches_dir)
+
+
+    training_size = round(patches.size * 0.8)
+    training_subset = random.sample(np.arange(patches.size).tolist(), training_size)
+
+    training_patches = patches[training_subset]
+    validation_patches = np.delete(patches, training_subset)
+
+    logger.info("Writing patches...")
+    ep.write_annotated_patch_records(training_patches, training_patches_dir)
+    ep.write_annotated_patch_records(validation_patches, validation_patches_dir)
+    logger.info("Finished writing patches.")
 
 
 

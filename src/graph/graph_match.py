@@ -71,7 +71,16 @@ def solve_wbm(from_nodes, to_nodes, wt, ucap, vcap):
 
 
 
+def diverse_bipartite_b_match(config, desired_source_size, source_features, target_features, source_patches, target_patches):
+    pass
+
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
+
 def bipartite_b_match(config, desired_source_size, source_features, target_features, source_patches, target_patches):
+
+    import sys
+    np.set_printoptions(threshold=sys.maxsize)
 
     b = m.ceil(desired_source_size / target_features.shape[0])
     print("b", b)
@@ -79,10 +88,14 @@ def bipartite_b_match(config, desired_source_size, source_features, target_featu
     print("target_features.shape", target_features.shape)
     target_features = np.tile(target_features, (b, 1))
     print("target_features.shape", target_features.shape)
-    distances = pairwise_distances(target_features, source_features)
+    distances = pairwise_distances(target_features, target_features) #source_features)
+    print("distances symmetric ?? {}".format(check_symmetric(distances)))
     row_ind, col_ind = min_weight_full_bipartite_matching(csr_matrix(distances))
+    print("distances.shape", distances.shape)
+    print("row_ind", row_ind)
     print("col_ind", col_ind)
-    selected_distances = distances[np.arange(distances.shape[0]), col_ind]
+    #selected_distances = distances[np.arange(distances.shape[0]), col_ind]
+    selected_distances = distances[row_ind, col_ind]
     print("selected_distances", selected_distances)
     order = selected_distances.argsort()
     print("order", order)
@@ -90,26 +103,26 @@ def bipartite_b_match(config, desired_source_size, source_features, target_featu
     selected_source_patches = source_patches[sorted_col_ind]
     selected_source_patches = np.array(selected_source_patches[:desired_source_size])
 
-    # output = True
-    # if output:
-    #     b_match_dir = os.path.join(config.model_dir, "b_matching")
-    #     os.makedirs(b_match_dir)
-    #     for i in range(target_features.shape[0]):
-    #         target_ind = i % org_target_size
-    #         target_dir = os.path.join(b_match_dir, str(target_ind))
-    #         if not os.path.exists(target_dir):
-    #             os.makedirs(target_dir)
-    #             target_patch_data = {"patch": target_patches[target_ind]["patch"], 
-    #             "patch_name": "target_" + str(target_ind) + ".png"
-    #             }
-    #             ep.write_patches(target_dir, [target_patch_data])
+    output = True
+    if output:
+        b_match_dir = os.path.join(config.model_dir, "b_matching")
+        os.makedirs(b_match_dir)
+        for i in range(target_features.shape[0]):
+            target_ind = i % org_target_size
+            target_dir = os.path.join(b_match_dir, str(target_ind))
+            if not os.path.exists(target_dir):
+                os.makedirs(target_dir)
+                target_patch_data = {"patch": target_patches[target_ind]["patch"], 
+                "patch_name": "target_" + str(target_ind) + ".png"
+                }
+                ep.write_patches(target_dir, [target_patch_data])
 
-    #         patch_data = source_patches[col_ind[i]]
+            patch_data = source_patches[col_ind[i]]
 
-    #         #{"patch": source_patches[col_ind[i]],
-    #         #              "patch_name": str(i) + ".png"}
-    #         ep.write_patches(target_dir, [patch_data])
-    #     exit()
+            #{"patch": source_patches[col_ind[i]],
+            #              "patch_name": str(i) + ".png"}
+            ep.write_patches(target_dir, [patch_data])
+        exit()
 
     return selected_source_patches
 

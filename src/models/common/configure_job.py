@@ -228,7 +228,7 @@ def fill_job_config(job_config):
 
     
     job_config.update({
-        "replications": 1,
+        #"replications": 1,
 
         "arch_config": {
 
