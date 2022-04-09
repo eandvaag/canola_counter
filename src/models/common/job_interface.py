@@ -1,3 +1,7 @@
+# import tensorflow as tf
+# tf.keras.utils.set_random_seed(123)
+# print("random seed set!")
+
 import os
 import shutil
 import logging
@@ -13,6 +17,10 @@ import numpy as np
 from io_utils import json_io, w3c_io
 from models.common import model_interface, configure_job, model_config #, inference_record_io
 import image_set
+
+
+
+
 
 #ADDED_TO_JOB = "added_to_job"
 #FINISHED_ARCH = "finished_arch"
@@ -54,7 +62,10 @@ def create_model_configs(job_config, model_index):
         config["target_field_name"] = target_field_name
         config["target_mission_date"] = target_mission_date
 
+    
     training_config["source_construction_params"] = job_config["source_construction_params"]
+    inference_config["predict_on_completed_only"] = job_config["predict_on_completed_only"]
+    inference_config["supplementary_targets"] = job_config["supplementary_targets"]
 
     if "variation_config" in job_config:
         param_index = model_index // job_config["replications"]
@@ -124,8 +135,16 @@ def create_model_configs(job_config, model_index):
 
 
 
-def run_fake_job():
+def run_test_job():
     import uuid
+    # import numpy as np
+    # import tensorflow as tf
+    # import random as python_random
+    # np.random.seed(123)
+    # python_random.seed(123)
+    # tf.random.set_seed(1234)
+
+
     
     logging.basicConfig(level=logging.INFO)
 
@@ -146,12 +165,17 @@ def run_fake_job():
         #     #"target_pool_size": 3000
         # },
         {
-            "match_method": "bipartite_b_matching",
-            "extraction_type": "surrounding_boxes", #"excess_green", #"surounding_boxes", #"excess_green",
+            "match_method": "bipartite_b_matching", #"reciprocal_match", #"diverse_bipartite_b_matching",
+            "extraction_type": "excess_green_box_combo", #"excess_green_box_combo", #"excess_green_box_combo", #"surrounding_boxes", #"excess_green", #"surrounding_boxes", #"excess_green", #"surounding_boxes", #"excess_green",
             "patch_size": "image_set_dependent",
-            "source_pool_size": 1000, #12000,
-            "target_pool_size": 1000 #3000
+            "source_pool_size": 25000, #18000, #12000, #12000,
+            "target_pool_size": 500, #2000, #3000 #3000
+            "exclude_target_from_source": True 
         },
+        #{
+        #    "extraction_type": "excess_green", #"surrounding_boxes", #"excess_green", #"surounding_boxes", #"excess_green",
+        #    "patch_size": "image_set_dependent",
+        #},
         # {
         #     "match_method": "bipartite_b_matching",
         #     "extraction_type": "surrounding_boxes",
@@ -163,19 +187,50 @@ def run_fake_job():
     for method_params in method_params_lst:
 
         job_uuid = str(uuid.uuid4())
+        # job_config = {
+        #     "job_uuid": job_uuid,
+        #     "replications": 1,
+        #     "job_name": "test_name_" + job_uuid,
+        #     "source_construction_params": {
+        #         "method_name": "graph_subset", #"direct", #"graph_subset", #"graph_subset", #"direct", #subset_type,
+        #         "method_params": method_params,
+        #         "size": 5000 #4000 #2000, #2000
+        #     },
+        #     "target_farm_name": "BlaineLake", #"row_spacing", #"UNI", #"row_spacing", #"UNI", #"BlaineLake", #"row_spacing", #"UNI", #"BlaineLake", #"row_spacing",  #"Biggar", , #"BlaineLake", #"row_spacing", #"BlaineLake", #"row_spacing",
+        #     "target_field_name": "HornerWest", #"nasser", #"LowN1", #"nasser", #"LowN1", #"HornerWest", #"River", #"HornerWest", #"brown", #"LowN1", #"nasser", #"Dennis3",  #"River", #"nasser", #"HornerWest", #"nasser", 
+        #     "target_mission_date": "2021-06-09" #"2020-06-08" #"2021-06-07" #"2020-06-08" #"2021-06-07" #"2021-06-09" #"2021-06-01" #"2021-06-07"  #"2020-06-08"  #"2021-06-04"  #"2021-06-09" #2020-06-08",  #"2021-06-09" #"2020-06-08"
+        # }
+
         job_config = {
             "job_uuid": job_uuid,
             "replications": 1,
-            "job_name": "fake_name_" + job_uuid,
+            "job_name": "test_name_" + job_uuid,
             "source_construction_params": {
-                "method_name": "graph_subset", #"direct", #subset_type,
+                "method_name": "direct", #"even_subset", #"graph_subset", #"even_subset", #"graph_subset", #"even_subset", #"direct", #"graph_subset", #"graph_subset", #"direct", #subset_type,
                 "method_params": method_params,
-                "size": 1000, #2000
-
+                "size": 500 #4000 #2000, #2000
             },
-            "target_farm_name": "BlaineLake", #"Biggar", #"row_spacing", #"BlaineLake", #"row_spacing", #"BlaineLake", #"row_spacing",
-            "target_field_name": "HornerWest", #"Dennis3", #"nasser", #"River", #"nasser", #"HornerWest", #"nasser", 
-            "target_mission_date": "2021-06-09" #"2021-06-04" #"2020-06-08" #"2021-06-09" #2020-06-08",  #"2021-06-09" #"2020-06-08"
+            "target_farm_name": "UNI", #"row_spacing", #"BlaineLake", #"row_spacing", #"UNI", #"row_spacing", #"UNI", #"BlaineLake", #"row_spacing", #"UNI", #"BlaineLake", #"row_spacing",  #"Biggar", , #"BlaineLake", #"row_spacing", #"BlaineLake", #"row_spacing",
+            "target_field_name": "Sutherland", #"brown", #"HornerWest", #"nasser", #"LowN1", #"nasser", #"LowN1", #"HornerWest", #"River", #"HornerWest", #"brown", #"LowN1", #"nasser", #"Dennis3",  #"River", #"nasser", #"HornerWest", #"nasser", 
+            "target_mission_date": "2021-06-05", #"2021-06-01", #"2021-06-09", #"2020-06-08" #"2021-06-07" #"2020-06-08" #"2021-06-07" #"2021-06-09" #"2021-06-01" #"2021-06-07"  #"2020-06-08"  #"2021-06-04"  #"2021-06-09" #2020-06-08",  #"2021-06-09" #"2020-06-08"
+            "predict_on_completed_only": True,
+            "supplementary_targets": [
+                {
+                    "target_farm_name": "row_spacing",
+                    "target_field_name": "nasser",
+                    "target_mission_date": "2020-06-08"
+                },
+                {
+                    "target_farm_name": "UNI",
+                    "target_field_name": "LowN1",
+                    "target_mission_date": "2021-06-07"                    
+                },
+                {
+                    "target_farm_name": "BlaineLake",
+                    "target_field_name": "River",
+                    "target_mission_date": "2021-06-09"                    
+                }
+            ]
         }
 
         json_io.save_json(os.path.join("usr", "data", "jobs", job_uuid + ".json"), job_config)

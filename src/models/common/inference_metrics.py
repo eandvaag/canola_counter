@@ -90,7 +90,7 @@ def boxplot_data(data):
 #            }
 
 
-def collect_statistics(predictions, dataset, config, inference_times=None):
+def collect_statistics(metrics, predictions, config, inference_times=None):
 
 
     # if "metrics" not in predictions:
@@ -109,8 +109,8 @@ def collect_statistics(predictions, dataset, config, inference_times=None):
     # }
     #dataset = image_set.all_dataset
 
-    point_metrics = predictions["metrics"]["all"]["point"]
-    boxplot_metrics = predictions["metrics"]["all"]["boxplot"]
+    point_metrics = metrics["point"]
+    boxplot_metrics = metrics["boxplot"]
 
     if inference_times is not None:
         total_inference_time = float(np.sum(inference_times))
@@ -135,12 +135,13 @@ def collect_statistics(predictions, dataset, config, inference_times=None):
 
     confidences = {k: [] for k in config.arch["class_map"].keys()}
     boxes = {k: [] for k in config.arch["class_map"].keys()}
-    for image in dataset.images:
+    #for image in dataset.images:
+    for image_name in predictions["image_predictions"].keys():
         for cls_name in config.arch["class_map"].keys():
-            cls_confs = predictions["image_predictions"][image.image_name]["pred_class_scores"][cls_name] 
+            cls_confs = predictions["image_predictions"][image_name]["pred_class_scores"][cls_name] 
             confidences[cls_name].extend(cls_confs)
 
-            cls_boxes = predictions["image_predictions"][image.image_name]["pred_class_boxes"][cls_name]
+            cls_boxes = predictions["image_predictions"][image_name]["pred_class_boxes"][cls_name]
             boxes[cls_name].extend(cls_boxes)
 
     num_predictions = np.sum(len(confidences[k]) for k in confidences.keys())
@@ -216,7 +217,7 @@ def calculate_optimal_score_threshold(annotations, predictions):
 
 
 
-def collect_metrics(predictions, dataset, config,
+def collect_metrics(metrics, predictions, dataset, config,
                     collect_patch_metrics=True, calculate_mAP=True):
 
     logger = logging.getLogger(__name__)
@@ -248,7 +249,7 @@ def collect_metrics(predictions, dataset, config,
     class_map = config.arch["class_map"]
     reverse_class_map = {v: k for k, v in config.arch["class_map"].items()}
 
-    image_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=num_classes) #config.arch["num_classes"])
+    all_images_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=num_classes) #config.arch["num_classes"])
 
     annotations = w3c_io.load_annotations(dataset.annotations_path, config.arch["class_map"])
 
@@ -257,49 +258,72 @@ def collect_metrics(predictions, dataset, config,
     if optimal_thresh_val is None:
         optimal_thresh_val = "unknown"
         optimal_mean_abs_diff = "unknown"
-    predictions["metrics"]["all"]["optimal_score_threshold"] = {}
-    predictions["metrics"]["all"]["optimal_score_threshold"]["threshold_value"] = optimal_thresh_val
-    predictions["metrics"]["all"]["optimal_score_threshold"]["mean_absolute_difference"] = optimal_mean_abs_diff
+
+    
+    point_metrics = metrics["point"]
+    boxplot_metrics = metrics["boxplot"]    
+    image_metrics = metrics["image"]
+    
+    point_metrics["optimal_score_threshold"] = {}
+    point_metrics["optimal_score_threshold"]["threshold_value"] = optimal_thresh_val
+    point_metrics["optimal_score_threshold"]["mean_absolute_difference"] = optimal_mean_abs_diff
+
+
+
 
 
     annotated_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
     pred_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
 
-    for image in dataset.completed_images:
+    #for image in dataset.completed_images:
+    for image_name in predictions["image_predictions"].keys():
 
-        #img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map) #config.arch["class_map"])
-        image_abs_boxes = annotations[image.image_name]["boxes"]
-        image_classes = annotations[image.image_name]["classes"]
-        
-        
-        unique, counts = np.unique(image_classes, return_counts=True)
-        class_num_to_count = dict(zip(unique, counts))
-        cur_image_class_counts = {k: 0 for k in class_map} #config.arch["class_map"].keys()}
-        for class_num in class_num_to_count.keys():
-            cur_image_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
-            #cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
+        if annotations[image_name]["status"] == "completed":
 
-        cur_image_pred_class_counts = predictions["image_predictions"][image.image_name]["pred_class_counts"]
+            #img_abs_boxes, img_classes = xml_io.load_boxes_and_classes(img.xml_path, img_set.class_map) #config.arch["class_map"])
+            image_abs_boxes = annotations[image_name]["boxes"]
+            image_classes = annotations[image_name]["classes"]
+            
+            
+            unique, counts = np.unique(image_classes, return_counts=True)
+            class_num_to_count = dict(zip(unique, counts))
+            cur_image_class_counts = {k: 0 for k in class_map} #config.arch["class_map"].keys()}
+            for class_num in class_num_to_count.keys():
+                cur_image_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
+                #cur_img_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
-        for class_name in class_map.keys(): #config.arch["class_map"].keys():
-            annotated_image_counts[class_name].append(cur_image_class_counts[class_name])
-            pred_image_counts[class_name].append(cur_image_pred_class_counts[class_name])
+            cur_image_pred_class_counts = predictions["image_predictions"][image_name]["pred_class_counts"]
 
-        #annotated_img_count = np.shape(img_abs_boxes)[0]
+            for class_name in class_map.keys(): #config.arch["class_map"].keys():
+                annotated_image_counts[class_name].append(cur_image_class_counts[class_name])
+                pred_image_counts[class_name].append(cur_image_pred_class_counts[class_name])
 
-        #pred_img_count = predictions["image_predictions"][img.img_name]["pred_count"]
-        
-        if calculate_mAP:
-            pred_abs_boxes = np.array(predictions["image_predictions"][image.image_name]["pred_image_abs_boxes"])
-            pred_classes = np.array(predictions["image_predictions"][image.image_name]["pred_classes"])
-            pred_scores = np.array(predictions["image_predictions"][image.image_name]["pred_scores"])
+            #annotated_img_count = np.shape(img_abs_boxes)[0]
 
-            pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
-                                                                image_abs_boxes, image_classes)
-            image_metric_fn.add(pred_for_mAP, true_for_mAP)
+            #pred_img_count = predictions["image_predictions"][img.img_name]["pred_count"]
+            
+            if calculate_mAP:
+                pred_abs_boxes = np.array(predictions["image_predictions"][image_name]["pred_image_abs_boxes"])
+                pred_classes = np.array(predictions["image_predictions"][image_name]["pred_classes"])
+                pred_scores = np.array(predictions["image_predictions"][image_name]["pred_scores"])
 
-            #annotated_img_counts.append(annotated_img_count)
-        #pred_img_counts.append(pred_img_count)
+                pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
+                                                                    image_abs_boxes, image_classes)
+                all_images_metric_fn.add(pred_for_mAP, true_for_mAP)
+
+
+                image_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=num_classes)
+                image_metric_fn.add(pred_for_mAP, true_for_mAP)
+                pascal_voc_mAP = image_metric_fn.value(iou_thresholds=0.5)['mAP']
+                coco_mAP = image_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+
+
+                image_metrics[image_name]["Image PASCAL VOC mAP"] = float(pascal_voc_mAP) * 100
+                image_metrics[image_name]["Image MS COCO mAP"] = float(coco_mAP) * 100
+
+                
+                #annotated_img_counts.append(annotated_img_count)
+            #pred_img_counts.append(pred_img_count)
 
 
     #annotated_img_counts = np.array(annotated_img_counts)
@@ -349,9 +373,6 @@ def collect_metrics(predictions, dataset, config,
     # if "boxplot" not in predictions["metrics"]:
     #     predictions["metrics"]["boxplot"] = {}
 
-
-    point_metrics = predictions["metrics"]["all"]["point"]
-    boxplot_metrics = predictions["metrics"]["all"]["boxplot"]
 
 
 
@@ -468,15 +489,15 @@ def collect_metrics(predictions, dataset, config,
     if calculate_mAP:
         logger.info("Started calculating mAP scores.")
 
-        pascal_voc_mAP = image_metric_fn.value(iou_thresholds=0.5)['mAP']
-        coco_mAP = image_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        pascal_voc_mAP = all_images_metric_fn.value(iou_thresholds=0.5)['mAP']
+        coco_mAP = all_images_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
 
         logger.info("Finished calculating mAP scores.")
 
         point_metrics["Image PASCAL VOC mAP"] = {}
-        point_metrics["Image PASCAL VOC mAP"]["---"] = float(pascal_voc_mAP)
+        point_metrics["Image PASCAL VOC mAP"]["---"] = float(pascal_voc_mAP) * 100
         point_metrics["Image MS COCO mAP"] = {}
-        point_metrics["Image MS COCO mAP"]["---"] = float(coco_mAP)
+        point_metrics["Image MS COCO mAP"]["---"] = float(coco_mAP) * 100
 
 
 

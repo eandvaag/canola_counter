@@ -241,11 +241,13 @@ def _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size):
     box_w = box_x_max - box_x_min
 
     if box_h > patch_size or box_w > patch_size:
-        raise RuntimeError("Box exceeds size of patch.")
+        raise RuntimeError("Box exceeds size of patch. (box_w, box_h): ({}, {}). patch_size: {}.".format(
+            box_w, box_h, patch_size
+        ))
 
-    patch_y_min = random.randrange((box_y_min + box_h) - patch_size, box_y_min)
+    patch_y_min = random.randrange((box_y_min + box_h) - patch_size, box_y_min + 1)
     patch_y_min = min(img_h - patch_size, max(0, patch_y_min))
-    patch_x_min = random.randrange((box_x_min + box_w) - patch_size, box_x_min)
+    patch_x_min = random.randrange((box_x_min + box_w) - patch_size, box_x_min + 1)
     patch_x_min = min(img_w - patch_size, max(0, patch_x_min))
     patch_y_max = patch_y_min + patch_size
     patch_x_max = patch_x_min + patch_size
@@ -261,8 +263,64 @@ def _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size):
 
 
 
+def extract_plant_and_other(image, image_annotations, num_plant, num_other, patch_size, allow_box_reuse=True):
+
+    patch_records = []
+    image_array = image.load_image_array()
+    gt_boxes = image_annotations["boxes"]
+    gt_classes = image_annotations["classes"]
+
+    if num_plant == "all":
+        num_plant = gt_boxes.shape[0]
+
+    if num_plant <= gt_boxes.shape[0] or allow_box_reuse:
+        if gt_boxes.shape[0] > 0:
+            subset_inds = np.random.choice(np.arange(gt_boxes.shape[0]), num_plant)
+            gt_boxes_subset = gt_boxes[subset_inds]
+        else:
+            gt_boxes_subset = np.array([])
+    else:
+        raise RuntimeError("Insufficient number of boxes to satisfy request")
+
+    patch_num = 0
+    for gt_box in gt_boxes_subset:
+        patch, patch_coords = _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size)
+        patch_record = {}
+        patch_record["patch"] = patch
+        patch_record["patch_coords"] = patch_coords
+        patch_record["image_path"] = image.image_path
+        patch_record["image_name"] = image.image_name
+        patch_record["patch_name"] = image.image_name + "-patch-" + str(patch_num).zfill(5) + ".png"
+        annotate_patch(patch_record, gt_boxes, gt_classes)
+        patch_records.append(patch_record)
+        patch_num += 1    
 
 
+    image_array = np.float32(image_array) / 255
+    exg_array = (2 * image_array[:,:,1]) - image_array[:,:,0] - image_array[:,:,2]
+    exg_array = image_utils.scale_image(exg_array, -2, 2, 0, 1)
+
+    img_h, img_w = image_array.shape[:2]
+    # mask out gt boxes
+    pad = 10
+    for gt_box in gt_boxes:
+        exg_array[max(0, gt_box[0] - pad):min(img_h, gt_box[2] + pad), 
+                  max(0, gt_box[1] - pad):min(img_w, gt_box[3] + pad)] = 0.5
+
+    coverage = 4
+    patch_coords_lst = generate_random_patch_coords_lst(image, coverage * num_other, patch_size)
+    exg_patch_records = extract_patch_records_from_image(image, patch_coords_lst, image_annotations, starting_patch_num=num_other)
+    exg_patches = extract_patches_from_image_array(exg_array, patch_coords_lst)
+
+    ranks = []
+    for exg_patch in exg_patches:
+        ranks.append((-1) * (np.sum(exg_patch ** 2)))
+    inds = np.argsort(np.array(ranks))
+    exg_patch_records = (np.array(exg_patch_records)[inds][:num_other]).tolist()
+
+    #patch_records.extend(exg_patch_records)
+
+    return patch_records, exg_patch_records
 
 
 def extract_patch_records_with_exg_box_combo(image, image_annotations, num_patches, patch_size):
@@ -317,11 +375,15 @@ def extract_patch_records_with_exg_box_combo(image, image_annotations, num_patch
 
     ranks = []
     for exg_patch in exg_patches:
-        ranks.append((-1) * np.sum(exg_patch))
+        ranks.append((-1) * (np.sum(exg_patch ** 2)))
     inds = np.argsort(np.array(ranks))
     exg_patch_records = (np.array(exg_patch_records)[inds][:num_exg_patches]).tolist()
 
     patch_records.extend(exg_patch_records)
+
+    #del image_array
+    #del exg_array
+
     return patch_records
 
 
@@ -348,7 +410,9 @@ def extract_patch_records_with_exg(image, image_annotations, num_patches, patch_
 
     ranks = []
     for exg_patch in exg_patches:
-        ranks.append((-1) * np.sum(exg_patch)) # np.sum(np.interp(exg_patch, (-1, 1), (0, 1)))))
+        #ranks.append((-1) * (np.sum(exg_patch[exg_patch > np.percentile(exg_patch, 85)])))
+        #ranks.append((-1) * (np.std(exg_patch)))
+        ranks.append((-1) * (np.sum(exg_patch ** 2))) # np.sum(np.interp(exg_patch, (-1, 1), (0, 1)))))
     inds = np.argsort(np.array(ranks))
 
     patch_records = (np.array(patch_records)[inds][:num_patches]).tolist()

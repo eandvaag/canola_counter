@@ -104,6 +104,7 @@ class DataSet(object):
         self.farm_name = dataset_conf["farm_name"]
         self.field_name = dataset_conf["field_name"]
         self.mission_date = dataset_conf["mission_date"]
+        self.image_set_name = self.farm_name + "-" + self.field_name + "-" + self.mission_date
         #self.patch_extraction_params = dataset_conf["patch_extraction_params"]
 
         self.image_set_root = os.path.join(usr_data_root, "image_sets", 

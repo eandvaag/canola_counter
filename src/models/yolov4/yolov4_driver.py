@@ -635,18 +635,40 @@ def generate_predictions(config):
     # patches_dir = os.path.join(config.model_dir, "patches")
     # if not os.path.exists(patches_dir):
     #     os.makedirs(patches_dir)
+    targets = [
+        {
+            "farm_name": config.inference["target_farm_name"],
+            "field_name": config.inference["target_field_name"],
+            "mission_date": config.inference["target_mission_date"]
+        }
+    ]
 
+    if "supplementary_targets" in config.inference:
+        for target_record in config.inference["supplementary_targets"]:
+            targets.append(
+                {
+                    "farm_name": target_record["target_farm_name"],
+                    "field_name": target_record["target_field_name"],
+                    "mission_date": target_record["target_mission_date"]
+                }
+            )
 
 
 
     #data_loader = data_load.InferenceDataLoader(tf_record_path, config)
-    target_patches_dir = os.path.join(config.model_dir, "target_patches") #config.inference["inference_patch_dir"]
+    all_targets_dir = os.path.join(config.model_dir, "target_patches") #config.inference["inference_patch_dir"]
 
-    for dataset_conf in config.inference["datasets"]:
+
+
+    #for dataset_conf in config.inference["datasets"]:
+    for target in targets:
 
         #driver_utils.set_active_inference_params(config)
         #image_set = ImageSet(image_set_conf)
-        dataset = DataSet(dataset_conf)
+        #dataset = DataSet(dataset_conf)
+        dataset = DataSet(target)
+        target_patches_dir = os.path.join(all_targets_dir, 
+                                            target["farm_name"] + "_" + target["field_name"] + "_" + target["mission_date"])
 
         if config.arch["model_type"] == "yolov4":
             yolov4 = YOLOv4(config)
@@ -658,7 +680,7 @@ def generate_predictions(config):
         tf_record_names = ["annotated-patches-record.tfrec", "unannotated-patches-record.tfrec"]
 
         predictions = driver_utils.create_predictions_skeleton(dataset)
-
+        inference_times = []
 
         for k, tf_record_name in enumerate(tf_record_names):
             is_annotated = k == 0
@@ -682,7 +704,7 @@ def generate_predictions(config):
                                                                             config.arch["model_name"], 
                                                                             tf_dataset_size))
 
-            inference_times = []
+            
             for step, batch_data in enumerate(tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
 
                 batch_images, batch_ratios, batch_info = data_loader.read_batch_data(batch_data, is_annotated)
@@ -769,9 +791,11 @@ def generate_predictions(config):
                                             iou_thresh=config.inference["image_nms_iou_thresh"])
         driver_utils.add_class_detections(predictions["image_predictions"], config)
 
-        inference_metrics.collect_statistics(predictions, dataset, config, inference_times=inference_times)
+        metrics = driver_utils.create_metrics_skeleton(dataset)
 
-        inference_metrics.collect_metrics(predictions, dataset, config)
+        inference_metrics.collect_statistics(metrics, predictions, config, inference_times=inference_times)
+
+        inference_metrics.collect_metrics(metrics, predictions, dataset, config)
 
         results_dir = os.path.join("usr", "data", "results",
                                    dataset.farm_name, dataset.field_name, dataset.mission_date,
@@ -784,6 +808,9 @@ def generate_predictions(config):
         #os.makedirs(pred_dir)
         pred_path = os.path.join(results_dir, "predictions.json")
         json_io.save_json(pred_path, predictions)
+
+        pred_path = os.path.join(results_dir, "metrics.json")
+        json_io.save_json(pred_path, metrics)        
 
         annotations_path = os.path.join(results_dir, "annotations.json")
         w3c_io.save_annotations(annotations_path, predictions, config)

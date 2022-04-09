@@ -98,7 +98,7 @@ def output_excel(out_path, predictions, dataset, config):
         "field_name": [],
         "mission_date": [],
         #"dataset_name": [],
-        "image_id": [],
+        "image_name": [],
     }
     for class_name in class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
@@ -106,8 +106,8 @@ def output_excel(out_path, predictions, dataset, config):
 
     annotations = w3c_io.load_annotations(dataset.annotations_path, class_map)
 
-    for image in dataset.images: #image_set.all_dataset.images:
-
+    #for image in dataset.images: #image_set.all_dataset.images:
+    for image_name in predictions["image_predictions"].keys():
         # if image.image_name in image_set.training_dataset.image_names:
         #     dataset_name = "training"
         # elif image.image_name in image_set.validation_dataset.image_names:
@@ -121,13 +121,13 @@ def output_excel(out_path, predictions, dataset, config):
         d["field_name"].append(field_name)
         d["mission_date"].append(mission_date)
         # d["dataset_name"].append(dataset_name)
-        d["image_id"].append(image.image_name)
+        d["image_name"].append(image_name)
 
         #if image.is_annotated:
-        if annotations[image.image_name]["status"] == "completed":
+        if annotations[image_name]["status"] == "completed":
             #image_abs_boxes, image_classes = xml_io.load_boxes_and_classes(image.xml_path, image_set.class_map) #config.arch["class_map"])
-            image_abs_boxes = annotations[image.image_name]["boxes"]
-            image_classes = annotations[image.image_name]["classes"]
+            image_abs_boxes = annotations[image_name]["boxes"]
+            image_classes = annotations[image_name]["classes"]
             unique, counts = np.unique(image_classes, return_counts=True)
             class_num_to_count = dict(zip(unique, counts))
             cur_image_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
@@ -135,9 +135,9 @@ def output_excel(out_path, predictions, dataset, config):
                 cur_image_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
                 #cur_image_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
-        cur_image_pred_class_counts = predictions["image_predictions"][image.image_name]["pred_class_counts"]
+        cur_image_pred_class_counts = predictions["image_predictions"][image_name]["pred_class_counts"]
         for class_name in class_map.keys(): #config.arch["class_map"].keys():
-            if annotations[image.image_name]["status"] == "completed":
+            if annotations[image_name]["status"] == "completed":
                 d["annotated_" + class_name + "_count"].append(cur_image_class_counts[class_name])
             else:
                 d["annotated_" + class_name + "_count"].append(np.nan)
@@ -146,7 +146,7 @@ def output_excel(out_path, predictions, dataset, config):
     
     pandas.io.formats.excel.ExcelFormatter.header_style = None
     df = pd.DataFrame(data=d)
-    df.sort_values(by="image_id", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_id"])))
+    df.sort_values(by="image_name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_name"])))
     writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
     #df.to_excel(writer, index=False, sheet_name="Sheet1")
     #for sheetname, df in dfs.items():  # loop through `dict` of dataframes
@@ -340,34 +340,45 @@ def add_class_detections(image_predictions, config):
 
 
 
+def create_metrics_skeleton(dataset):
+    metrics = {
+        "point": {},
+        "boxplot": {},
+        "image": {}
+    }
+    for image in dataset.images:
+        metrics["image"][image.image_name] = {}
+    return metrics
+
+
 def create_predictions_skeleton(dataset):
 
     return {"farm_name": dataset.farm_name, #config["target_farm_name"],
             "field_name": dataset.field_name, #config["target_field_name"],
             "mission_date": dataset.mission_date, #config["target_mission_date"],
             "image_predictions": {}, 
-            "patch_predictions": {},
-            "metrics": 
-                {
-                    # "training": 
-                    # {
-                    #     "point": {},
-                    #     "boxplot": {}
-                    # },
-                    # "validation":
-                    # {
-                    #     "point": {},
-                    #     "boxplot": {}
-                    # },
-                    # "test":
-                    # {
-                    #     "point": {},
-                    #     "boxplot": {}
-                    # },
-                    "all":
-                    {
-                        "point": {},
-                        "boxplot": {}
-                    },                    
-                }
+            "patch_predictions": {}
+            # "metrics": 
+            #     {
+            #         # "training": 
+            #         # {
+            #         #     "point": {},
+            #         #     "boxplot": {}
+            #         # },
+            #         # "validation":
+            #         # {
+            #         #     "point": {},
+            #         #     "boxplot": {}
+            #         # },
+            #         # "test":
+            #         # {
+            #         #     "point": {},
+            #         #     "boxplot": {}
+            #         # },
+            #         "all":
+            #         {
+            #             "point": {},
+            #             "boxplot": {}
+            #         },                    
+            #     }
             }

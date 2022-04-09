@@ -301,17 +301,17 @@ def fill_job_config(job_config):
 
         "inference_config": {
 
-            "datasets": [
-                {
-                    "farm_name": job_config["target_farm_name"],
-                    "field_name": job_config["target_field_name"],
-                    "mission_date": job_config["target_mission_date"],
-                    "training_image_names": [],
-                    "validation_image_names": [],
-                    "test_image_names": [],
-                    #"patch_extraction_params": None
-                }
-            ],
+            # "datasets": [
+            #     {
+            #         "farm_name": job_config["target_farm_name"],
+            #         "field_name": job_config["target_field_name"],
+            #         "mission_date": job_config["target_mission_date"],
+            #         "training_image_names": [],
+            #         "validation_image_names": [],
+            #         "test_image_names": [],
+            #         #"patch_extraction_params": None
+            #     }
+            # ],
             "patch_border_buffer_percent": 0.10,
             "batch_size": 16,
             "patch_nms_iou_thresh": 0.4,
