@@ -106,7 +106,10 @@ def report(run_uuid):
                 job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
                 job_config = json_io.load_json(job_config_path)
                 ms_coco_mAPs = []
+                mean_abs_diffs = []
+                results[method][dataset_size]["per_image_ms_coco_mAP_vals"] = []
                 for model_info in job_config["model_info"]:
+                    
                     model_uuid = model_info["model_uuid"]
 
                     metrics_path = os.path.join("usr", "data", "results", 
@@ -115,11 +118,26 @@ def report(run_uuid):
 
                     metrics = json_io.load_json(metrics_path)
                     point_metrics = metrics["point"]
+                    image_metrics = metrics["image"]
                     ms_coco_mAP = point_metrics["---"]["Image MS COCO mAP"]
-                    ms_coco_mAPs.append(ms_coco_mAP)
+                    mean_abs_diff = point_metrics["Image Mean Abs. Diff. in Count"]["plant"]
 
-                job_ms_coco_mAP = np.mean(ms_coco_mAPs)
-                results[method][dataset_size] = job_ms_coco_mAP
+                    per_image_ms_coco_mAP_vals = []
+                    for image_name in image_metrics.keys():
+                        per_image_ms_coco_mAP_vals.append(image_metrics[image_name]["Image MS COCO mAP"])
+
+                    ms_coco_mAPs.append(ms_coco_mAP)
+                    mean_abs_diffs.append(mean_abs_diff)
+
+                results[method][dataset_size]["ave_ms_coco"] = np.mean(ms_coco_mAPs)
+                results[method][dataset_size]["ave_mean_abs_diff"] = np.mean(mean_abs_diffs)
+                results[method][dataset_size]["per_image_ms_coco_mAP_vals"].append(per_image_ms_coco_mAP_vals)
+
+
+    run_results_dir = os.path.join("usr", "data", "runs", run_uuid)
+    if os.path.exists(run_results_dir):
+        shutil.rmtree(run_results_dir)
+    os.makedirs(run_results_dir)
 
     method_colors = {
         "direct": "red",
@@ -128,22 +146,58 @@ def report(run_uuid):
     }
 
     for method in results.keys():
-        mAP_vals = []
+        vals = []
         for dataset_size in results[method].keys():
             dataset_sizes.push(dataset_size)
-            mAP_vals.push(results[method][dataset_size])
+            vals.push(results[method][dataset_size]["ave_ms_coco"])
         
-        plt.plot(dataset_sizes, mAP_vals, color=method_colors[method], 
+        plt.plot(dataset_sizes, vals, color=method_colors[method], 
                  marker='o', linestyle='dashed', linewidth=2, markersize=12, label=method)
 
     plt.legend()
     plt.title("Average MS COCO mAP value by method")
-    run_results_dir = os.path.join("usr", "data", "runs", run_uuid)
-    if os.path.exists(run_results_dir):
-        shutil.rmtree(run_results_dir)
-    os.makedirs(run_results_dir)
+
     plt.savefig(os.path.join(run_results_dir, "ms_coco_plot.png"))
 
+
+    for method in results.keys():
+        vals = []
+        for dataset_size in results[method].keys():
+            dataset_sizes.push(dataset_size)
+            vals.push(results[method][dataset_size]["ave_mean_abs_diff"])
+        
+        plt.plot(dataset_sizes, vals, color=method_colors[method], 
+                 marker='o', linestyle='dashed', linewidth=2, markersize=12, label=method)
+
+    plt.legend()
+    plt.title("Average Absolute Difference in Count")
+
+    plt.savefig(os.path.join(run_results_dir, "abs_diff_plot.png"))
+
+
+    val_i = 0
+    method_colors = []
+    vals = []
+    for method in results.keys():
+        for dataset_size in results[method].keys():
+            for i in range(len(results[method][dataset_size]["per_image_ms_coco_mAP_vals"])):
+                per_image_ms_coco_mAP_vals = results[method][dataset_size]["per_image_ms_coco_mAP_vals"][i]
+                vals.append(per_image_ms_coco_mAP_vals)
+                method_colors.append(method_colors[val_i])
+                val_i += 1
+
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(9, 4))
+
+    parts = ax.violinplot(
+                vals
+    )
+
+    for i, pc in enumerate(parts["bodies"]):
+        pc.set_facecolor(method_colors[val_i])
+        pc.set_edgecolor("black")
+        pc.set_alpha(1)
+
+    plt.savefig(os.path.join(run_results_dir, "ms_coco_boxplot.png"))
 
     # for dataset in target_datasets:
     #     for dataset_size in dataset_sizes:

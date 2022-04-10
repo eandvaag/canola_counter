@@ -232,7 +232,7 @@ def get_model(model_name, config):
         model = yolov4.YOLOv4TinyBackbone(config)
         input_shape = (16, *(config.arch["input_image_shape"]))
         model.build(input_shape=input_shape)
-        model.load_weights("/home/eaa299/Documents/work/2021/plant_detection/plant_detection/src/weights/weights.h5", by_name=False)
+        model.load_weights(os.path.join("weights", "weights.h5"), by_name=False)
         return model
 
 
