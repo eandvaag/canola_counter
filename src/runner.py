@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 from models.common import job_interface
 from io_utils import json_io
 
-dataset_sizes = [256, 1024, 4096, 8192] #, 512, 1024, 2048, 4096]
-methods = ["direct", "even_subset", "graph_subset"] #, "even_subset", "graph_subset"]
+dataset_sizes = [256, 1024, 4096, 8192, 16384] #, 512, 1024, 2048, 4096]
+methods = ["direct"] #, "even_subset", "graph_subset"] #, "even_subset", "graph_subset"]
 
 method_params = {
         "match_method": "bipartite_b_matching",
@@ -35,6 +35,14 @@ target_datasets = [
         "target_mission_date": "2021-06-09"
     }
 ]
+
+epoch_patience = {
+    256: 50,
+    1024: 40,
+    4096: 30,
+    8192: 25,
+    16384: 20
+}
 
 
 
@@ -55,7 +63,7 @@ def run_tests():
 
                 job_config = {
                     "job_uuid": job_uuid,
-                    "replications": 3,
+                    "replications": 1,
                     "job_name": "test_name_" + job_uuid,
                     "source_construction_params": {
                         "method_name": method,
@@ -66,7 +74,8 @@ def run_tests():
                     "target_field_name": dataset["target_field_name"],
                     "target_mission_date": dataset["target_mission_date"],
                     "predict_on_completed_only": True,
-                    "supplementary_targets": []
+                    "supplementary_targets": [],
+                    "tol_test": epoch_patience[dataset_size]
                 }
                 job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
                 json_io.save_json(job_config_path, job_config)
@@ -119,12 +128,13 @@ def report(run_uuid):
                     metrics = json_io.load_json(metrics_path)
                     point_metrics = metrics["point"]
                     image_metrics = metrics["image"]
-                    ms_coco_mAP = point_metrics["---"]["Image MS COCO mAP"]
+                    ms_coco_mAP = point_metrics["Image MS COCO mAP"]["---"]
                     mean_abs_diff = point_metrics["Image Mean Abs. Diff. in Count"]["plant"]
 
                     per_image_ms_coco_mAP_vals = []
                     for image_name in image_metrics.keys():
-                        per_image_ms_coco_mAP_vals.append(image_metrics[image_name]["Image MS COCO mAP"])
+                        if "Image MS COCO mAP" in image_metrics[image_name]:
+                            per_image_ms_coco_mAP_vals.append(image_metrics[image_name]["Image MS COCO mAP"])
 
                     ms_coco_mAPs.append(ms_coco_mAP)
                     mean_abs_diffs.append(mean_abs_diff)
@@ -144,12 +154,15 @@ def report(run_uuid):
         "even_subset":"green",
         "graph_subset": "blue"
     }
+    
 
+    plt.figure(0)
     for method in results.keys():
+        dataset_sizes = []
         vals = []
         for dataset_size in results[method].keys():
-            dataset_sizes.push(dataset_size)
-            vals.push(results[method][dataset_size]["ave_ms_coco"])
+            dataset_sizes.append(dataset_size)
+            vals.append(results[method][dataset_size]["ave_ms_coco"])
         
         plt.plot(dataset_sizes, vals, color=method_colors[method], 
                  marker='o', linestyle='dashed', linewidth=2, markersize=12, label=method)
@@ -160,11 +173,13 @@ def report(run_uuid):
     plt.savefig(os.path.join(run_results_dir, "ms_coco_plot.png"))
 
 
+    plt.figure(1)
     for method in results.keys():
+        dataset_sizes = []
         vals = []
         for dataset_size in results[method].keys():
-            dataset_sizes.push(dataset_size)
-            vals.push(results[method][dataset_size]["ave_mean_abs_diff"])
+            dataset_sizes.append(dataset_size)
+            vals.append(results[method][dataset_size]["ave_mean_abs_diff"])
         
         plt.plot(dataset_sizes, vals, color=method_colors[method], 
                  marker='o', linestyle='dashed', linewidth=2, markersize=12, label=method)
@@ -175,16 +190,16 @@ def report(run_uuid):
     plt.savefig(os.path.join(run_results_dir, "abs_diff_plot.png"))
 
 
-    val_i = 0
-    method_colors = []
+    #val_i = 0
+    v_colors = []
     vals = []
     for method in results.keys():
         for dataset_size in results[method].keys():
             for i in range(len(results[method][dataset_size]["per_image_ms_coco_mAP_vals"])):
                 per_image_ms_coco_mAP_vals = results[method][dataset_size]["per_image_ms_coco_mAP_vals"][i]
                 vals.append(per_image_ms_coco_mAP_vals)
-                method_colors.append(method_colors[val_i])
-                val_i += 1
+                v_colors.append(method_colors[method])
+        #val_i += 1
 
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(9, 4))
 
@@ -193,7 +208,7 @@ def report(run_uuid):
     )
 
     for i, pc in enumerate(parts["bodies"]):
-        pc.set_facecolor(method_colors[val_i])
+        pc.set_facecolor(v_colors[i])
         pc.set_edgecolor("black")
         pc.set_alpha(1)
 

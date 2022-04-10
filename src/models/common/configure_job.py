@@ -286,7 +286,7 @@ def fill_job_config(job_config):
                     "early_stopping": {
                         "apply": True,
                         "monitor": "validation_loss",
-                        "num_epochs_tolerance": 12
+                        "num_epochs_tolerance": job_config["tol_test"] #12
                     },
                     "batch_size": 16,
 
