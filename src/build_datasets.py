@@ -1118,6 +1118,12 @@ def build_direct(config):
                 annotations[image.image_name], 
                 num_patches_per_image, 
                 image_set_patch_size))
+        elif extraction_type == "random":
+            patches.extend(ep.extract_patch_records_randomly(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image, 
+                image_set_patch_size))
         else:
             raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
 

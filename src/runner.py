@@ -17,7 +17,7 @@ from models.common import job_interface
 from io_utils import json_io
 
 dataset_sizes = [256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
-methods = ["graph_subset", "direct", "even_subset"] #, "graph_subset"] #, "even_subset", "graph_subset"]
+methods = ["even_subset", "graph_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
 
 # method_params = [
 # {

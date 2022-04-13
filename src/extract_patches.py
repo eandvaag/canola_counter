@@ -409,7 +409,12 @@ def extract_patch_records_with_exg_box_combo(image, image_annotations, num_patch
     return patch_records
 
 
-    
+def extract_patch_records_randomly(image, image_annotations, num_patches, patch_size):
+
+    patch_coords_lst = generate_evenly_sampled_patch_coords_lst(image, num_patches, patch_size)
+    patch_records = extract_patch_records_from_image(image, patch_coords_lst, image_annotations)
+    return patch_records
+
 
 def extract_patch_records_with_exg(image, image_annotations, num_patches, patch_size):
 
