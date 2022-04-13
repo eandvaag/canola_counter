@@ -121,6 +121,7 @@ class DataSet(object):
 
         self.images = []
         self.completed_images = []
+        self.nonempty_completed_images = []
         self.selected_images = []
         for image_name in self.image_names:
             #print("adding", image_name)
@@ -132,6 +133,8 @@ class DataSet(object):
                 self.selected_images.append(image)
             if annotations[image_name]["status"] == "completed":
                 self.completed_images.append(image)
+                if annotations[image_name]["boxes"].size > 0:
+                    self.nonempty_completed_images.append(image)
 
 
 

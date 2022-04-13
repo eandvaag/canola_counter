@@ -183,9 +183,10 @@ def get_annotation_stats():
     }
 
 
-def get_completed_images(annotations):
+def get_completed_images(annotations, allow_empty=True):
     return [image_name for image_name in annotations.keys() \
-            if annotations[image_name]["status"] == "completed"]
+            if annotations[image_name]["status"] == "completed" and (allow_empty or annotations[image_name]["boxes"].size > 0)]
+
 
 
 def get_num_annotations(annotations, require_completed=True):

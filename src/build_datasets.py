@@ -1067,17 +1067,20 @@ def build_direct(config):
 
     image_set_root = os.path.join("usr", "data", "image_sets")
 
-    dataset = DataSet({
-        "farm_name": target_farm_name,
-        "field_name": target_field_name,
-        "mission_date": target_mission_date
-    })
+    # dataset = DataSet({
+    #     "farm_name": target_farm_name,
+    #     "field_name": target_field_name,
+    #     "mission_date": target_mission_date
+    # })
 
     annotations_path = os.path.join(image_set_root, target_farm_name, target_field_name, target_mission_date,
                                     "annotations", "annotations_w3c.json")
     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-    num_annotated_images = len(w3c_io.get_completed_images(annotations))
+    allow_empty = extraction_type != "surrounding_boxes"
+
+    completed_images = w3c_io.get_completed_images(annotations, allow_empty=allow_empty)
+    num_annotated_images = len(completed_images)
     num_annotations = w3c_io.get_num_annotations(annotations, require_completed=True)
     if num_annotated_images == 0 or num_annotations == 0:
         raise RuntimeError("Insufficient number of annotations for direct training")
@@ -1091,7 +1094,7 @@ def build_direct(config):
     else:
         image_set_patch_size = patch_size
 
-    for image in dataset.completed_images:
+    for image in completed_images:
         if extraction_type == "surrounding_boxes":
             patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
                 image, 
