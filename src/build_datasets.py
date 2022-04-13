@@ -1122,7 +1122,8 @@ def build_direct(config):
             raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
 
     patches = np.array(patches)
-    patches = (np.random.shuffle(patches))[:source_size]
+    np.random.shuffle(patches)
+    patches = patches[:source_size]
 
 
     usr_data_root = os.path.join("usr", "data")
@@ -1227,8 +1228,8 @@ def build_even_subset(config):
                             num_patches_per_image, 
                             image_set_patch_size))
     patches = np.array(patches)
-    patches = (np.random.shuffle(patches))[:source_size]
-
+    np.random.shuffle(patches)
+    patches = patches[:source_size]
 
     usr_data_root = os.path.join("usr", "data")
     patches_dir = os.path.join(usr_data_root, "models", config.arch["model_uuid"], "source_patches", "0")
