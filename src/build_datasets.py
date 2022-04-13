@@ -104,6 +104,8 @@ def build_training_datasets(config):
     elif method_name == "graph_subset":
         two_phase_patches(config)
         #build_graph_subset(config)
+    elif method_name == "graph_subset_basic":
+        build_graph_subset(config)
     elif method_name == "direct":
         build_direct(config)
     else:
@@ -263,6 +265,16 @@ def two_phase_patches(config):
     target_field_name = config.arch["target_field_name"]
     target_mission_date = config.arch["target_mission_date"]
 
+    source_construction_params = config.training["source_construction_params"]
+    desired_source_size = source_construction_params["size"]
+
+    prop_plant_patches = 0.85
+    desired_plant_size = round(desired_source_size * prop_plant_patches)
+    desired_other_size = desired_source_size - desired_plant_size
+
+    #method_params = source_construction_params["method_params"]
+    #extraction_type = method_params["extraction_type"]
+
     patch_size = "image_set_dependent"
     extraction_type = None
 
@@ -375,9 +387,9 @@ def two_phase_patches(config):
     np.put_along_axis(other_similarities, smallest_dist_ind, largest_sim, axis=1)
     total_other_sim_sum = np.sum(other_similarities)
 
-
-    source_pool_plant_size = 10000
-    source_pool_other_size = 10000
+    total_pool_size = 25000
+    source_pool_plant_size = round(prop_plant_patches * total_pool_size) #  10000
+    source_pool_other_size = total_pool_size - source_pool_plant_size #10000
     source_plant_patches = []
     source_other_patches = []
     target_plant_patches = []
@@ -439,7 +451,7 @@ def two_phase_patches(config):
                         image, 
                         annotations[image.image_name], 
                         "all",
-                        m.ceil(1000 / len(target_dataset.images)),
+                        m.ceil(desired_other_size / len(target_dataset.images)),
                         image_set_patch_size
                     )
         target_plant_patches.extend(plant_patches)
@@ -450,10 +462,10 @@ def two_phase_patches(config):
     source_other_patches = np.array(source_other_patches)
     target_plant_patches = np.array(target_plant_patches)
     target_other_patches = np.array(target_other_patches)
-    if target_plant_patches.shape[0] > 400: #4000:
-        subset_inds = np.random.choice(np.arange(target_plant_patches.shape[0]), 400) #4000)
+    if target_plant_patches.shape[0] > desired_plant_size: #4000:
+        subset_inds = np.random.choice(np.arange(target_plant_patches.shape[0]), desired_plant_size) #4000)
         target_plant_patches = target_plant_patches[subset_inds]
-    subset_inds = np.random.choice(np.arange(target_other_patches.shape[0]), 100) #1000)
+    subset_inds = np.random.choice(np.arange(target_other_patches.shape[0]), desired_other_size) #1000)
     target_other_patches = target_other_patches[subset_inds]
 
     print("source_plant_patches.size", source_plant_patches.size)
@@ -468,8 +480,8 @@ def two_phase_patches(config):
     source_other_features = extract_patch_features(source_other_patches, extraction_type, config)
     target_other_features = extract_patch_features(target_other_patches, extraction_type, config)
 
-    selected_plant_source_patches = graph_match.bipartite_b_match(config, 400, source_plant_features, target_plant_features, source_plant_patches, target_plant_patches)
-    selected_other_source_patches = graph_match.bipartite_b_match(config, 100, source_other_features, target_other_features, source_other_patches, target_other_patches)
+    selected_plant_source_patches = graph_match.bipartite_b_match(config, desired_plant_size, source_plant_features, target_plant_features, source_plant_patches, target_plant_patches)
+    selected_other_source_patches = graph_match.bipartite_b_match(config, desired_other_size, source_other_features, target_other_features, source_other_patches, target_other_patches)
     
 
     print("selected_plant_source_patches.size", selected_plant_source_patches.size)
@@ -508,9 +520,10 @@ def two_phase_exg_patches(config, combo):
     method_params = source_construction_params["method_params"]
     extraction_type = method_params["extraction_type"]
     patch_size = method_params["patch_size"]
-    source_pool_size = method_params["source_pool_size"]
-    target_pool_size = method_params["target_pool_size"]
-        
+    #source_pool_size = method_params["source_pool_size"]
+    #target_pool_size = method_params["target_pool_size"]
+    source_pool_size = 25000
+    target_pool_size = source_construction_params["size"]
 
     image_set_root = os.path.join("usr", "data", "image_sets")
 

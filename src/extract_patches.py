@@ -6,6 +6,7 @@ import tqdm
 import math as m
 import random
 import numpy as np
+from functools import reduce
 
 import cv2
 import uuid
@@ -308,24 +309,34 @@ def extract_plant_and_other(image, image_annotations, num_plant, num_other, patc
                   max(0, gt_box[1] - pad):min(img_w, gt_box[3] + pad)] = 0.5
 
     coverage = 4
-    patch_coords_lst = generate_random_patch_coords_lst(image, coverage * num_other, patch_size)
+    #patch_coords_lst = generate_random_patch_coords_lst(image, coverage * num_other, patch_size)
+    image_area = img_w * img_h
+    patch_area = patch_size * patch_size
+
+    pool_size = max(coverage * num_other, m.ceil(image_area / patch_area))
+    patch_coords_lst = generate_evenly_sampled_patch_coords_lst(image, pool_size, patch_size)
+    #patch_coords_lst = generate_evenly_sampled_patch_coords_lst(image, coverage * num_other, patch_size)
     exg_patch_records = extract_patch_records_from_image(image, patch_coords_lst, image_annotations, starting_patch_num=num_other)
     exg_patches = extract_patches_from_image_array(exg_array, patch_coords_lst)
 
     ranks = []
     for exg_patch in exg_patches:
-        ranks.append((-1) * (np.sum(exg_patch ** 2)))
-    inds = np.argsort(np.array(ranks))
-    exg_patch_records = (np.array(exg_patch_records)[inds][:num_other]).tolist()
+        ranks.append((-1) * (np.sum(exg_patch)))
+    #inds = np.argsort(np.array(ranks))
+    #exg_patch_records = (np.array(exg_patch_records)[inds][:num_other]).tolist()
 
-    #patch_records.extend(exg_patch_records)
+    inds = np.arange(len(ranks))
+    epsilon = 1e-10
+    probs = ranks / (np.sum(ranks) + epsilon)
+    sel_inds = np.random.choice(inds, num_other, p=probs, replace=False)
+    exg_patch_records = (np.array(exg_patch_records)[sel_inds]).tolist()
 
     return patch_records, exg_patch_records
 
 
 def extract_patch_records_with_exg_box_combo(image, image_annotations, num_patches, patch_size):
 
-    prop_box_patches = 0.85
+    prop_box_patches = 0.80
     tentative_num_box_patches = m.ceil(prop_box_patches * num_patches)
 
 
@@ -369,16 +380,27 @@ def extract_patch_records_with_exg_box_combo(image, image_annotations, num_patch
                   max(0, gt_box[1] - pad):min(img_w, gt_box[3] + pad)] = 0.5
 
     coverage = 4
-    patch_coords_lst = generate_random_patch_coords_lst(image, coverage * num_exg_patches, patch_size)
+    #patch_coords_lst = generate_random_patch_coords_lst(image, coverage * num_exg_patches, patch_size)
+    image_area = img_w * img_h
+    patch_area = patch_size * patch_size
+
+    pool_size = max(coverage * num_patches, m.ceil(image_area / patch_area))
+    patch_coords_lst = generate_evenly_sampled_patch_coords_lst(image, pool_size, patch_size)
+    #patch_coords_lst = generate_evenly_sampled_patch_coords_lst(image, coverage * num_exg_patches, patch_size)
     exg_patch_records = extract_patch_records_from_image(image, patch_coords_lst, image_annotations, starting_patch_num=num_box_patches)
     exg_patches = extract_patches_from_image_array(exg_array, patch_coords_lst)
 
     ranks = []
     for exg_patch in exg_patches:
-        ranks.append((-1) * (np.sum(exg_patch ** 2)))
-    inds = np.argsort(np.array(ranks))
-    exg_patch_records = (np.array(exg_patch_records)[inds][:num_exg_patches]).tolist()
+        ranks.append((-1) * (np.sum(exg_patch)))
 
+    inds = np.arange(len(ranks))
+    epsilon = 1e-10
+    probs = ranks / (np.sum(ranks) + epsilon)
+    sel_inds = np.random.choice(inds, num_exg_patches, p=probs, replace=False)
+    #inds = np.argsort(np.array(ranks))
+    #exg_patch_records = (np.array(exg_patch_records)[inds][:num_exg_patches]).tolist()
+    exg_patch_records = (np.array(exg_patch_records)[sel_inds]).tolist()
     patch_records.extend(exg_patch_records)
 
     #del image_array
@@ -396,9 +418,10 @@ def extract_patch_records_with_exg(image, image_annotations, num_patches, patch_
     w, h = image.get_wh()
     image_area = w * h
     patch_area = patch_size * patch_size
-
-    pool_size = max(4 * num_patches, 2 * m.ceil(image_area / patch_area))
-    patch_coords_lst = generate_random_patch_coords_lst(image, 4 * num_patches, patch_size)
+    coverage = 4
+    pool_size = max(coverage * num_patches, m.ceil(image_area / patch_area))
+    patch_coords_lst = generate_evenly_sampled_patch_coords_lst(image, pool_size, patch_size)
+    #patch_coords_lst = generate_random_patch_coords_lst(image, 4 * num_patches, patch_size)
     patch_records = extract_patch_records_from_image(image, patch_coords_lst, image_annotations)
     #patches = extract_patches_from_image_tiled(image, patch_size, annotations, patch_overlap_percent=85)
 
@@ -412,10 +435,16 @@ def extract_patch_records_with_exg(image, image_annotations, num_patches, patch_
     for exg_patch in exg_patches:
         #ranks.append((-1) * (np.sum(exg_patch[exg_patch > np.percentile(exg_patch, 85)])))
         #ranks.append((-1) * (np.std(exg_patch)))
-        ranks.append((-1) * (np.sum(exg_patch ** 2))) # np.sum(np.interp(exg_patch, (-1, 1), (0, 1)))))
-    inds = np.argsort(np.array(ranks))
-
-    patch_records = (np.array(patch_records)[inds][:num_patches]).tolist()
+        ranks.append((-1) * (np.sum(exg_patch))) # np.sum(np.interp(exg_patch, (-1, 1), (0, 1)))))
+    #inds = np.argsort(np.array(ranks))
+    #patch_records = (np.array(patch_records)[inds][:num_patches]).tolist()
+    
+    inds = np.arange(len(ranks))
+    epsilon = 1e-10
+    probs = ranks / (np.sum(ranks) + epsilon)
+    sel_inds = np.random.choice(inds, num_patches, p=probs, replace=False)
+    patch_records = (np.array(patch_records)[sel_inds]).tolist()    
+    
     return patch_records
 
 def extract_patch_records_surrounding_gt_boxes(image, image_annotations, patch_size):
@@ -623,6 +652,83 @@ def extract_patches_from_image_array_tiled(image_array, patch_size, patch_overla
 #     patch = image_array[patch_y_min:patch_y_max, patch_x_min:patch_x_max]
 
 #     return patch, patch_coords
+
+
+def get_factors(n):    
+    return set(reduce(list.__add__, 
+                ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
+
+
+def generate_evenly_sampled_patch_coords_lst(image, num_patches, patch_size):
+
+    img_w, img_h = image.get_wh()
+    factors = sorted(get_factors(num_patches))
+
+    image_ratio = max(img_w, img_h) / min(img_w, img_h)
+
+    best_factors = (num_patches, 1)
+    best_ratio_diff = np.inf
+    i = 0
+    #for i in range((len(factors) // 2) + 1):
+    while (factors[-i-1] >= factors[i]):
+        factor_ratio = factors[-i-1] / factors[i]
+        ratio_diff = abs(image_ratio - factor_ratio)
+        if ratio_diff < best_ratio_diff:
+            best_ratio_diff = ratio_diff
+            best_factors = (factors[-i-1], factors[i])
+        i += 1
+
+    if img_w > img_h:
+        #width_step = img_w // best_factors[0]
+        #height_step = img_h // best_factors[1]
+        #x_positions = np.rint(np.linspace(0, img_w, best_factors[0]+1, endpoint=True))
+        #y_positions = np.rint(np.linspace(0, img_h, best_factors[1]+1, endpoint=True))
+        x_positions = np.rint(np.linspace(patch_size // 2, img_w - patch_size // 2, best_factors[0]+1, endpoint=True))
+        y_positions = np.rint(np.linspace(patch_size // 2, img_h - patch_size // 2, best_factors[1]+1, endpoint=True))
+    else:
+        #width_step = img_w // best_factors[1]
+        #height_step = img_h // best_factors[0]
+        #x_positions = np.rint(np.linspace(0, img_w, best_factors[1]+1, endpoint=True))
+        #y_positions = np.rint(np.linspace(0, img_h, best_factors[0]+1, endpoint=True))
+        x_positions = np.rint(np.linspace(patch_size // 2, img_w - patch_size // 2, best_factors[1]+1, endpoint=True))
+        y_positions = np.rint(np.linspace(patch_size // 2, img_h - patch_size // 2, best_factors[0]+1, endpoint=True))
+
+
+    #print("x_positions: {}, y_positions: {}, patch_size: {}, img_w: {}, img_h: {}".format(
+    #    x_positions, y_positions, patch_size, img_w, img_h
+    #))
+
+    patch_coords_lst = []
+    #for i in range(0, img_w, width_step):
+    #    for j in range(0, img_h, height_step):
+
+    for i in range(len(x_positions)-1):
+        for j in range(len(y_positions)-1):
+            #patch_y_centre = random.randrange(j, j+height_step)
+            patch_y_centre = random.randrange(y_positions[j], y_positions[j+1]+1)
+            patch_y_min = patch_y_centre - (patch_size // 2)
+            patch_y_min = min(img_h - patch_size, max(0, patch_y_min))
+
+            #patch_x_centre = random.randrange(i, i+width_step)
+            patch_x_centre = random.randrange(x_positions[i], x_positions[i+1]+1)
+            patch_x_min = patch_x_centre - (patch_size // 2)
+            patch_x_min = min(img_w - patch_size, max(0, patch_x_min))
+
+            #patch_y_min = random.randrange(min(j, img_h - patch_size), min(j+height_step, img_h - patch_size + 1))
+
+            #patch_y_min = random.randrange(0, j + height_step - patch_size)
+            #patch_x_min = random.randrange(0, i + width_step - patch_size)
+            patch_y_max = patch_y_min + patch_size
+            patch_x_max = patch_x_min + patch_size
+
+            patch_coords_lst.append([patch_y_min, patch_x_min, patch_y_max, patch_x_max])
+    
+
+    assert(len(patch_coords_lst) == num_patches)
+
+    return patch_coords_lst
+
+
 
 
 def generate_random_patch_coords_lst(image, num_patches, patch_size):

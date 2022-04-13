@@ -16,9 +16,18 @@ import matplotlib.pyplot as plt
 from models.common import job_interface
 from io_utils import json_io
 
-dataset_sizes = [256, 1024, 4096, 8192, 16384] #, 512, 1024, 2048, 4096]
-methods = ["direct"] #, "even_subset", "graph_subset"] #, "even_subset", "graph_subset"]
+dataset_sizes = [256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
+methods = ["graph_subset", "direct", "even_subset"] #, "graph_subset"] #, "even_subset", "graph_subset"]
 
+# method_params = [
+# {
+#         "match_method": "bipartite_b_matching",
+#         "extraction_type": "excess_green_box_combo_two_phase",
+#         "patch_size": "image_set_dependent",
+#         #"source_pool_size": 25000, #18000, #12000, #12000,
+#         #"target_pool_size": 500, #2000, #3000 #3000
+#         "exclude_target_from_source": True 
+# },{
 method_params = {
         "match_method": "bipartite_b_matching",
         "extraction_type": "excess_green_box_combo",
@@ -37,11 +46,11 @@ target_datasets = [
 ]
 
 epoch_patience = {
-    256: 50,
-    1024: 40,
+    256: 30,
+    1024: 30,
     4096: 30,
-    8192: 25,
-    16384: 20
+    8192: 30,
+    16384: 30
 }
 
 
@@ -53,12 +62,13 @@ def run_tests():
         "method_params": method_params,
         "methods": methods,
         "dataset_sizes": dataset_sizes,
-        "target_datasets": target_datasets
+        "target_datasets": target_datasets,
+        "explanation": "compare methods"
     }
 
     for dataset in target_datasets:
         for dataset_size in dataset_sizes:
-            for method in methods:
+            for i, method in enumerate(methods):
                 job_uuid = str(uuid.uuid4())
 
                 job_config = {
@@ -86,8 +96,7 @@ def run_tests():
     run_uuid = str(uuid.uuid4())
     run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
     json_io.save_json(run_path, run_record)
-
-
+    report(run_uuid)
 
 
 def report(run_uuid):
@@ -152,7 +161,8 @@ def report(run_uuid):
     method_colors = {
         "direct": "red",
         "even_subset":"green",
-        "graph_subset": "blue"
+        "graph_subset": "blue",
+        "graph_subset_basic": "orange"
     }
     
 
@@ -165,7 +175,7 @@ def report(run_uuid):
             vals.append(results[method][dataset_size]["ave_ms_coco"])
         
         plt.plot(dataset_sizes, vals, color=method_colors[method], 
-                 marker='o', linestyle='dashed', linewidth=2, markersize=12, label=method)
+                 marker='o', linestyle='dashed', linewidth=2, markersize=8, label=method)
 
     plt.legend()
     plt.title("Average MS COCO mAP value by method")
@@ -182,7 +192,7 @@ def report(run_uuid):
             vals.append(results[method][dataset_size]["ave_mean_abs_diff"])
         
         plt.plot(dataset_sizes, vals, color=method_colors[method], 
-                 marker='o', linestyle='dashed', linewidth=2, markersize=12, label=method)
+                 marker='o', linestyle='dashed', linewidth=2, markersize=8, label=method)
 
     plt.legend()
     plt.title("Average Absolute Difference in Count")
