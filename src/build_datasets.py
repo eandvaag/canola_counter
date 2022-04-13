@@ -1067,11 +1067,11 @@ def build_direct(config):
 
     image_set_root = os.path.join("usr", "data", "image_sets")
 
-    # dataset = DataSet({
-    #     "farm_name": target_farm_name,
-    #     "field_name": target_field_name,
-    #     "mission_date": target_mission_date
-    # })
+    dataset = DataSet({
+        "farm_name": target_farm_name,
+        "field_name": target_field_name,
+        "mission_date": target_mission_date
+    })
 
     annotations_path = os.path.join(image_set_root, target_farm_name, target_field_name, target_mission_date,
                                     "annotations", "annotations_w3c.json")
@@ -1094,7 +1094,12 @@ def build_direct(config):
     else:
         image_set_patch_size = patch_size
 
-    for image in completed_images:
+    if extraction_type == "surrounding_boxes":
+        images = dataset.nonempty_completed_images
+    else:
+        images = dataset.completed_images
+
+    for image in images:
         if extraction_type == "surrounding_boxes":
             patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
                 image, 
