@@ -1,5 +1,6 @@
 import uuid
 import os
+import glob
 
 import math as m
 import numpy as np
@@ -155,6 +156,31 @@ def convert_xml_files_to_w3c(xml_dir, class_map):
 
     return res
 
+
+def get_annotation_stats():
+    num_annotations = 0
+    num_completed_images = 0
+    num_image_sets = 0
+    image_set_root = os.path.join("usr", "data", "image_sets")
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                num_image_sets += 1
+                mission_date = os.path.basename(mission_path)
+                annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
+                annotations = load_annotations(annotations_path, {"plant": 0})
+                completed_images = get_completed_images(annotations)
+                num_completed_images += len(completed_images)
+                for image_name in completed_images:
+                    num_annotations += annotations[image_name]["boxes"].shape[0]
+
+    return {
+        "num_image_sets": num_image_sets,
+        "num_completed_images": num_completed_images,
+        "num_annotations": num_annotations
+    }
 
 
 def get_completed_images(annotations):

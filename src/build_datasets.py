@@ -1061,6 +1061,7 @@ def build_direct(config):
     
     source_construction_params = config.training["source_construction_params"]
     method_params = source_construction_params["method_params"]
+    source_size = source_construction_params["size"]
     extraction_type = method_params["extraction_type"]
     patch_size = method_params["patch_size"]
 
@@ -1082,10 +1083,7 @@ def build_direct(config):
         raise RuntimeError("Insufficient number of annotations for direct training")
 
 
-    if "size" in source_construction_params:
-        size = source_construction_params["size"]
-        num_patches_per_image = m.ceil(size / num_annotated_images)
-
+    num_patches_per_image = m.ceil(source_size / num_annotated_images)
 
     patches = []
     if patch_size == "image_set_dependent":
@@ -1098,6 +1096,7 @@ def build_direct(config):
             patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
                 image, 
                 annotations[image.image_name], 
+                num_patches_per_image,
                 image_set_patch_size))
         elif extraction_type == "excess_green":
             patches.extend(ep.extract_patch_records_with_exg(
@@ -1115,6 +1114,7 @@ def build_direct(config):
             raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
 
     patches = np.array(patches)
+    patches = (np.random.shuffle(patches))[:source_size]
 
 
     usr_data_root = os.path.join("usr", "data")
@@ -1178,14 +1178,33 @@ def build_even_subset(config):
                     datasets.append(dataset)
 
     extraction_func = ep.extract_patch_records_with_exg_box_combo
-    num_per_dataset = m.ceil(source_size / len(datasets))
+    #num_per_dataset = m.ceil(source_size / len(datasets))
 
     patches = []
-    for dataset in datasets:
+    # for dataset in datasets:
 
-        num_patches_per_image = m.ceil(num_per_dataset / len(dataset.completed_images))
-        logger.info("Processing {} | Num per dataset: {} | Num per image: {}".format(
-            dataset.image_set_name, num_per_dataset, num_patches_per_image))
+    #     num_patches_per_image = m.ceil(num_per_dataset / len(dataset.completed_images))
+    #     logger.info("Processing {} | Num per dataset: {} | Num per image: {}".format(
+    #         dataset.image_set_name, num_per_dataset, num_patches_per_image))
+        
+    #     annotations = w3c_io.load_annotations(dataset.annotations_path, {"plant": 0})
+    #     if patch_size == "image_set_dependent":
+    #         image_set_patch_size = w3c_io.get_patch_size(annotations)
+    #     else:
+    #         image_set_patch_size = patch_size
+        
+    #     for image in dataset.completed_images:
+    #         patches.extend(extraction_func( #ep.extract_patch_records_with_exg(
+    #                         image, 
+    #                         annotations[image.image_name], 
+    #                         num_patches_per_image, 
+    #                         image_set_patch_size))
+
+    num_completed_images = np.sum([len(dataset.completed_images) for dataset in datasets])
+    num_patches_per_image = m.ceil(source_size / num_completed_images)
+    for dataset in datasets:
+        logger.info("Processing {} | Num per image: {}".format(
+            dataset.image_set_name, num_patches_per_image))
         
         annotations = w3c_io.load_annotations(dataset.annotations_path, {"plant": 0})
         if patch_size == "image_set_dependent":
@@ -1199,8 +1218,8 @@ def build_even_subset(config):
                             annotations[image.image_name], 
                             num_patches_per_image, 
                             image_set_patch_size))
-
     patches = np.array(patches)
+    patches = (np.random.shuffle(patches))[:source_size]
 
 
     usr_data_root = os.path.join("usr", "data")

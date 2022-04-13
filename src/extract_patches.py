@@ -447,14 +447,18 @@ def extract_patch_records_with_exg(image, image_annotations, num_patches, patch_
     
     return patch_records
 
-def extract_patch_records_surrounding_gt_boxes(image, image_annotations, patch_size):
+def extract_patch_records_surrounding_gt_boxes(image, image_annotations, num_patches, patch_size):
 
     patch_records = []
     image_array = image.load_image_array()
     gt_boxes = image_annotations["boxes"]
     gt_classes = image_annotations["classes"]
+    num_boxes = gt_boxes.shape[0]
     patch_num = 0
-    for gt_box in gt_boxes:
+    num_patches_needed = num_patches
+    #for gt_box in gt_boxes:
+    while num_patches_needed > 0:
+        gt_box = gt_boxes[patch_num % num_boxes]
         patch, patch_coords = _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size)
         patch_record = {}
         patch_record["patch"] = patch
@@ -465,6 +469,7 @@ def extract_patch_records_surrounding_gt_boxes(image, image_annotations, patch_s
         annotate_patch(patch_record, gt_boxes, gt_classes)
         patch_records.append(patch_record)
         patch_num += 1
+        num_patches_needed -= 1
 
     return patch_records
 
