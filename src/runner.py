@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from models.common import job_interface
 from io_utils import json_io
 
-dataset_sizes = [256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
+dataset_sizes = [250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
 methods = ["even_subset", "graph_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
 
 # method_params = [
@@ -39,9 +39,9 @@ method_params = {
 
 target_datasets = [
     {
-        "target_farm_name": "BlaineLake",
-        "target_field_name": "HornerWest",
-        "target_mission_date": "2021-06-09"
+        "target_farm_name": "row_spacing",
+        "target_field_name": "brown",
+        "target_mission_date": "2021-06-01"
     }
 ]
 
@@ -53,7 +53,7 @@ epoch_patience = {
     16384: 30
 }
 
-
+# TODO organize results in terms of farm_name, field_name, mission_date
 
 
 def run_tests():
@@ -85,7 +85,7 @@ def run_tests():
                     "target_mission_date": dataset["target_mission_date"],
                     "predict_on_completed_only": True,
                     "supplementary_targets": [],
-                    "tol_test": epoch_patience[dataset_size]
+                    "tol_test": 30, #epoch_patience[dataset_size]
                 }
                 job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
                 json_io.save_json(job_config_path, job_config)
@@ -97,6 +97,107 @@ def run_tests():
     run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
     json_io.save_json(run_path, run_record)
     report(run_uuid)
+
+
+
+def prepare_report_for_display(run_uuid):
+    run_record_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
+    run_record = json_io.load_json(run_record_path)
+    
+    #dataset_sizes = sorted(run_record["dataset_sizes"])
+
+    results = {
+        "dataset_sizes": run_record["dataset_sizes"],
+        "results": {}
+    }
+    i = 0
+    dataset = run_record["target_datasets"][0]
+    target_farm_name = dataset["target_farm_name"]
+    target_field_name = dataset["target_field_name"]
+    target_mission_date = dataset["target_mission_date"]
+
+    for dataset_size in run_record["dataset_sizes"]:
+        for method in run_record["methods"]:
+
+            if method not in results["results"]:
+                results["results"][method] = {
+                    "MS COCO mAP": [],
+                    "PASCAL VOC mAP": [],
+                    "Image Mean Abs. Diff. in Count": [],
+                    "Image R Squared": [],
+                    "Patch R Squared": [],
+                    "Image Mean Abs. Diff. in Count at Optimal Score Thresh.": [],
+                    "Optimal Score Thresh.": []
+                }
+
+            job_uuid = run_record["job_uuids"][i]
+            i += 1
+
+            job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+            job_config = json_io.load_json(job_config_path)
+            ms_coco_mAPs = []
+            pascal_voc_mAPs = []
+            mean_abs_diffs = []
+            image_r_squareds = []
+            patch_r_squareds = []
+            opt_mean_abs_diffs = []
+            opt_score_threshs = []
+            #results[method][dataset_size]["per_image_ms_coco_mAP_vals"] = []
+            for model_info in job_config["model_info"]:
+                
+                model_uuid = model_info["model_uuid"]
+
+                metrics_path = os.path.join("usr", "data", "results", 
+                                            target_farm_name, target_field_name, target_mission_date,
+                                            job_uuid, model_uuid, "metrics.json")
+
+                metrics = json_io.load_json(metrics_path)
+                point_metrics = metrics["point"]
+                image_metrics = metrics["image"]
+                ms_coco_mAP = point_metrics["Image MS COCO mAP"]["---"]
+                pascal_voc_mAP = point_metrics["Image PASCAL VOC mAP"]["---"]
+                mean_abs_diff = point_metrics["Image Mean Abs. Diff. in Count"]["plant"]
+                image_r_squared = point_metrics["Image R Squared"]["plant"]
+                patch_r_squared = point_metrics["Patch R Squared"]["plant"]
+                opt_mean_abs_diff = point_metrics["optimal_score_threshold"]["mean_absolute_difference"]
+                opt_score_thresh = point_metrics["optimal_score_threshold"]["threshold_value"]
+                #per_image_ms_coco_mAP_vals = []
+                #for image_name in image_metrics.keys():
+                #    if "Image MS COCO mAP" in image_metrics[image_name]:
+                #        per_image_ms_coco_mAP_vals.append(image_metrics[image_name]["Image MS COCO mAP"])
+
+                pascal_voc_mAPs.append(pascal_voc_mAP)
+                ms_coco_mAPs.append(ms_coco_mAP)
+                mean_abs_diffs.append(mean_abs_diff)
+                image_r_squareds.append(image_r_squared)
+                patch_r_squareds.append(patch_r_squared)
+                opt_mean_abs_diffs.append(opt_mean_abs_diff)
+                opt_score_threshs.append(opt_score_thresh)
+
+            results["results"][method]["MS COCO mAP"].append(np.mean(ms_coco_mAPs))
+            results["results"][method]["PASCAL VOC mAP"].append(np.mean(pascal_voc_mAPs))
+            results["results"][method]["Image Mean Abs. Diff. in Count"].append(np.mean(mean_abs_diffs))
+            results["results"][method]["Image R Squared"].append(np.mean(image_r_squareds))
+            results["results"][method]["Patch R Squared"].append(np.mean(patch_r_squareds))
+            results["results"][method]["Image Mean Abs. Diff. in Count at Optimal Score Thresh."].append(np.mean(opt_mean_abs_diffs))
+            results["results"][method]["Optimal Score Thresh."].append(np.mean(opt_score_threshs))
+            #results[method][dataset_size]["per_image_ms_coco_mAP_vals"].append(per_image_ms_coco_mAP_vals)
+
+
+
+
+    run_results_dir = os.path.join("usr", "data", "runs", "display", 
+                                   target_farm_name, target_field_name, target_mission_date)
+
+    if os.path.exists(run_results_dir):
+        raise RuntimeError("run results already exist")
+
+    else:
+        os.makedirs(run_results_dir)
+    
+    results_path = os.path.join(run_results_dir, "results.json")
+    json_io.save_json(results_path, results)
+
 
 
 def report(run_uuid):
