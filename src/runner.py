@@ -14,49 +14,194 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.common import job_interface
-from io_utils import json_io
+from io_utils import json_io, w3c_io
 
-dataset_sizes = [250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
-methods = ["even_subset", "graph_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
 
-# method_params = [
-# {
-#         "match_method": "bipartite_b_matching",
-#         "extraction_type": "excess_green_box_combo_two_phase",
-#         "patch_size": "image_set_dependent",
-#         #"source_pool_size": 25000, #18000, #12000, #12000,
-#         #"target_pool_size": 500, #2000, #3000 #3000
-#         "exclude_target_from_source": True 
-# },{
-method_params = {
-        "match_method": "bipartite_b_matching",
-        "extraction_type": "excess_green_box_combo",
-        "patch_size": "image_set_dependent",
-        #"source_pool_size": 25000, #18000, #12000, #12000,
-        #"target_pool_size": 500, #2000, #3000 #3000
-        "exclude_target_from_source": True 
-}
 
-target_datasets = [
-    {
-        "target_farm_name": "row_spacing",
-        "target_field_name": "brown",
-        "target_mission_date": "2021-06-01"
+def reduce_db_size(pct, target_farm_name, target_field_name, target_mission_date):
+
+    image_set_root = os.path.join("usr", "data", "image_sets")
+
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                if not ((farm_name == target_farm_name and field_name == target_field_name) and mission_date == target_mission_date):
+                    
+                    annotations_path = os.path.join(image_set_root, farm_name, field_name, mission_date,
+                                                "annotations", "annotations_w3c.json")
+                    save_annotations_path = os.path.join(image_set_root, farm_name, field_name, mission_date,
+                                                "annotations", "SAVE_annotations_w3c.json")                           
+                    shutil.copy(annotations_path, save_annotations_path)
+
+                    w3c_annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+                    annotations = json_io.load_json(annotations_path)
+
+                    completed_images = w3c_io.get_completed_images(w3c_annotations)
+
+                    keep_images = np.random.choice(completed_images, int(len(completed_images) * pct))
+
+                    for image_name in completed_images:
+                        if image_name not in keep_images:
+                            annotations[image_name] = {
+                                "status": "unannotated",
+                                "annotations": []
+                            }
+
+                    json_io.save_json(annotations_path, annotations)
+
+def restore_db(target_farm_name, target_field_name, target_mission_date):
+
+    image_set_root = os.path.join("usr", "data", "image_sets")
+
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                if not ((farm_name == target_farm_name and field_name == target_field_name) and mission_date == target_mission_date):
+                    
+                    annotations_path = os.path.join(image_set_root, farm_name, field_name, mission_date,
+                                                "annotations", "annotations_w3c.json")
+                    save_annotations_path = os.path.join(image_set_root, farm_name, field_name, mission_date,
+                                                "annotations", "SAVE_annotations_w3c.json")
+
+                    shutil.move(save_annotations_path, annotations_path)
+                    os.remove(save_annotations_path)
+
+
+def run_db_size_variation_test():
+
+
+    dataset_sizes = [250, 500, 1000, 2000, 4000, 8000]
+    methods = ["even_subset", "graph_subset"]
+
+    method_params = {
+            "match_method": "bipartite_b_matching",
+            "extraction_type": "excess_green_box_combo",
+            "patch_size": "image_set_dependent",
+            "exclude_target_from_source": True 
     }
-]
 
-epoch_patience = {
-    256: 30,
-    1024: 30,
-    4096: 30,
-    8192: 30,
-    16384: 30
-}
+    target_datasets = [
+        {
+            "target_farm_name": "Biggar",
+            "target_field_name": "Dennis3",
+            "target_mission_date": "2021-06-04"
+        }
+    ]
 
-# TODO organize results in terms of farm_name, field_name, mission_date
+    epoch_patience = {
+        256: 30,
+        1024: 30,
+        4096: 30,
+        8192: 30,
+        16384: 30
+    }
+
+
+    db_pcts = [100, 50]
+
+
+    run_record = {
+        "job_uuids": [],
+        "method_params": method_params,
+        "methods": methods,
+        "dataset_sizes": dataset_sizes,
+        "target_datasets": target_datasets,
+        "db_pcts": db_pcts,
+        "explanation": "db size variation"
+    }
+
+
+    for dataset in target_datasets:
+        for db_pct in db_pcts:
+
+            reduce_db_size(db_pct, dataset["target_farm_name"], dataset["target_field_name"], dataset["target_mission_date"])
+
+            for dataset_size in dataset_sizes:
+                for i, method in enumerate(methods):
+                    job_uuid = str(uuid.uuid4())
+
+                    job_config = {
+                        "job_uuid": job_uuid,
+                        "replications": 1,
+                        "job_name": "test_name_" + job_uuid,
+                        "source_construction_params": {
+                            "method_name": method,
+                            "method_params": method_params,
+                            "size": dataset_size
+                        },
+                        "target_farm_name": dataset["target_farm_name"],
+                        "target_field_name": dataset["target_field_name"],
+                        "target_mission_date": dataset["target_mission_date"],
+                        "predict_on_completed_only": True,
+                        "supplementary_targets": [],
+                        "tol_test": 30, #epoch_patience[dataset_size]
+                    }
+                    job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+                    json_io.save_json(job_config_path, job_config)
+                    job_interface.run_job(job_uuid)
+
+                    run_record["job_uuids"].append(job_uuid)
+
+            restore_db(dataset["target_farm_name"], dataset["target_field_name"], dataset["target_mission_date"])
+
+
+
+
+    run_uuid = str(uuid.uuid4())
+    run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
+    json_io.save_json(run_path, run_record)
+    report(run_uuid)
+
 
 
 def run_tests():
+    dataset_sizes = [250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
+    methods = ["even_subset", "graph_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
+
+    # method_params = [
+    # {
+    #         "match_method": "bipartite_b_matching",
+    #         "extraction_type": "excess_green_box_combo_two_phase",
+    #         "patch_size": "image_set_dependent",
+    #         #"source_pool_size": 25000, #18000, #12000, #12000,
+    #         #"target_pool_size": 500, #2000, #3000 #3000
+    #         "exclude_target_from_source": True 
+    # },{
+    method_params = {
+            "match_method": "bipartite_b_matching",
+            "extraction_type": "excess_green_box_combo",
+            "patch_size": "image_set_dependent",
+            #"source_pool_size": 25000, #18000, #12000, #12000,
+            #"target_pool_size": 500, #2000, #3000 #3000
+            "exclude_target_from_source": True 
+    }
+
+    target_datasets = [
+        {
+            "target_farm_name": "Biggar", #"row_spacing",
+            "target_field_name": "Dennis3", #"brown",
+            "target_mission_date": "2021-06-04"
+        }
+    ]
+
+    epoch_patience = {
+        256: 30,
+        1024: 30,
+        4096: 30,
+        8192: 30,
+        16384: 30
+    }
+
+
+
     run_record = {
         "job_uuids": [],
         "method_params": method_params,
@@ -104,10 +249,10 @@ def prepare_report_for_display(run_uuid):
     run_record_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
     run_record = json_io.load_json(run_record_path)
     
-    #dataset_sizes = sorted(run_record["dataset_sizes"])
+    dataset_sizes = sorted(run_record["dataset_sizes"])
 
     results = {
-        "dataset_sizes": run_record["dataset_sizes"],
+        "dataset_sizes": dataset_sizes,
         "results": {}
     }
     i = 0
@@ -115,6 +260,17 @@ def prepare_report_for_display(run_uuid):
     target_farm_name = dataset["target_farm_name"]
     target_field_name = dataset["target_field_name"]
     target_mission_date = dataset["target_mission_date"]
+
+    inds = np.argsort(run_record["dataset_sizes"])
+    metrics = [
+        "MS COCO mAP",
+        "PASCAL VOC mAP",
+        "Image Mean Abs. Diff. in Count",
+        "Image R Squared",
+        "Patch R Squared",
+        "Image Mean Abs. Diff. in Count at Optimal Score Thresh.",
+        "Optimal Score Thresh."
+    ]
 
     for dataset_size in run_record["dataset_sizes"]:
         for method in run_record["methods"]:
@@ -184,7 +340,8 @@ def prepare_report_for_display(run_uuid):
             #results[method][dataset_size]["per_image_ms_coco_mAP_vals"].append(per_image_ms_coco_mAP_vals)
 
 
-
+        for metric in metrics:
+            results["results"][method][metric] = (np.array(results["results"][method][metric])[inds]).tolist()
 
     run_results_dir = os.path.join("usr", "data", "runs", "display", 
                                    target_farm_name, target_field_name, target_mission_date)
