@@ -164,7 +164,7 @@ def run_db_size_variation_test():
 
 def run_tests():
     dataset_sizes = [8000, 4000, 2000, 1000, 500, 250] #[250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
-    methods = ["even_subset", "graph_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
+    methods = ["graph_subset", "even_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
 
     # method_params = [
     # {
@@ -241,8 +241,8 @@ def run_tests():
     run_uuid = str(uuid.uuid4())
     run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
     json_io.save_json(run_path, run_record)
-    report(run_uuid)
-
+    #report(run_uuid)
+    prepare_report_for_display(run_uuid)
 
 
 def prepare_report_for_display(run_uuid):
