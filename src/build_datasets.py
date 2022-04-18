@@ -268,7 +268,7 @@ def two_phase_patches(config):
     source_construction_params = config.training["source_construction_params"]
     desired_source_size = source_construction_params["size"]
 
-    prop_plant_patches = 0.85
+    prop_plant_patches = 0.80
     desired_plant_size = round(desired_source_size * prop_plant_patches)
     desired_other_size = desired_source_size - desired_plant_size
 
