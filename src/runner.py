@@ -163,7 +163,7 @@ def run_db_size_variation_test():
 
 
 def run_tests():
-    dataset_sizes = [250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
+    dataset_sizes = [8000, 4000, 2000, 1000, 500, 250] #[250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
     methods = ["even_subset", "graph_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
 
     # method_params = [
@@ -186,9 +186,9 @@ def run_tests():
 
     target_datasets = [
         {
-            "target_farm_name": "Biggar", #"row_spacing",
-            "target_field_name": "Dennis3", #"brown",
-            "target_mission_date": "2021-06-04"
+            "target_farm_name": "row_spacing",
+            "target_field_name": "brown",
+            "target_mission_date": "2021-06-01"
         }
     ]
 

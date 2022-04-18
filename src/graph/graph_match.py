@@ -20,8 +20,9 @@ from scipy.sparse import csr_matrix
 from sklearn.cluster import KMeans
 
 
+
 from graph import graph_model
-from io_utils import w3c_io
+from io_utils import w3c_io, json_io
 import extract_patches as ep
 from image_set import DataSet
 
@@ -428,6 +429,13 @@ def bipartite_b_match(config, desired_source_size, source_features, target_featu
     selected_source_patches = source_patches[sorted_col_ind]
     selected_source_patches = np.array(selected_source_patches[:desired_source_size])
 
+
+    graph_stats_path = os.path.join(config.model_dir, "graph_stats.json")
+    graph_stats = {}
+    graph_stats["mean_distance"] = float(np.mean(selected_distances))
+    graph_stats["max_distance"] = float(np.max(selected_distances))
+    graph_stats["min_distance"] = float(np.min(selected_distances))
+    json_io.save_json(graph_stats_path, graph_stats)
     # output = True
     # if output:
     #     b_match_dir = os.path.join(config.model_dir, "b_matching")
