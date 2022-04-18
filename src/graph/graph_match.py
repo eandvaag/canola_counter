@@ -431,10 +431,19 @@ def bipartite_b_match(config, desired_source_size, source_features, target_featu
 
 
     graph_stats_path = os.path.join(config.model_dir, "graph_stats.json")
-    graph_stats = {}
-    graph_stats["mean_distance"] = float(np.mean(selected_distances))
-    graph_stats["max_distance"] = float(np.max(selected_distances))
-    graph_stats["min_distance"] = float(np.min(selected_distances))
+    if os.path.exists(graph_stats_path):
+        graph_stats = json_io.load_json(graph_stats_path)
+    else:
+        graph_stats = {
+            "records": []
+        }
+    record = {
+        "mean_distance": float(np.mean(selected_distances)),
+        "max_distance": float(np.max(selected_distances)),
+        "min_distance": float(np.min(selected_distances)),
+        "selected_distances.size": int(selected_distances.size)
+    }
+    graph_stats["records"].append(record)
     json_io.save_json(graph_stats_path, graph_stats)
     # output = True
     # if output:
