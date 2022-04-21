@@ -161,6 +161,38 @@ def run_db_size_variation_test():
     report(run_uuid)
 
 
+def plot_tSNE():
+
+    method_params = {
+            "match_method": "bipartite_b_matching",
+            "extraction_type": "excess_green_box_combo",
+            "patch_size": "image_set_dependent",
+            #"source_pool_size": 25000, #18000, #12000, #12000,
+            #"target_pool_size": 500, #2000, #3000 #3000
+            "exclude_target_from_source": True 
+    }
+
+    job_uuid = str(uuid.uuid4())
+    job_config = {
+        "job_uuid": job_uuid,
+        "replications": 1,
+        "job_name": "test_name_" + job_uuid,
+        "source_construction_params": {
+            "method_name": "create_tsne_plot",
+            "method_params": method_params,
+            #"size": dataset_size
+        },
+        "target_farm_name": "BlaineLake", #dataset["target_farm_name"],
+        "target_field_name": "HornerWest", #dataset["target_field_name"],
+        "target_mission_date": "2021-06-09", #dataset["target_mission_date"],
+        "predict_on_completed_only": True,
+        "supplementary_targets": [],
+        "tol_test": 30, #epoch_patience[dataset_size]
+    }
+
+    job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+    json_io.save_json(job_config_path, job_config)
+    job_interface.run_job(job_uuid)
 
 def run_tests():
     dataset_sizes = [8000, 4000, 2000, 1000, 500, 250] #[250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
@@ -186,9 +218,9 @@ def run_tests():
 
     target_datasets = [
         {
-            "target_farm_name": "row_spacing",
-            "target_field_name": "brown",
-            "target_mission_date": "2021-06-01"
+            "target_farm_name": "BlaineLake",
+            "target_field_name": "HornerWest",
+            "target_mission_date": "2021-06-09"
         }
     ]
 
@@ -262,7 +294,7 @@ def prepare_report_for_display(run_uuid):
     target_mission_date = dataset["target_mission_date"]
 
     inds = np.argsort(run_record["dataset_sizes"])
-    metrics = [
+    display_metrics = [
         "MS COCO mAP",
         "PASCAL VOC mAP",
         "Image Mean Abs. Diff. in Count",
@@ -340,7 +372,8 @@ def prepare_report_for_display(run_uuid):
             #results[method][dataset_size]["per_image_ms_coco_mAP_vals"].append(per_image_ms_coco_mAP_vals)
 
 
-        for metric in metrics:
+    for method in run_record["methods"]:
+        for metric in display_metrics:
             results["results"][method][metric] = (np.array(results["results"][method][metric])[inds]).tolist()
 
     run_results_dir = os.path.join("usr", "data", "runs", "display", 

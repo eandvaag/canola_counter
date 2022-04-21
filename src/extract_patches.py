@@ -270,18 +270,33 @@ def extract_plant_and_other(image, image_annotations, num_plant, num_other, patc
     image_array = image.load_image_array()
     gt_boxes = image_annotations["boxes"]
     gt_classes = image_annotations["classes"]
+    num_boxes = gt_boxes.shape[0]
+
 
     if num_plant == "all":
-        num_plant = gt_boxes.shape[0]
+        num_plant = num_boxes
 
-    if num_plant <= gt_boxes.shape[0] or allow_box_reuse:
-        if gt_boxes.shape[0] > 0:
-            subset_inds = np.random.choice(np.arange(gt_boxes.shape[0]), num_plant)
-            gt_boxes_subset = gt_boxes[subset_inds]
-        else:
-            gt_boxes_subset = np.array([])
-    else:
+    if num_plant > num_boxes and not allow_box_reuse:
         raise RuntimeError("Insufficient number of boxes to satisfy request")
+
+
+    subset_inds = []
+    num_needed = num_plant
+    while num_needed > 0:
+        num_taken = min(num_needed, num_boxes)
+        subset_inds.extend(np.random.choice(np.arange(num_boxes), num_taken, replace=False))
+        num_needed -= num_taken
+
+    gt_boxes_subset = gt_boxes[subset_inds]
+
+    # if num_plant <= gt_boxes.shape[0] or allow_box_reuse:
+    #     if gt_boxes.shape[0] > 0:
+    #         subset_inds = np.random.choice(np.arange(gt_boxes.shape[0]), num_plant)
+    #         gt_boxes_subset = gt_boxes[subset_inds]
+    #     else:
+    #         gt_boxes_subset = np.array([])
+    #else:
+    #    raise RuntimeError("Insufficient number of boxes to satisfy request")
 
     patch_num = 0
     for gt_box in gt_boxes_subset:
@@ -346,7 +361,7 @@ def extract_patch_records_with_exg_box_combo(image, image_annotations, num_patch
     gt_classes = image_annotations["classes"]
 
     if tentative_num_box_patches < gt_boxes.shape[0]:
-        subset_inds = np.random.choice(np.arange(gt_boxes.shape[0]), tentative_num_box_patches)
+        subset_inds = np.random.choice(np.arange(gt_boxes.shape[0]), tentative_num_box_patches, replace=False)
         gt_boxes_subset = gt_boxes[subset_inds]
     else:
         gt_boxes_subset = gt_boxes
@@ -460,10 +475,21 @@ def extract_patch_records_surrounding_gt_boxes(image, image_annotations, num_pat
     gt_classes = image_annotations["classes"]
     num_boxes = gt_boxes.shape[0]
     patch_num = 0
-    num_patches_needed = num_patches
+
+    subset_inds = []
+    num_needed = num_patches
+    while num_needed > 0:
+        num_taken = min(num_needed, num_boxes)
+        subset_inds.extend(np.random.choice(np.arange(num_boxes), num_taken, replace=False).tolist())
+        num_needed -= num_taken
+    #gt_boxes_subset = gt_boxes[subset_inds]
+    #gt_classes_subset = gt_classes[subset_inds]
+
+    #num_patches_needed = num_patches
     #for gt_box in gt_boxes:
-    while num_patches_needed > 0:
-        gt_box = gt_boxes[patch_num % num_boxes]
+    #while num_patches_needed > 0:
+    for subset_ind in subset_inds:
+        gt_box = gt_boxes[subset_ind] #patch_num % num_boxes]
         patch, patch_coords = _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size)
         patch_record = {}
         patch_record["patch"] = patch
@@ -474,7 +500,7 @@ def extract_patch_records_surrounding_gt_boxes(image, image_annotations, num_pat
         annotate_patch(patch_record, gt_boxes, gt_classes)
         patch_records.append(patch_record)
         patch_num += 1
-        num_patches_needed -= 1
+        #num_patches_needed -= 1
 
     return patch_records
 

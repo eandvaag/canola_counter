@@ -108,6 +108,8 @@ def build_training_datasets(config):
         build_graph_subset(config)
     elif method_name == "direct":
         build_direct(config)
+    elif method_name == "create_tsne_plot":
+        tSNE_plot(config)
     else:
         raise RuntimeError("Unrecognized source dataset construction method: {}".format(method_name))
 
@@ -1360,3 +1362,72 @@ def build_even_subset(config):
 
 #     ep.write_patches_from_gt_box_records(training_records, training_patches_dir)
 #     ep.write_patches_from_gt_box_records(validation_records, validation_patches_dir)
+
+
+
+
+def tSNE_plot(config, plant_patches_per_image_set=75, other_patches_per_image_set=0):
+    
+    from sklearn.manifold import TSNE
+    import matplotlib.pyplot as plt
+
+
+    source_construction_params = config.training["source_construction_params"]
+    method_params = source_construction_params["method_params"]
+    extraction_type = method_params["extraction_type"]
+    #patch_size = method_params["patch_size"]
+
+    patches = []
+    labels = []
+    image_set_root = os.path.join("usr", "data", "image_sets")
+
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+                
+                dataset = DataSet({
+                    "farm_name": farm_name,
+                    "field_name": field_name,
+                    "mission_date": mission_date
+                })
+                print("now processing", dataset.image_set_name)
+
+
+                annotations = w3c_io.load_annotations(dataset.annotations_path, {"plant": 0})
+                
+                completed_image_names = w3c_io.get_completed_images(annotations)
+
+                if len(completed_image_names) > 0:
+                    image_set_patch_size = w3c_io.get_patch_size(annotations)
+                    assigned = determine_number_of_patches_for_each_image(completed_image_names, annotations, 
+                                plant_patches_per_image_set, other_patches_per_image_set, allow_box_reuse=True)
+
+                    for image in dataset.completed_images:
+                        plant_patches, other_patches = ep.extract_plant_and_other(
+                            image, 
+                            annotations[image.image_name],
+                            assigned[image.image_name]["plant"],
+                            assigned[image.image_name]["other"],
+                            image_set_patch_size
+                        )
+
+                        #total_added = len(plant_patches) + len(other_patches)
+                        patches.extend(plant_patches)
+                        patches.extend(other_patches)
+                    labels.append([farm_name + "-" + field_name + "-" + mission_date]) # * total_added)
+
+    patches = np.array(patches)
+    features = extract_patch_features(patches, extraction_type, config)
+
+    step = plant_patches_per_image_set + other_patches_per_image_set
+    embedded = TSNE(perplexity=10).fit_transform(features)
+    plt.figure(figsize=(10, 8))
+    for i in range(len(labels)):
+        plt.scatter(embedded[i * step:(i+1) * step, 0], embedded[i * step:(i+1) * step, 1], label=labels[i])
+    plt.legend()
+    plt.xlim([np.min(embedded[:, 0] - 100), np.max(embedded[:, 0] + 5)])
+    plt.savefig("/home/eaa299/Documents/work/graph_prj/tsne/tsne_plot.svg")
+    exit()
