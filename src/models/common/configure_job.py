@@ -282,7 +282,7 @@ def fill_job_config(job_config):
                     ],
 
                     "min_num_epochs": 15,
-                    "max_num_epochs": 300,
+                    "max_num_epochs": 3000,
                     "early_stopping": {
                         "apply": True,
                         "monitor": "validation_loss",
