@@ -10,11 +10,13 @@ from functools import reduce
 
 import cv2
 import uuid
+import logging
 
 from io_utils import w3c_io, tf_record_io
 from models.common import box_utils
 from image_set import Image, DataSet
 import image_utils
+
 
 from graph import graph_match
 
@@ -234,6 +236,8 @@ def write_annotated_patch_records(patch_records, patch_dir):
 
 def _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size):
 
+    logger = logging.getLogger(__name__)
+
     img_h, img_w = image_array.shape[:2]
 
     box_y_min, box_x_min, box_y_max, box_x_max = gt_box
@@ -242,13 +246,16 @@ def _extract_patch_surrounding_gt_box(image_array, gt_box, patch_size):
     box_w = box_x_max - box_x_min
 
     if box_h > patch_size or box_w > patch_size:
-        raise RuntimeError("Box exceeds size of patch. (box_w, box_h): ({}, {}). patch_size: {}.".format(
+        logger.warning("Box exceeds size of patch. (box_w, box_h): ({}, {}). patch_size: {}.".format(
             box_w, box_h, patch_size
         ))
+        #raise RuntimeError("Box exceeds size of patch. (box_w, box_h): ({}, {}). patch_size: {}.".format(
+        #    box_w, box_h, patch_size
+        #))
 
-    patch_y_min = random.randrange((box_y_min + box_h) - patch_size, box_y_min + 1)
+    patch_y_min = random.randrange((box_y_min + box_h) - max(box_h, patch_size), box_y_min + 1)
     patch_y_min = min(img_h - patch_size, max(0, patch_y_min))
-    patch_x_min = random.randrange((box_x_min + box_w) - patch_size, box_x_min + 1)
+    patch_x_min = random.randrange((box_x_min + box_w) - max(box_w, patch_size), box_x_min + 1)
     patch_x_min = min(img_w - patch_size, max(0, patch_x_min))
     patch_y_max = patch_y_min + patch_size
     patch_x_max = patch_x_min + patch_size
@@ -553,6 +560,7 @@ def write_patches(out_dir, patch_data_lst):
 
 
 def extract_patch_around_box(image, box, patch_size):
+    logger = logging.getLogger(__name__)
 
     image_array = image.load_image_array()
     img_h, img_w = image_array.shape[:2]
@@ -563,12 +571,17 @@ def extract_patch_around_box(image, box, patch_size):
     box_h = box_y_max - box_y_min
     box_w = box_x_max - box_x_min
 
-    if box_h > patch_size or box_w > patch_size:
-        raise RuntimeError("Box exceeds size of patch.")
+    #if box_h > patch_size or box_w > patch_size:
+    #    raise RuntimeError("Box exceeds size of patch.")
 
-    patch_y_min = random.randrange((box_y_min + box_h) - patch_size, box_y_min)
+    if box_h > patch_size or box_w > patch_size:
+        logger.warning("Box exceeds size of patch. (box_w, box_h): ({}, {}). patch_size: {}.".format(
+            box_w, box_h, patch_size
+        ))
+
+    patch_y_min = random.randrange((box_y_min + box_h) - max(box_h, patch_size), box_y_min + 1)
     patch_y_min = min(img_h - patch_size, max(0, patch_y_min))
-    patch_x_min = random.randrange((box_x_min + box_w) - patch_size, box_x_min)
+    patch_x_min = random.randrange((box_x_min + box_w) - max(box_w, patch_size), box_x_min + 1)
     patch_x_min = min(img_w - patch_size, max(0, patch_x_min))
     patch_y_max = patch_y_min + patch_size
     patch_x_max = patch_x_min + patch_size

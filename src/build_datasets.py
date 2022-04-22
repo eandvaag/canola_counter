@@ -1102,32 +1102,33 @@ def build_direct(config):
         images = dataset.completed_images
 
     for image in images:
-        if extraction_type == "surrounding_boxes":
-            patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
-                image, 
-                annotations[image.image_name], 
-                num_patches_per_image,
-                image_set_patch_size))
-        elif extraction_type == "excess_green":
-            patches.extend(ep.extract_patch_records_with_exg(
-                image, 
-                annotations[image.image_name], 
-                num_patches_per_image, 
-                image_set_patch_size))
-        elif extraction_type == "excess_green_box_combo":
-            patches.extend(ep.extract_patch_records_with_exg_box_combo(
-                image, 
-                annotations[image.image_name], 
-                num_patches_per_image, 
-                image_set_patch_size))
-        elif extraction_type == "random":
-            patches.extend(ep.extract_patch_records_randomly(
-                image, 
-                annotations[image.image_name], 
-                num_patches_per_image, 
-                image_set_patch_size))
-        else:
-            raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
+        if image.image_name not in config.arch["test_reserved_images"]:
+            if extraction_type == "surrounding_boxes":
+                patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
+                    image, 
+                    annotations[image.image_name], 
+                    num_patches_per_image,
+                    image_set_patch_size))
+            elif extraction_type == "excess_green":
+                patches.extend(ep.extract_patch_records_with_exg(
+                    image, 
+                    annotations[image.image_name], 
+                    num_patches_per_image, 
+                    image_set_patch_size))
+            elif extraction_type == "excess_green_box_combo":
+                patches.extend(ep.extract_patch_records_with_exg_box_combo(
+                    image, 
+                    annotations[image.image_name], 
+                    num_patches_per_image, 
+                    image_set_patch_size))
+            elif extraction_type == "random":
+                patches.extend(ep.extract_patch_records_randomly(
+                    image, 
+                    annotations[image.image_name], 
+                    num_patches_per_image, 
+                    image_set_patch_size))
+            else:
+                raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
 
     patches = np.array(patches)
     np.random.shuffle(patches)
@@ -1366,7 +1367,7 @@ def build_even_subset(config):
 
 
 
-def tSNE_plot(config, plant_patches_per_image_set=75, other_patches_per_image_set=0):
+def tSNE_plot(config, plant_patches_per_image_set=0, other_patches_per_image_set=75):
     
     from sklearn.manifold import TSNE
     import matplotlib.pyplot as plt
@@ -1429,5 +1430,5 @@ def tSNE_plot(config, plant_patches_per_image_set=75, other_patches_per_image_se
         plt.scatter(embedded[i * step:(i+1) * step, 0], embedded[i * step:(i+1) * step, 1], label=labels[i])
     plt.legend()
     plt.xlim([np.min(embedded[:, 0] - 100), np.max(embedded[:, 0] + 5)])
-    plt.savefig("/home/eaa299/Documents/work/graph_prj/tsne/tsne_plot.svg")
+    plt.savefig("/home/eaa299/Documents/work/graph_prj/tsne/tsne_background_plot.svg")
     exit()

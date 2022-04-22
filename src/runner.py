@@ -194,9 +194,10 @@ def plot_tSNE():
     json_io.save_json(job_config_path, job_config)
     job_interface.run_job(job_uuid)
 
-def run_tests():
-    dataset_sizes = [8000, 4000, 2000, 1000, 500, 250] #[250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
-    methods = ["graph_subset", "even_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
+
+def run_kaylie_test():
+    dataset_sizes = [250] #10000]
+    methods = ["direct"]
 
     # method_params = [
     # {
@@ -218,9 +219,9 @@ def run_tests():
 
     target_datasets = [
         {
-            "target_farm_name": "BlaineLake",
-            "target_field_name": "HornerWest",
-            "target_mission_date": "2021-06-09"
+            "target_farm_name": "row_spacing",
+            "target_field_name": "brown",
+            "target_mission_date": "2021-06-01-high-res"
         }
     ]
 
@@ -260,9 +261,101 @@ def run_tests():
                     "target_farm_name": dataset["target_farm_name"],
                     "target_field_name": dataset["target_field_name"],
                     "target_mission_date": dataset["target_mission_date"],
+                    "predict_on_completed_only": False, #True,
+                    "supplementary_targets": [],
+                    "tol_test": 3, #30, #epoch_patience[dataset_size]
+                    "test_reserved_images": ["805", "810", "817", "821", "824"]
+                }
+                job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+                json_io.save_json(job_config_path, job_config)
+                job_interface.run_job(job_uuid)
+
+                run_record["job_uuids"].append(job_uuid)
+
+    run_uuid = str(uuid.uuid4())
+    run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
+    json_io.save_json(run_path, run_record)
+
+
+def run_tests():
+    dataset_sizes = [8000, 4000, 2000, 1000, 500, 250] #[250, 500, 1000, 2000, 4000, 8000] #[256, 1024, 4096, 8192] #, 16384] #, 512, 1024, 2048, 4096]
+    methods = ["graph_subset", "even_subset", "direct"] #, "graph_subset"] #, "even_subset", "graph_subset"]
+
+    # method_params = [
+    # {
+    #         "match_method": "bipartite_b_matching",
+    #         "extraction_type": "excess_green_box_combo_two_phase",
+    #         "patch_size": "image_set_dependent",
+    #         #"source_pool_size": 25000, #18000, #12000, #12000,
+    #         #"target_pool_size": 500, #2000, #3000 #3000
+    #         "exclude_target_from_source": True 
+    # },{
+    method_params = {
+            "match_method": "bipartite_b_matching",
+            "extraction_type": "excess_green_box_combo",
+            "patch_size": "image_set_dependent",
+            #"source_pool_size": 25000, #18000, #12000, #12000,
+            #"target_pool_size": 500, #2000, #3000 #3000
+            "exclude_target_from_source": True 
+    }
+
+    target_datasets = [
+        {
+            "target_farm_name": "UNI",
+            "target_field_name": "Brown",
+            "target_mission_date": "2021-06-05"
+        }
+    ]
+
+    epoch_patience = {
+        256: 30,
+        1024: 30,
+        4096: 30,
+        8192: 30,
+        16384: 30
+    }
+
+
+
+    run_record = {
+        "job_uuids": [],
+        "method_params": method_params,
+        "methods": methods,
+        "dataset_sizes": dataset_sizes,
+        "target_datasets": target_datasets,
+        "explanation": "compare methods"
+    }
+
+    for dataset in target_datasets:
+        for dataset_size in dataset_sizes:
+            for i, method in enumerate(methods):
+                job_uuid = str(uuid.uuid4())
+
+                if method == "graph_subset" or method == "even_subset":
+                    annotations_path = os.path.join("usr", "data", "image_sets",
+                        dataset["target_farm_name"], dataset["target_field_name"], dataset["target_mission_date"],
+                        "annotations", "annotations_w3c.json")
+                    annotations = w3c_io.load_json(annotations_path)
+                    test_reserved_images = w3c_io.get_completed_images(annotations)
+                else:
+                    test_reserved_images = []
+
+                job_config = {
+                    "job_uuid": job_uuid,
+                    "replications": 1,
+                    "job_name": "test_name_" + job_uuid,
+                    "source_construction_params": {
+                        "method_name": method,
+                        "method_params": method_params,
+                        "size": dataset_size
+                    },
+                    "target_farm_name": dataset["target_farm_name"],
+                    "target_field_name": dataset["target_field_name"],
+                    "target_mission_date": dataset["target_mission_date"],
                     "predict_on_completed_only": True,
                     "supplementary_targets": [],
                     "tol_test": 30, #epoch_patience[dataset_size]
+                    "test_reserved_images": test_reserved_images
                 }
                 job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
                 json_io.save_json(job_config_path, job_config)

@@ -793,9 +793,9 @@ def generate_predictions(config):
 
         metrics = driver_utils.create_metrics_skeleton(dataset)
 
-        inference_metrics.collect_statistics(metrics, predictions, config, inference_times=inference_times)
-
-        inference_metrics.collect_metrics(metrics, predictions, dataset, config)
+        all_image_names = predictions["image_predictions"].keys()
+        inference_metrics.collect_statistics(all_image_names, metrics, predictions, config, inference_times=inference_times)
+        inference_metrics.collect_metrics(all_image_names, metrics, predictions, dataset, config)
 
         results_dir = os.path.join("usr", "data", "results",
                                    dataset.farm_name, dataset.field_name, dataset.mission_date,
@@ -809,8 +809,11 @@ def generate_predictions(config):
         pred_path = os.path.join(results_dir, "predictions.json")
         json_io.save_json(pred_path, predictions)
 
-        pred_path = os.path.join(results_dir, "metrics.json")
-        json_io.save_json(pred_path, metrics)        
+        metrics_path = os.path.join(results_dir, "metrics.json")
+        json_io.save_json(metrics_path, metrics)
+
+        # test_metrics_path = os.path.join(results_dir, "test_metrics.json")
+        # json_io.save_json(test_metrics_path, test_metrics)
 
         annotations_path = os.path.join(results_dir, "annotations.json")
         w3c_io.save_annotations(annotations_path, predictions, config)

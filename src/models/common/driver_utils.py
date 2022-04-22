@@ -97,14 +97,17 @@ def output_excel(out_path, predictions, dataset, config):
         "farm_name": [],
         "field_name": [],
         "mission_date": [],
-        #"dataset_name": [],
-        "image_name": [],
+        "used_for": [],
+        "image_name": []
+        #"COCO_mAP": [],
+        #"PASCAL_VOC_mAP": []
     }
     for class_name in class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
         d["model_" + class_name + "_count"] = []
 
     annotations = w3c_io.load_annotations(dataset.annotations_path, class_map)
+    completed_image_names = w3c_io.get_completed_images(annotations)
 
     #for image in dataset.images: #image_set.all_dataset.images:
     for image_name in predictions["image_predictions"].keys():
@@ -116,11 +119,18 @@ def output_excel(out_path, predictions, dataset, config):
         #     dataset_name = "test"
         # else:
         #     dataset_name = "NA"
+        if image_name in completed_image_names:
+            if image_name in config.arch["test_reserved_images"]:
+                dataset_name = "testing"
+            else:
+                dataset_name = "training/validation"
+        else:
+            dataset_name = "NA"
 
         d["farm_name"].append(farm_name)
         d["field_name"].append(field_name)
         d["mission_date"].append(mission_date)
-        # d["dataset_name"].append(dataset_name)
+        d["used_for"].append(dataset_name)
         d["image_name"].append(image_name)
 
         #if image.is_annotated:

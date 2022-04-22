@@ -13,6 +13,8 @@ import signal
 import math as m
 import random
 import numpy as np
+import pandas as pd
+import pandas.io.formats.excel
 
 from io_utils import json_io, w3c_io
 from models.common import model_interface, configure_job, model_config #, inference_record_io
@@ -43,6 +45,8 @@ def create_model_configs(job_config, model_index):
     target_farm_name = job_config["target_farm_name"]
     target_field_name = job_config["target_field_name"]
     target_mission_date = job_config["target_mission_date"]
+    test_reserved_images = job_config["test_reserved_images"]
+    training_validation_images = job_config["training_validation_images"]
 
     m = job_config["model_info"][model_index]
 
@@ -53,6 +57,7 @@ def create_model_configs(job_config, model_index):
     training_config =  copy.deepcopy(job_config["training_config"])
     inference_config =  copy.deepcopy(job_config["inference_config"])
 
+
     for config in [arch_config, training_config, inference_config]:
         config["model_uuid"] = model_uuid
         config["model_name"] = model_name
@@ -61,6 +66,8 @@ def create_model_configs(job_config, model_index):
         config["target_farm_name"] = target_farm_name
         config["target_field_name"] = target_field_name
         config["target_mission_date"] = target_mission_date
+        config["test_reserved_images"] = test_reserved_images
+        config["training_validation_images"] = training_validation_images
 
     
     training_config["source_construction_params"] = job_config["source_construction_params"]
@@ -253,11 +260,27 @@ def run_job(job_uuid):
     job_config = json_io.load_json(job_config_path)
     job_name = job_config["job_name"]
 
+
     job_config["start_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     logger.info("Started processing job '{}' (uuid: {}).".format(job_name, job_uuid))
 
     try:
+
+        target_farm_name = job_config["target_farm_name"]
+        target_field_name = job_config["target_field_name"]
+        target_mission_date = job_config["target_mission_date"]
+        test_reserved_images = job_config["test_reserved_images"]
+
+        annotations_path = os.path.join("usr", "data", "image_sets",
+                                        target_farm_name, target_field_name, target_mission_date,
+                                        "annotations", "annotations_w3c.json")
+        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+        completed_image_names = w3c_io.get_completed_images(annotations)
+        job_config["training_validation_images"] = [image_name for image_name in completed_image_names if image_name not in test_reserved_images]
+
+
+
         # Save the job before training the models. If aborted, the job can now be destroyed.
         job_config["status"] = JOB_RUNNING
         json_io.save_json(job_config_path, job_config)
@@ -311,11 +334,55 @@ def run_job(job_uuid):
         #else:
         #    raise e
 
+    
+    build_job_excel(job_config)
+
 
     job_config["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     job_config["status"] = JOB_FINISHED
     json_io.save_json(job_config_path, job_config)
     logger.info("Finished processing job '{}' (uuid: {}).".format(job_config["job_name"], job_uuid))
+
+
+def build_job_excel(job_config):
+    target_farm_name = job_config["target_farm_name"]
+    target_field_name = job_config["target_field_name"]
+    target_mission_date = job_config["target_mission_date"]
+    job_uuid = job_config["job_uuid"]
+    job_results_dir = os.path.join("usr", "data", "results", target_farm_name, target_field_name, target_mission_date, job_uuid)
+    out_path = os.path.join(job_results_dir, "results.xlsx")
+    model_info = job_config["model_info"]
+
+
+
+    model_uuid = model_info[0]["model_uuid"]
+    model_dir = os.path.join(job_results_dir, model_uuid)
+    excel_path = os.path.join(model_dir, "results.xlsx")
+    job_df = pd.read_excel(excel_path)
+    job_df.rename(columns={"model_plant_count": "model_1_plant_count"}, inplace=True)
+
+    for i, model_info in model_info[1:]:
+        model_uuid = model_info["model_uuid"]
+        model_dir = os.path.join(job_results_dir, model_uuid)
+        excel_path = os.path.join(model_dir, "results.xlsx")
+        df = pd.read_excel(excel_path)
+
+        job_df["model_" + str(i+1) + "_plant_count"] = df["model_plant_count"]
+
+    #print("job_df", job_df)
+    pandas.io.formats.excel.ExcelFormatter.header_style = None
+    writer = pd.ExcelWriter(out_path, engine="xlsxwriter")    
+    job_df.to_excel(writer, index=False, sheet_name="Sheet1", na_rep='NA')  # send df to writer
+    worksheet = writer.sheets["Sheet1"]  # pull worksheet object
+    for idx, col in enumerate(job_df):  # loop through all columns
+        series = job_df[col]
+        max_len = max((
+            series.astype(str).map(len).max(),  # len of largest item
+            len(str(series.name))  # len of column name/header
+            )) + 1  # adding a little extra space
+        worksheet.set_column(idx, idx, max_len)  # set column width
+    writer.save()
+
 
 
 

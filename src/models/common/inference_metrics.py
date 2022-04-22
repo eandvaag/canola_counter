@@ -90,7 +90,7 @@ def boxplot_data(data):
 #            }
 
 
-def collect_statistics(metrics, predictions, config, inference_times=None):
+def collect_statistics(image_names, metrics, predictions, config, inference_times=None):
 
 
     # if "metrics" not in predictions:
@@ -136,7 +136,7 @@ def collect_statistics(metrics, predictions, config, inference_times=None):
     confidences = {k: [] for k in config.arch["class_map"].keys()}
     boxes = {k: [] for k in config.arch["class_map"].keys()}
     #for image in dataset.images:
-    for image_name in predictions["image_predictions"].keys():
+    for image_name in image_names: #predictions["image_predictions"].keys():
         for cls_name in config.arch["class_map"].keys():
             cls_confs = predictions["image_predictions"][image_name]["pred_class_scores"][cls_name] 
             confidences[cls_name].extend(cls_confs)
@@ -217,7 +217,7 @@ def calculate_optimal_score_threshold(annotations, predictions):
 
 
 
-def collect_metrics(metrics, predictions, dataset, config,
+def collect_metrics(image_names, metrics, predictions, dataset, config,
                     collect_patch_metrics=True, calculate_mAP=True):
 
     logger = logging.getLogger(__name__)
@@ -240,6 +240,10 @@ def collect_metrics(metrics, predictions, dataset, config,
     # datasets["all"] = DataSet({
 
     # })
+    # metric_subsets = {
+    #     "all": predictions["image_predictions"].keys(),
+    #     "test": config.arch["test_reserve_images"]
+    # }
 
     num_classes = len(config.arch["class_map"].keys())
 
@@ -276,7 +280,7 @@ def collect_metrics(metrics, predictions, dataset, config,
     pred_image_counts = {k: [] for k in class_map.keys()} #config.arch["class_map"].keys()}
 
     #for image in dataset.completed_images:
-    for image_name in predictions["image_predictions"].keys():
+    for image_name in image_names: #predictions["image_predictions"].keys():
 
         if annotations[image_name]["status"] == "completed":
 
