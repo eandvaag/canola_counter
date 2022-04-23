@@ -3,6 +3,7 @@ import numpy as np
 import time
 import sys
 import os
+import glob
 import shutil
 import tqdm
 import logging
@@ -10,6 +11,7 @@ import time
 import random
 
 from image_set import DataSet
+import build_datasets
 
 from models.common import box_utils, \
                           model_io, \
@@ -628,6 +630,7 @@ def search_for_iou(predictions, config):
 
 
 
+
 def generate_predictions(config):
 
     logger = logging.getLogger(__name__)
@@ -635,6 +638,14 @@ def generate_predictions(config):
     # patches_dir = os.path.join(config.model_dir, "patches")
     # if not os.path.exists(patches_dir):
     #     os.makedirs(patches_dir)
+
+    #optimal_thresh_val = calculate_optimal_score_thresh(config)
+    #print("got optimal thresh val: {}".format(optimal_thresh_val))
+    # source_patches_dir = os.path.join(config.model_dir, "source_patches")
+
+
+
+
     targets = [
         {
             "farm_name": config.inference["target_farm_name"],
@@ -789,9 +800,21 @@ def generate_predictions(config):
 
         driver_utils.apply_nms_to_image_boxes(predictions["image_predictions"], 
                                             iou_thresh=config.inference["image_nms_iou_thresh"])
-        driver_utils.add_class_detections(predictions["image_predictions"], config)
+
+
+        annotations = w3c_io.load_annotations(dataset.annotations_path, config.arch["class_map"])
+        optimal_train_val_thresh, optimal_train_val_diff = inference_metrics.calculate_optimal_score_threshold(annotations, predictions, config.arch["training_validation_images"])
+        logger.info("Optimal train/val thresh is {}".format(optimal_train_val_thresh))
+
+        driver_utils.add_class_detections(predictions["image_predictions"], config, optimal_train_val_thresh)
 
         metrics = driver_utils.create_metrics_skeleton(dataset)
+
+        #metrics["point"]["train_val_optimal_score_threshold"] = optimal_train_val_thresh
+        metrics["point"]["train_val_optimal_score_threshold"] = {}
+        metrics["point"]["train_val_optimal_score_threshold"]["threshold_value"] = optimal_train_val_thresh
+        metrics["point"]["train_val_optimal_score_threshold"]["mean_absolute_difference"] = optimal_train_val_diff
+
 
         all_image_names = predictions["image_predictions"].keys()
         inference_metrics.collect_statistics(all_image_names, metrics, predictions, config, inference_times=inference_times)
@@ -1234,7 +1257,177 @@ def train(config):
             if driver_utils.stop_early(config, loss_record):
                 break
 
-
-
-
     shutil.rmtree(source_patches_dir)
+
+
+
+def calculate_optimal_score_thresh(config):
+
+
+    logger = logging.getLogger(__name__)
+
+    logger.info("Starting to calculate optimal score threshold.")
+    image_names = config.arch["training_validation_images"]
+    if len(image_names) == 0:
+        return 0.5
+
+
+    build_datasets.build_train_val_thresh_dataset(config)
+
+    patches_dir = os.path.join(config.model_dir, "training_validation_opt_patches")
+
+    tf_record_paths = os.path.join(patches_dir, "annotated-patches-record.tfrec")
+
+    # seq_source_patches_dir = sorted(glob.glob(os.path.join(source_patches_dir, "*")))[-1]
+    # #seq_num = len(config.training["training_sequence"]) - 1
+    
+    # training_patch_dir = os.path.join(seq_source_patches_dir, "training")
+    # validation_patch_dir = os.path.join(seq_source_patches_dir, "validation")
+
+    # training_tf_record_paths = [os.path.join(training_patch_dir, "annotated-patches-record.tfrec")]
+    # validation_tf_record_paths = [os.path.join(validation_patch_dir, "annotated-patches-record.tfrec")]
+
+    data_loader = data_load.InferenceDataLoader(tf_record_paths, config)
+    tf_dataset, tf_dataset_size = data_loader.create_dataset()
+
+    if config.arch["model_type"] == "yolov4":
+        yolov4 = YOLOv4(config)
+    elif config.arch["model_type"] == "yolov4_tiny":
+        yolov4 = YOLOv4Tiny(config)
+    decoder = Decoder(config)
+
+    #driver_utils.set_active_training_params(config, seq_num)
+
+    input_shape = (config.inference["batch_size"], *(data_loader.get_model_input_shape()))
+    yolov4.build(input_shape=input_shape)
+
+    model_io.load_all_weights(yolov4, config)
+
+    #buffer_pct = None
+    steps = np.sum([1 for i in tf_dataset])
+
+    if "patch_border_buffer_percent" in config.inference:
+        buffer_pct = config.inference["patch_border_buffer_percent"]
+    else:
+        buffer_pct = None
+
+
+
+    predictions = {}
+    predictions["image_predictions"] = {}
+    for step, batch_data in enumerate(tqdm.tqdm(tf_dataset, total=steps, 
+                                      desc="Generating predictions for calculating optimal score threshold")):
+
+        batch_images, batch_ratios, batch_info = data_loader.read_batch_data(batch_data, True)
+        batch_size = batch_images.shape[0]
+
+        pred = yolov4(batch_images, training=False)
+        detections = decoder(pred)
+        batch_pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+
+        batch_pred_bbox = tf.concat(batch_pred_bbox, axis=1)
+
+        for i in range(batch_size):
+
+            pred_bbox = batch_pred_bbox[i]
+            ratio = batch_ratios[i]
+
+            patch_info = batch_info[i]
+
+            image_path = bytes.decode((patch_info["image_path"]).numpy())
+            patch_path = bytes.decode((patch_info["patch_path"]).numpy())
+            image_name = os.path.basename(image_path)[:-4]
+            patch_name = os.path.basename(patch_path)[:-4]
+            patch_coords = tf.sparse.to_dense(patch_info["patch_coords"]).numpy().astype(np.int32)
+
+            # patch_boxes = tf.reshape(tf.sparse.to_dense(patch_info["patch_abs_boxes"]), shape=(-1, 4)).numpy()
+
+
+            pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = \
+                    post_process_sample(pred_bbox, ratio, patch_coords, config)
+
+            # patch_results[patch_name] = {
+            #     "pred_scores": pred_patch_scores,
+            #     "num_boxes": patch_boxes.shape[0]
+            # }
+
+
+            if image_name not in predictions["image_predictions"]:
+                predictions["image_predictions"][image_name] = {
+                    "image_path": image_path,
+                    "pred_image_abs_boxes": [],
+                    "pred_classes": [],
+                    "pred_scores": [],
+                    "patch_coords": []
+                }
+
+            pred_image_abs_boxes, pred_image_scores, pred_image_classes = \
+                driver_utils.get_image_detections(pred_patch_abs_boxes, 
+                                                pred_patch_scores, 
+                                                pred_patch_classes, 
+                                                patch_coords, 
+                                                image_path, 
+                                                buffer_pct=buffer_pct)
+
+
+            predictions["image_predictions"][image_name]["pred_image_abs_boxes"].extend(pred_image_abs_boxes.tolist())
+            predictions["image_predictions"][image_name]["pred_scores"].extend(pred_image_scores.tolist())
+            predictions["image_predictions"][image_name]["pred_classes"].extend(pred_image_classes.tolist())
+            predictions["image_predictions"][image_name]["patch_coords"].append(patch_coords.tolist())
+
+
+    driver_utils.clip_image_boxes(predictions["image_predictions"])
+
+    driver_utils.apply_nms_to_image_boxes(predictions["image_predictions"], 
+                                          iou_thresh=config.inference["image_nms_iou_thresh"])
+
+
+    annotations_path = os.path.join("usr", "data", "image_sets",
+                                    config.arch["target_farm_name"], 
+                                    config.arch["target_field_name"],
+                                    config.arch["target_mission_date"],
+                                    "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+    optimal_thresh_val, _ = inference_metrics.calculate_optimal_score_threshold(annotations, predictions, image_names)
+
+
+    # optimal_thresh_val = None
+    # optimal_sum_abs_diff = np.inf
+    # thresh_vals = np.arange(0.5, 1.0, 0.01)
+    # #print_thresh_vals = [0.5, 0.55, 0.60, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    # for thresh_val in tqdm.tqdm(thresh_vals, desc="Calculating optimal threshold value"):
+    #     abs_diffs = []
+
+    #     for patch_name in patch_results.keys():
+    #         num_boxes = patch_results[patch_name]["num_boxes"]
+    #         num_pred_boxes = (np.where(patch_results[patch_name]["pred_scores"] >= thresh_val)[0]).size
+
+    #         abs_diffs.append(abs(num_boxes - num_pred_boxes))
+    #     sum_abs_diff = float(np.sum(abs_diffs))
+
+    #     print("thresh_val: {}. sum_abs_diff: {}. best_thresh_val: {}. optimal_sum_abs_diff: {}.".format(
+    #         thresh_val, sum_abs_diff, optimal_thresh_val, optimal_sum_abs_diff
+    #     ))
+    #     if sum_abs_diff < optimal_sum_abs_diff:
+    #         optimal_sum_abs_diff = sum_abs_diff
+    #         optimal_thresh_val = thresh_val
+
+    logger.info("Optimal train/val score threshold is {}".format(optimal_thresh_val))
+    # #optimal_thresh_record_path = os.path.join(config.model_dir, "optimal_score_threshold.json")
+    # #optimal_thresh_record = {
+    # #    "optimal_thresh": optimal_thresh_val
+    # #}
+    # #json_io.save_json(optimal_thresh_record_path, optimal_thresh_record)
+
+    shutil.rmtree(patches_dir)
+
+    return optimal_thresh_val
+
+
+
+
+
+
+
+
+

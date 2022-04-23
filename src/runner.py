@@ -196,7 +196,7 @@ def plot_tSNE():
 
 
 def run_kaylie_test():
-    dataset_sizes = [250] #10000]
+    dataset_sizes = [20000] #3000] #[15000] #250] #10000]
     methods = ["direct"]
 
     # method_params = [
@@ -263,8 +263,8 @@ def run_kaylie_test():
                     "target_mission_date": dataset["target_mission_date"],
                     "predict_on_completed_only": False, #True,
                     "supplementary_targets": [],
-                    "tol_test": 3, #30, #epoch_patience[dataset_size]
-                    "test_reserved_images": ["805", "810", "817", "821", "824"]
+                    "tol_test": 30, #30, #epoch_patience[dataset_size]
+                    "test_reserved_images": ["204", "311", "805", "810", "817", "819", "821", "824"]
                 }
                 job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
                 json_io.save_json(job_config_path, job_config)

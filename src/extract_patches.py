@@ -861,8 +861,11 @@ def annotate_patch(patch_data, gt_boxes, gt_classes):
 
         #patch_height = patch_coords[2] - patch_coords[0]
         #patch_width = patch_coords[3] - patch_coords[1]
-        image_abs_boxes = box_utils.clip_and_remove_small_visibility_boxes_np(
-            contained_boxes, patch_coords, min_visibility=0)
+        image_abs_boxes, mask = box_utils.clip_boxes_and_get_small_visibility_mask(
+            contained_boxes, patch_coords, min_visibility=0.05)
+
+        image_abs_boxes = image_abs_boxes[mask]
+        contained_classes = contained_classes[mask]
 
         #image_abs_boxes = box_utils.clip_boxes_np(contained_boxes, patch_coords)
 

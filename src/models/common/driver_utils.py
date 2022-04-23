@@ -105,6 +105,7 @@ def output_excel(out_path, predictions, dataset, config):
     for class_name in class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
         d["model_" + class_name + "_count"] = []
+        d["model_" + class_name + "_count_at_optimal_score"] = []
 
     annotations = w3c_io.load_annotations(dataset.annotations_path, class_map)
     completed_image_names = w3c_io.get_completed_images(annotations)
@@ -146,12 +147,14 @@ def output_excel(out_path, predictions, dataset, config):
                 #cur_image_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
         cur_image_pred_class_counts = predictions["image_predictions"][image_name]["pred_class_counts"]
+        cur_image_pred_opt_class_counts = predictions["image_predictions"][image_name]["pred_opt_class_counts"]
         for class_name in class_map.keys(): #config.arch["class_map"].keys():
             if annotations[image_name]["status"] == "completed":
                 d["annotated_" + class_name + "_count"].append(cur_image_class_counts[class_name])
             else:
                 d["annotated_" + class_name + "_count"].append(np.nan)
             d["model_" + class_name + "_count"].append(cur_image_pred_class_counts[class_name])
+            d["model_" + class_name + "_count_at_optimal_score"].append(cur_image_pred_opt_class_counts[class_name])
 
     
     pandas.io.formats.excel.ExcelFormatter.header_style = None
@@ -321,7 +324,7 @@ def apply_nms_to_image_boxes(image_predictions, iou_thresh):
         image_predictions[image_name]["pred_scores"] = nms_scores.tolist()
 
 
-def add_class_detections(image_predictions, config):
+def add_class_detections(image_predictions, config, opt_thresh_val):
 
     class_map = config.arch["class_map"]
     reverse_class_map = {v: k for k, v in class_map.items()}
@@ -330,23 +333,40 @@ def add_class_detections(image_predictions, config):
         pred_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
         pred_classes = np.array(image_predictions[image_name]["pred_classes"])
         pred_scores = np.array(image_predictions[image_name]["pred_scores"])
-        unique, counts = np.unique(pred_classes, return_counts=True)
-        class_num_to_count = dict(zip(unique, counts))
-        #pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
+        unique = np.unique(pred_classes)
+
         pred_class_counts = {k: 0 for k in class_map.keys()}
         pred_class_boxes = {k: [] for k in class_map.keys()}
         pred_class_scores = {k: [] for k in class_map.keys()}
-        for class_num in class_num_to_count.keys():
+        pred_opt_class_counts = {k: 0 for k in class_map.keys()}
+
+        for class_num in unique:
             class_name = reverse_class_map[class_num]
-            #class_name = config.arch["reverse_class_map"][class_num]
-            pred_class_counts[class_name] = int(class_num_to_count[class_num])
-            pred_class_boxes[class_name] = (pred_boxes[class_num == pred_classes]).tolist()
-            pred_class_scores[class_name] = (pred_scores[class_num == pred_classes]).tolist()
+            inds = np.where(pred_classes == class_num)[0]
+
+            pred_class_counts[class_name] = int(pred_scores[inds].size)
+            pred_class_boxes[class_name] = (pred_boxes[inds]).tolist()
+            pred_class_scores[class_name] = (pred_scores[inds]).tolist()
+            pred_opt_class_counts[class_name] = int((np.where(pred_scores[inds] >= opt_thresh_val)[0]).size)
+
+        
+        # class_num_to_count = dict(zip(unique, counts))
+        # #pred_class_counts = {k: 0 for k in config.arch["class_map"].keys()}
+        # pred_class_counts = {k: 0 for k in class_map.keys()}
+        # pred_class_boxes = {k: [] for k in class_map.keys()}
+        # pred_class_scores = {k: [] for k in class_map.keys()}
+        # for class_num in class_num_to_count.keys():
+        #     class_name = reverse_class_map[class_num]
+        #     #class_name = config.arch["reverse_class_map"][class_num]
+        #     pred_class_counts[class_name] = int(class_num_to_count[class_num])
+        #     pred_class_boxes[class_name] = (pred_boxes[class_num == pred_classes]).tolist()
+        #     pred_class_scores[class_name] = (pred_scores[class_num == pred_classes]).tolist()
 
 
         image_predictions[image_name]["pred_class_counts"] = pred_class_counts
         image_predictions[image_name]["pred_class_boxes"] = pred_class_boxes
         image_predictions[image_name]["pred_class_scores"] = pred_class_scores
+        image_predictions[image_name]["pred_opt_class_counts"] = pred_opt_class_counts
 
 
 

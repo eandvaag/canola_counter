@@ -11,12 +11,64 @@ from sklearn.metrics import pairwise_distances
 
 import extract_patches as ep
 from graph import graph_match, graph_model
-from image_set import DataSet
+from image_set import DataSet, Image
 
 import manual_descriptor as md
 
 
 from io_utils import w3c_io, tf_record_io
+
+
+def build_train_val_thresh_dataset(config):
+    targets = [
+        {
+            "farm_name": config.inference["target_farm_name"],
+            "field_name": config.inference["target_field_name"],
+            "mission_date": config.inference["target_mission_date"]
+        }
+    ]
+
+
+    
+    model_dir = os.path.join("usr", "data", "models", config.arch["model_uuid"])
+    
+    for target in targets:
+        target_farm_name = target["farm_name"]
+        target_field_name = target["field_name"]
+        target_mission_date = target["mission_date"]
+        image_set_root = os.path.join("usr", "data", "image_sets", 
+                                        target_farm_name, target_field_name, target_mission_date)
+        annotations_path = os.path.join(image_set_root,
+                                        "annotations", "annotations_w3c.json")
+
+        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+        patch_dir = os.path.join(model_dir, "training_validation_opt_patches")
+        os.makedirs(patch_dir)
+        annotated_patches_record_path = os.path.join(patch_dir, "annotated-patches-record.tfrec")
+
+        annotated_tf_records = []
+
+        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+        patch_size = w3c_io.get_patch_size(annotations)
+
+        image_names = config["training_validation_images"]
+
+        for image_name in tqdm.tqdm(image_names, desc="Extracting train/val opt patches"):
+
+            image_path = glob.glob(os.path.join(image_set_root, "images", image_name + ".*"))[0]
+            image = Image(image_path)
+
+            image_patches = ep.extract_patch_records_from_image_tiled(image, patch_size, annotations[image.image_name])
+
+            ep.write_patches(patch_dir, image_patches)
+            tf_records_for_image = tf_record_io.create_patch_tf_records(image_patches, patch_dir, is_annotated=True)
+
+            annotated_tf_records.extend(tf_records_for_image)
+
+        tf_record_io.output_patch_tf_records(annotated_patches_record_path, annotated_tf_records)
+
+
 
 
 def build_inference_datasets(config):
@@ -1069,26 +1121,24 @@ def build_direct(config):
 
     image_set_root = os.path.join("usr", "data", "image_sets")
 
-    dataset = DataSet({
-        "farm_name": target_farm_name,
-        "field_name": target_field_name,
-        "mission_date": target_mission_date
-    })
+    # dataset = DataSet({
+    #     "farm_name": target_farm_name,
+    #     "field_name": target_field_name,
+    #     "mission_date": target_mission_date
+    # })
 
     annotations_path = os.path.join(image_set_root, target_farm_name, target_field_name, target_mission_date,
                                     "annotations", "annotations_w3c.json")
     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-    allow_empty = extraction_type != "surrounding_boxes"
+    #allow_empty = extraction_type != "surrounding_boxes"
 
-    completed_images = w3c_io.get_completed_images(annotations, allow_empty=allow_empty)
-    num_annotated_images = len(completed_images)
-    num_annotations = w3c_io.get_num_annotations(annotations, require_completed=True)
-    if num_annotated_images == 0 or num_annotations == 0:
-        raise RuntimeError("Insufficient number of annotations for direct training")
+    #completed_images = w3c_io.get_completed_images(annotations, allow_empty=allow_empty)
+    #num_annotated_images = len(completed_images)
+    #num_annotations = w3c_io.get_num_annotations(annotations, require_completed=True)
+    #if num_annotated_images == 0 or num_annotations == 0:
+    #    raise RuntimeError("Insufficient number of annotations for direct training")
 
-
-    num_patches_per_image = m.ceil(source_size / num_annotated_images)
 
     patches = []
     if patch_size == "image_set_dependent":
@@ -1097,43 +1147,56 @@ def build_direct(config):
         image_set_patch_size = patch_size
 
     if extraction_type == "surrounding_boxes":
-        images = dataset.nonempty_completed_images
+        #images = [image_name for image_name in config.arch["training_validation_images"] if annotations[image_name]["boxes"].size > 0]
+        #images = dataset.nonempty_completed_images
+        image_names = [image_name for image_name in config.arch["training_validation_images"] if annotations[image_name]["boxes"].size > 0]
+        
     else:
-        images = dataset.completed_images
+        image_names = config.arch["training_validation_images"]
+        #images = dataset.completed_images
+        #num_patches_per_image = m.ceil(source_size / len(config.arch["training_validation_images"]))
 
-    for image in images:
-        if image.image_name not in config.arch["test_reserved_images"]:
-            if extraction_type == "surrounding_boxes":
-                patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
-                    image, 
-                    annotations[image.image_name], 
-                    num_patches_per_image,
-                    image_set_patch_size))
-            elif extraction_type == "excess_green":
-                patches.extend(ep.extract_patch_records_with_exg(
-                    image, 
-                    annotations[image.image_name], 
-                    num_patches_per_image, 
-                    image_set_patch_size))
-            elif extraction_type == "excess_green_box_combo":
-                patches.extend(ep.extract_patch_records_with_exg_box_combo(
-                    image, 
-                    annotations[image.image_name], 
-                    num_patches_per_image, 
-                    image_set_patch_size))
-            elif extraction_type == "random":
-                patches.extend(ep.extract_patch_records_randomly(
-                    image, 
-                    annotations[image.image_name], 
-                    num_patches_per_image, 
-                    image_set_patch_size))
-            else:
-                raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
+    images_root = os.path.join("usr", "data", "image_sets", 
+                                target_farm_name, target_field_name, target_mission_date, "images")
+    num_patches_per_image = m.ceil(source_size / len(image_names))
+    for image_name in image_names:
+
+        image_path = glob.glob(os.path.join(images_root, image_name + ".*"))[0]
+        image = Image(image_path)
+        #if image.image_name in config.arch["training_validation_images"]:
+        if extraction_type == "surrounding_boxes":
+            patches.extend(ep.extract_patch_records_surrounding_gt_boxes(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image,
+                image_set_patch_size))
+        elif extraction_type == "excess_green":
+            patches.extend(ep.extract_patch_records_with_exg(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image, 
+                image_set_patch_size))
+        elif extraction_type == "excess_green_box_combo":
+            patches.extend(ep.extract_patch_records_with_exg_box_combo(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image, 
+                image_set_patch_size))
+        elif extraction_type == "random":
+            patches.extend(ep.extract_patch_records_randomly(
+                image, 
+                annotations[image.image_name], 
+                num_patches_per_image, 
+                image_set_patch_size))
+        else:
+            raise RuntimeError("Unrecognized extraction type: {}".format(extraction_type))
 
     patches = np.array(patches)
     np.random.shuffle(patches)
     patches = patches[:source_size]
 
+    assert patches.size == source_size
+    logger.info("Total number of training/validation patches is {}.".format(patches.size))
 
     usr_data_root = os.path.join("usr", "data")
     patches_dir = os.path.join(usr_data_root, "models", config.arch["model_uuid"], "source_patches", "0")
@@ -1149,6 +1212,8 @@ def build_direct(config):
     training_patches = patches[training_subset]
     validation_patches = np.delete(patches, training_subset)
 
+
+    logger.info("Extracted {} training patches and {} validation patches".format(training_patches.size, validation_patches.size))
     logger.info("Writing patches...")
     ep.write_annotated_patch_records(training_patches, training_patches_dir)
     ep.write_annotated_patch_records(validation_patches, validation_patches_dir)

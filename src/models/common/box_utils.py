@@ -81,12 +81,12 @@ def box_visibilities_np(boxes, clipped_boxes):
     visibilities = np.divide(clipped_box_areas, box_areas, out=np.zeros_like(clipped_box_areas, dtype="float64"), where=box_areas!=0)
     return visibilities
 
-def clip_and_remove_small_visibility_boxes_np(boxes, patch_coords, min_visibility):
+def clip_boxes_and_get_small_visibility_mask(boxes, patch_coords, min_visibility):
 
     clipped_boxes = clip_boxes_np(boxes, patch_coords)
     box_visibilities = box_visibilities_np(boxes, clipped_boxes)
-    mask = box_visibilities > min_visibility
-    return clipped_boxes[mask]
+    mask = box_visibilities >= min_visibility
+    return clipped_boxes, mask
 
 
 # def get_normalized_patch_wh(training_dataset):
