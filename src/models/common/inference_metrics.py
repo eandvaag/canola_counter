@@ -197,11 +197,13 @@ def calculate_optimal_score_threshold(annotations, predictions, image_names):
 
     # currently assumes only class is plant class
 
-    
+
+    logger = logging.getLogger(__name__)    
 
     optimal_thresh_val = None
     optimal_mean_abs_diff = np.inf
-    thresh_vals = np.arange(0.5, 1.0, 0.01)
+    prev_mean_abs_diff = np.inf
+    thresh_vals = np.arange(0.0, 1.0, 0.01)
     for thresh_val in tqdm.tqdm(thresh_vals, desc="Calculating optimal threshold value"):
         abs_diffs = []
         for image_name in image_names:
@@ -209,9 +211,17 @@ def calculate_optimal_score_threshold(annotations, predictions, image_names):
             num_predictions = (np.where(np.array(predictions["image_predictions"][image_name]["pred_scores"]) >= thresh_val)[0]).size
             abs_diffs.append(abs(num_annotations - num_predictions))
         mean_abs_diff = float(np.mean(abs_diffs))
-        if mean_abs_diff < optimal_mean_abs_diff:
+
+        if prev_mean_abs_diff < mean_abs_diff:
+            break
+
+        if mean_abs_diff <= optimal_mean_abs_diff:
             optimal_mean_abs_diff = mean_abs_diff
             optimal_thresh_val = thresh_val
+
+        prev_mean_abs_diff = mean_abs_diff
+
+    logger.info("Optimal score threshold for all images is: {}".format(optimal_thresh_val))
 
     return optimal_thresh_val, optimal_mean_abs_diff
 

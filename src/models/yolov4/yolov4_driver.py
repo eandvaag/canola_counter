@@ -819,12 +819,12 @@ def generate_predictions(config):
         driver_utils.clip_image_boxes(predictions["image_predictions"])
 
         
-        out_dir = os.path.join(config.model_dir, "image_pre_nms")
+        #out_dir = os.path.join(config.model_dir, "image_pre_nms")
         #nt_out_dir = os.path.join(config.model_dir, "nt_image_pre_nms")
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+        #f not os.path.exists(out_dir):
+        #    os.makedirs(out_dir)
         #    os.makedirs(nt_out_dir)
-        output_image_predictions(predictions["image_predictions"], out_dir)
+        #output_image_predictions(predictions["image_predictions"], out_dir)
         #output_image_predictions(predictions["image_predictions"], nt_out_dir, nt=True)
 
         driver_utils.apply_nms_to_image_boxes(predictions["image_predictions"], 
@@ -833,12 +833,12 @@ def generate_predictions(config):
         #driver_utils.apply_careful_nms_to_image_boxes(predictions["image_predictions"], iou_thresh=0.1)
 
 
-        out_dir = os.path.join(config.model_dir, "image_post_nms")
+        #out_dir = os.path.join(config.model_dir, "image_post_nms")
         #nt_out_dir = os.path.join(config.model_dir, "nt_image_post_nms")
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+        #if not os.path.exists(out_dir):
+        #    os.makedirs(out_dir)
             #os.makedirs(nt_out_dir)
-        output_image_predictions(predictions["image_predictions"], out_dir)
+        #output_image_predictions(predictions["image_predictions"], out_dir)
         #output_image_predictions(predictions["image_predictions"], nt_out_dir, nt=True)
 
 
@@ -1400,13 +1400,13 @@ def calculate_optimal_score_thresh(config):
 
             #patch = cv2.cvtColor(cv2.imread(patch_path), cv2.COLOR_BGR2RGB)
             #ratio = np.array(image.shape[:2]) / np.array(self.input_image_shape[:2])
-            new_h = round(ratio[0] * config.arch["input_image_shape"][0])
-            new_w = round(ratio[1] * config.arch["input_image_shape"][1])
-            resized_patch = tf.image.resize(batch_images[i], size=np.array([new_h, new_w], dtype=np.int32)).numpy().astype(np.uint8)
 
+            #new_h = round(ratio[0] * config.arch["input_image_shape"][0])
+            #new_w = round(ratio[1] * config.arch["input_image_shape"][1])
+            #resized_patch = tf.image.resize(batch_images[i], size=np.array([new_h, new_w], dtype=np.int32)).numpy().astype(np.uint8)
 
-            output_patch_prediction(resized_patch, pred_patch_abs_boxes,
-                pred_patch_classes, pred_patch_scores, os.path.join(debug_out_dir, patch_name) + ".png")
+            #output_patch_prediction(resized_patch, pred_patch_abs_boxes,
+            #    pred_patch_classes, pred_patch_scores, os.path.join(debug_out_dir, patch_name) + ".png")
 
             patch_results[patch_name] = {
                 "pred_scores": pred_patch_scores,
@@ -1454,8 +1454,8 @@ def calculate_optimal_score_thresh(config):
 
 
     optimal_thresh_val = None
-    optimal_sum_abs_diff = np.inf
-    prev_sum_abs_diff = np.inf
+    optimal_mean_abs_diff = np.inf
+    prev_mean_abs_diff = np.inf
     thresh_vals = np.arange(0.0, 1.0, 0.01)
     #print_thresh_vals = [0.5, 0.55, 0.60, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
     for thresh_val in tqdm.tqdm(thresh_vals, desc="Calculating optimal threshold value"):
@@ -1466,22 +1466,22 @@ def calculate_optimal_score_thresh(config):
             num_pred_boxes = (np.where(patch_results[patch_name]["pred_scores"] >= thresh_val)[0]).size
 
             abs_diffs.append(abs(num_boxes - num_pred_boxes))
-        sum_abs_diff = float(np.sum(abs_diffs))
+        mean_abs_diff = float(np.mean(abs_diffs))
 
-        print("thresh_val: {}. sum_abs_diff: {}. best_thresh_val: {}. optimal_sum_abs_diff: {}.".format(
-            thresh_val, sum_abs_diff, optimal_thresh_val, optimal_sum_abs_diff
+        logger.info("thresh_val: {}. sum_abs_diff: {}. best_thresh_val: {}. optimal_sum_abs_diff: {}.".format(
+            thresh_val, mean_abs_diff, optimal_thresh_val, optimal_mean_abs_diff
         ))
-        if prev_sum_abs_diff < sum_abs_diff:
-            print("breaking at thresh_val", thresh_val)
+        if prev_mean_abs_diff < mean_abs_diff:
+            logger.info("breaking at thresh_val {}".format(thresh_val))
             break
 
-        if sum_abs_diff <= optimal_sum_abs_diff:
-            optimal_sum_abs_diff = sum_abs_diff
+        if mean_abs_diff <= optimal_mean_abs_diff:
+            optimal_mean_abs_diff = mean_abs_diff
             optimal_thresh_val = thresh_val
 
-        prev_sum_abs_diff = sum_abs_diff
+        prev_mean_abs_diff = mean_abs_diff
 
-    logger.info("Optimal train/val score threshold is {}".format(optimal_thresh_val))
+    logger.info("Optimal score threshold for training patches is: {}".format(optimal_thresh_val))
     # #optimal_thresh_record_path = os.path.join(config.model_dir, "optimal_score_threshold.json")
     # #optimal_thresh_record = {
     # #    "optimal_thresh": optimal_thresh_val
@@ -1490,7 +1490,7 @@ def calculate_optimal_score_thresh(config):
 
     #shutil.rmtree(patches_dir)
 
-    return optimal_thresh_val, optimal_sum_abs_diff
+    return optimal_thresh_val, optimal_mean_abs_diff
 
 
 
