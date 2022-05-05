@@ -1,40 +1,40 @@
 import numpy as np
-import os
-import shutil
-import tqdm
+#import os
+#import shutil
+#import tqdm
 import cv2
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import plotly.graph_objects as go
-import plotly.express as px
+#import matplotlib.pyplot as plt
+#import matplotlib.colors as mcolors
+#import plotly.graph_objects as go
+#import plotly.express as px
 
-from io_utils import json_io
+#from io_utils import json_io
 
-import models.common.decode_predictions as decode_predictions
+#import models.common.decode_predictions as decode_predictions
 
 
-def draw_boxes_on_img(img_array,
-                      pred_boxes,
-                      pred_classes,
-                      pred_scores,
-                      class_map,
-                      gt_boxes=None,
-                      patch_coords=None,
-                      display_class=True,
-                      display_score=True):
+def draw_boxes_on_image(image_array,
+                        pred_boxes,
+                        pred_classes,
+                        pred_scores,
+                        class_map,
+                        gt_boxes=None,
+                        patch_coords=None,
+                        display_class=True,
+                        display_score=True):
 
     if display_class:
         rev_class_map = dict([(v, k) for k, v in class_map.items()])
 
-    out_array = np.copy(img_array)
+    out_array = np.copy(image_array)
 
     if gt_boxes is not None:
-        shapes = np.zeros_like(img_array, np.uint8)
+        shapes = np.zeros_like(image_array, np.uint8)
         for gt_box in gt_boxes:
             cv2.rectangle(shapes, (gt_box[1], gt_box[0]), (gt_box[3], gt_box[2]), (255, 0, 0), -1)
         alpha = 0.25
         mask = shapes.astype(bool)
-        out_array[mask] = cv2.addWeighted(img_array, alpha, shapes, 1-alpha, 0)[mask]
+        out_array[mask] = cv2.addWeighted(image_array, alpha, shapes, 1-alpha, 0)[mask]
 
 
     if patch_coords is not None:
@@ -48,7 +48,7 @@ def draw_boxes_on_img(img_array,
                                  (min(pred_box[3], out_array.shape[1]), min(pred_box[2], out_array.shape[0])),
                                  (0, 255, 0), 1)
 
-        if display_class or display_class:
+        if display_class or display_score:
             if display_class and display_score:
                 label = rev_class_map[pred_class] + ": " + str(round(pred_score, 2))
             elif display_class:
@@ -67,41 +67,45 @@ def draw_boxes_on_img(img_array,
 
 
 
-def output_patch_predictions(out_dir, patch_predictions_lst, class_map, patch_paths):
+# def output_patch_predictions(out_dir, patch_predictions_lst, class_map, patch_paths):
 
-    for patch_path in patch_paths:
+#     for patch_path in patch_paths:
 
-        patch_arrays = []
+#         patch_arrays = []
 
-        for i, patch_predictions in enumerate(patch_predictions_lst):
+#         for i, patch_predictions in enumerate(patch_predictions_lst):
 
-            patch_pred = patch_predictions[patch_path]
+#             patch_pred = patch_predictions[patch_path]
 
-            patch_array = cv2.imread(patch_path)
+#             patch_array = cv2.imread(patch_path)
 
-            gt_boxes = patch_pred["patch_abs_boxes"] if "patch_abs_boxes" in patch_pred else None
+#             gt_boxes = patch_pred["patch_abs_boxes"] if "patch_abs_boxes" in patch_pred else None
 
-            patch_array = draw_boxes_on_img(patch_array,
-                                           patch_pred["pred_patch_abs_boxes"],
-                                           patch_pred["pred_classes"], 
-                                           patch_pred["pred_scores"],
-                                           class_map,
-                                           gt_boxes=gt_boxes,
-                                           display_class=True,
-                                           display_score=True)
+#             patch_array = draw_boxes_on_img(patch_array,
+#                                            patch_pred["pred_patch_abs_boxes"],
+#                                            patch_pred["pred_classes"], 
+#                                            patch_pred["pred_scores"],
+#                                            class_map,
+#                                            gt_boxes=gt_boxes,
+#                                            display_class=True,
+#                                            display_score=True)
 
-            patch_array = cv2.cvtColor(patch_array, cv2.COLOR_BGR2RGB)
+#             patch_array = cv2.cvtColor(patch_array, cv2.COLOR_BGR2RGB)
 
-            patch_arrays.append(patch_array)
+#             patch_arrays.append(patch_array)
 
-        patch_arrays = np.stack(patch_arrays, axis=0)
+#         patch_arrays = np.stack(patch_arrays, axis=0)
 
-        fig = px.imshow(patch_arrays, animation_frame=0, binary_string=True,
-                        labels=dict(animation_frame="slice"), binary_compression_level=5)
+#         fig = px.imshow(patch_arrays, animation_frame=0, binary_string=True,
+#                         labels=dict(animation_frame="slice"), binary_compression_level=5)
 
-        out_name = os.path.basename(patch_path)[:-4] + "_predictions.html"
+#         out_name = os.path.basename(patch_path)[:-4] + "_predictions.html"
 
-        fig.write_html(os.path.join(out_dir, out_name))
+#         fig.write_html(os.path.join(out_dir, out_name))
+
+
+
+
 
 
     # for patch_path, patch_pred in tqdm.tqdm(patch_predictions, desc="Outputting patch predictions"):
@@ -223,84 +227,84 @@ def output_image_predictions(out_dir, img_predictions_lst, class_map, img_paths)
 
 
 
-def loss_plot(out_dir, model_instance_name, model_dir):
+# def loss_plot(out_dir, model_instance_name, model_dir):
 
-    loss_record_path = os.path.join(model_dir, "loss_record.json")
-    save_path = os.path.join(out_dir, "loss_plot.svg")
+#     loss_record_path = os.path.join(model_dir, "loss_record.json")
+#     save_path = os.path.join(out_dir, "loss_plot.svg")
 
-    loss_record = json_io.load_json(loss_record_path)
+#     loss_record = json_io.load_json(loss_record_path)
 
-    train_loss_values = [loss_record[epoch]["train_loss"] for epoch in loss_record.keys()]
-    val_loss_values = [loss_record[epoch]["val_loss"] for epoch in loss_record.keys()]
-    epochs = [int(epoch) for epoch in loss_record.keys()]
+#     train_loss_values = [loss_record[epoch]["train_loss"] for epoch in loss_record.keys()]
+#     val_loss_values = [loss_record[epoch]["val_loss"] for epoch in loss_record.keys()]
+#     epochs = [int(epoch) for epoch in loss_record.keys()]
 
-    plt.figure()
-    plt.plot(epochs, train_loss_values, "steelblue", label="Training")
-    plt.plot(epochs, val_loss_values, "tomato", label="Validation")
-    plt.title(model_instance_name + " Loss Values")
-    plt.xlabel("Epochs")
-    plt.ylabel("Loss")
-    plt.legend()
-    plt.savefig(save_path)
-    plt.close()
-
-
-
-def image_counts(out_dir, model_instance_names, pred_stats_lst):
-
-    data = []
-
-    for i, (model_instance_name, pred_stats) in enumerate(zip(model_instance_names, pred_stats_lst)):
-
-        img_paths = sorted(pred_stats["image_results"].keys())
-        img_names = [os.path.basename(img_path)[:-4] for img_path in img_paths]
-        pred_counts = [pred_stats["image_results"][img_path]["num_pred"] for img_path in img_paths]
+#     plt.figure()
+#     plt.plot(epochs, train_loss_values, "steelblue", label="Training")
+#     plt.plot(epochs, val_loss_values, "tomato", label="Validation")
+#     plt.title(model_instance_name + " Loss Values")
+#     plt.xlabel("Epochs")
+#     plt.ylabel("Loss")
+#     plt.legend()
+#     plt.savefig(save_path)
+#     plt.close()
 
 
-        if i == 0 and pred_stats["is_annotated"]:
-            gt_counts = [pred_stats["image_results"][img_path]["num_actual"] for img_path in img_paths]
-            data.append(go.Bar(name="Ground Truth", x=img_names, y=gt_counts))
 
-        data.append(go.Bar(name=model_instance_name, x=img_names, y=pred_counts))
+# def image_counts(out_dir, model_instance_names, pred_stats_lst):
 
-    fig = go.Figure(data=data)
-    fig.update_layout(
-        barmode='group',
-        title="Ground Truth and Predicted Counts",
-        xaxis_title="Image",
-        yaxis_title="Count",
-        font=dict(
-            family="verdana",
-            size=18,
-            color="darkslategray"
-        )
-    )
-    out_path = os.path.join(out_dir, "image_counts.html")
-    fig.write_html(out_path)
+#     data = []
+
+#     for i, (model_instance_name, pred_stats) in enumerate(zip(model_instance_names, pred_stats_lst)):
+
+#         img_paths = sorted(pred_stats["image_results"].keys())
+#         img_names = [os.path.basename(img_path)[:-4] for img_path in img_paths]
+#         pred_counts = [pred_stats["image_results"][img_path]["num_pred"] for img_path in img_paths]
 
 
-def time_vs_mAP(out_dir, model_instance_names, pred_lst, pred_stats_lst, metric="coco_score"):
+#         if i == 0 and pred_stats["is_annotated"]:
+#             gt_counts = [pred_stats["image_results"][img_path]["num_actual"] for img_path in img_paths]
+#             data.append(go.Bar(name="Ground Truth", x=img_names, y=gt_counts))
 
-    fig = go.Figure()
-    for (model_instance_name, pred, pred_stats) in zip(model_instance_names, pred_lst, pred_stats_lst):
+#         data.append(go.Bar(name=model_instance_name, x=img_names, y=pred_counts))
 
-        per_patch_inference_time = pred["per_patch_inference_time"]
-        score = pred_stats["img_summary_results"]["coco_score"]
+#     fig = go.Figure(data=data)
+#     fig.update_layout(
+#         barmode='group',
+#         title="Ground Truth and Predicted Counts",
+#         xaxis_title="Image",
+#         yaxis_title="Count",
+#         font=dict(
+#             family="verdana",
+#             size=18,
+#             color="darkslategray"
+#         )
+#     )
+#     out_path = os.path.join(out_dir, "image_counts.html")
+#     fig.write_html(out_path)
 
-        fig.add_trace(go.Scatter(x=[per_patch_inference_time], y=[score],
-                                 mode="markers", marker=dict(size=5), name=model_instance_name))
+
+# def time_vs_mAP(out_dir, model_instance_names, pred_lst, pred_stats_lst, metric="coco_score"):
+
+#     fig = go.Figure()
+#     for (model_instance_name, pred, pred_stats) in zip(model_instance_names, pred_lst, pred_stats_lst):
+
+#         per_patch_inference_time = pred["per_patch_inference_time"]
+#         score = pred_stats["img_summary_results"]["coco_score"]
+
+#         fig.add_trace(go.Scatter(x=[per_patch_inference_time], y=[score],
+#                                  mode="markers", marker=dict(size=5), name=model_instance_name))
 
 
-    fig.update_layout(
-        title="Inference Time vs COCO mAP",
-        xaxis_title="Per-Patch Inference Time",
-        yaxis_title="COCO mAP",
-        font=dict(
-            family="verdana",
-            size=18,
-            color="darkslategray"
-        )
-    )
+#     fig.update_layout(
+#         title="Inference Time vs COCO mAP",
+#         xaxis_title="Per-Patch Inference Time",
+#         yaxis_title="COCO mAP",
+#         font=dict(
+#             family="verdana",
+#             size=18,
+#             color="darkslategray"
+#         )
+#     )
 
-    out_path = os.path.join(out_dir, "inference_time_vs_mAP.html")
-    fig.write_html(out_path)
+#     out_path = os.path.join(out_dir, "inference_time_vs_mAP.html")
+#     fig.write_html(out_path)

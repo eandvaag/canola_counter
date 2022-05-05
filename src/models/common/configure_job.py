@@ -278,7 +278,27 @@ def fill_job_config(job_config):
                             "parameters": {
                                 "probability": 0.5
                             }
-                        }                   
+                        },
+                        {
+                            "type": "brightness_contrast",
+                            "parameters": {
+                                "probability": 1.0, 
+                                "brightness_limit": [-0.2, 0.2], 
+                                "contrast_limit": [-0.2, 0.2]
+                            }
+                        }
+                        # {
+                        #     "type": "affine",
+                        #     "parameters": {
+                        #         "probability": 1.0, 
+                        #         "scale": 1.0, 
+                        #         "translate_percent": (-0.3, 0.3), 
+                        #         "rotate": 0, 
+                        #         "shear": 0
+                        #     }
+                        # }
+
+
                     ],
 
                     "min_num_epochs": 15,
@@ -312,7 +332,7 @@ def fill_job_config(job_config):
             #         #"patch_extraction_params": None
             #     }
             # ],
-            "patch_border_buffer_percent": 0.10,
+            #"patch_border_buffer_percent": 0.10,
             "batch_size": 16,
             "patch_nms_iou_thresh": 0.4,
             "image_nms_iou_thresh": 0.4,

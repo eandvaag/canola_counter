@@ -25,15 +25,35 @@ class DataLoader(ABC):
         image = tf.image.resize(images=image, size=self.input_image_shape[:2])
         return image, ratio
 
+    def _box_preprocess(self, boxes):
+
+        #resize_ratio = [self.input_image_shape[0] / h, self.input_image_shape[1] / w]
+
+        boxes = tf.math.round(
+            tf.stack([
+                boxes[:, 0] * self.input_image_shape[1], #resize_ratio[1],
+                boxes[:, 1] * self.input_image_shape[0], #resize_ratio[0],
+                boxes[:, 2] * self.input_image_shape[1], #resize_ratio[1],
+                boxes[:, 3] * self.input_image_shape[0], #resize_ratio[0]
+
+            ], axis=-1)
+        )
+        boxes = box_utils.convert_to_xywh_tf(boxes)
+        return boxes
+
+
+
+
     def get_model_input_shape(self):
         return self.input_image_shape
 
 
 class InferenceDataLoader(DataLoader):
 
-    def __init__(self, tf_record_paths, config):
+    def __init__(self, tf_record_paths, config, mask_border_boxes=False):
         super().__init__(tf_record_paths, config)
         self.batch_size = config.inference["batch_size"]
+        self.mask_border_boxes = mask_border_boxes
 
     def create_dataset(self):
         dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
@@ -60,10 +80,44 @@ class InferenceDataLoader(DataLoader):
 
     def _preprocess(self, sample):
         image_path = bytes.decode((sample["patch_path"]).numpy())
-        image = tf.cast(cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB), dtype=tf.float32)
+        image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
 
         #image = tf.io.read_file(filename=image_path)
         #image = tf.io.decode_image(contents=image, channels=3, dtype=tf.dtypes.float32)
+        
+        if self.mask_border_boxes:
+            #boxes = (tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4))).numpy().astype(np.float32)
+            patch_abs_boxes = tf.reshape(tf.sparse.to_dense(sample["patch_abs_boxes"]), shape=(-1, 4)).numpy().astype(np.int64)
+            edge_boxes_mask = box_utils.get_edge_boxes_mask(patch_abs_boxes, image.shape[:2])
+            edge_boxes = patch_abs_boxes[edge_boxes_mask]
+            non_edge_boxes = patch_abs_boxes[np.logical_not(edge_boxes_mask)]
+
+            mask = np.full(image.shape[:2], False)
+            for box in edge_boxes:
+                mask[box[0]:box[2]+1, box[1]:box[3]+1] = True
+            for box in non_edge_boxes:
+                mask[box[0]:box[2]+1, box[1]:box[3]+1] = False
+
+
+            image[mask] = [0, 0, 0]
+            #sample["patch_normalized_boxes"] = sample["patch_normalized_boxes"][edge_boxes_mask]
+            sample["masked_box_count"] = non_edge_boxes.shape[0]
+            
+
+
+
+            
+            #classes = tf.sparse.to_dense(sample["patch_classes"]).numpy().astype(np.uint8)
+
+            #image = tf.convert_to_tensor(image, dtype=tf.float32)
+            #boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
+            #classes = tf.convert_to_tensor(classes, dtype=tf.uint8) #tf.float32)
+
+
+            # image, _ = self._image_preprocess(image)
+            #boxes = self._box_preprocess(boxes)
+            
+        image = tf.cast(image, dtype=tf.float32)
 
         image, ratio = self._image_preprocess(image)
         return image, ratio
@@ -102,7 +156,6 @@ class TrainDataLoader(DataLoader):
 
         autotune = tf.data.experimental.AUTOTUNE
         dataset = dataset.prefetch(autotune)
-
 
         # for i, batch_data in enumerate(dataset):
 
@@ -171,22 +224,6 @@ class TrainDataLoader(DataLoader):
 
         return image, boxes, classes
 
-
-    def _box_preprocess(self, boxes):
-
-        #resize_ratio = [self.input_image_shape[0] / h, self.input_image_shape[1] / w]
-
-        boxes = tf.math.round(
-            tf.stack([
-                boxes[:, 0] * self.input_image_shape[1], #resize_ratio[1],
-                boxes[:, 1] * self.input_image_shape[0], #resize_ratio[0],
-                boxes[:, 2] * self.input_image_shape[1], #resize_ratio[1],
-                boxes[:, 3] * self.input_image_shape[0], #resize_ratio[0]
-
-            ], axis=-1)
-        )
-        boxes = box_utils.convert_to_xywh_tf(boxes)
-        return boxes
 
 
 
@@ -345,22 +382,6 @@ class PreLoadedTrainDataLoader(DataLoader):
         )
         boxes = box_utils.convert_to_xywh_tf(boxes)
         #boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
-        return boxes
-
-    def _box_preprocess(self, boxes):
-
-        #resize_ratio = [self.input_image_shape[0] / h, self.input_image_shape[1] / w]
-
-        boxes = tf.math.round(
-            tf.stack([
-                boxes[:, 0] * self.input_image_shape[1], #resize_ratio[1],
-                boxes[:, 1] * self.input_image_shape[0], #resize_ratio[0],
-                boxes[:, 2] * self.input_image_shape[1], #resize_ratio[1],
-                boxes[:, 3] * self.input_image_shape[0], #resize_ratio[0]
-
-            ], axis=-1)
-        )
-        boxes = box_utils.convert_to_xywh_tf(boxes)
         return boxes
 
 

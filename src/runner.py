@@ -195,6 +195,256 @@ def plot_tSNE():
     job_interface.run_job(job_uuid)
 
 
+
+def calc_sim_mAP_tuples():
+    sim_map_tuples = []
+    kept_runs_root = os.path.join("usr", "data", "runs", "kept_runs")
+    for run_path in glob.glob(os.path.join(kept_runs_root, "*")):
+
+        run_config = json_io.load_json(run_path)
+        target_farm_name =  run_config["target_datasets"][0]["target_farm_name"]
+        target_field_name =  run_config["target_datasets"][0]["target_field_name"]
+        target_mission_date =  run_config["target_datasets"][0]["target_mission_date"]
+
+        for job_uuid in run_config["job_uuids"]:
+            job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+            job_config = json_io.load_json(job_config_path)
+
+            model_uuid = job_config["model_info"][0]["model_uuid"]
+
+            metrics_path = os.path.join("usr", "data", "results", target_farm_name,
+                                    target_field_name, target_mission_date, job_uuid, model_uuid,
+                                    "metrics.json")
+            metrics = json_io.load_json(metrics_path)
+
+            graph_stats_path = os.path.join("usr", "data", "models", model_uuid, "graph_stats.json")
+
+            if os.path.exists(graph_stats_path):
+                graph_stats = json_io.load_json(graph_stats_path)
+                distances_size = graph_stats["records"][0]["selected_distances.size"]
+
+                mean_dist = graph_stats["records"][0]["mean_distance"]
+                ms_coco_mAP = metrics["point"]["Image MS COCO mAP"]["---"]
+
+                sim_map_tuples.append((target_farm_name + "::" + target_field_name + "::" + target_mission_date, 
+                                        distances_size, mean_dist, ms_coco_mAP))
+
+                #print("({}, {})".format(mean_dist, ms_coco_mAP))
+
+    s = sorted(sim_map_tuples)
+    for t in s:
+        print(t[0] + ", " + str(t[1]) + ", " + str(t[2]) + ", " + str(t[3]))
+
+
+
+
+def assign_relative_error():
+    image_set_stats = {}
+    #metric = "MS COCO mAP"
+    scores = []
+    image_sets = []
+    
+    kept_runs_root = os.path.join("usr", "data", "runs", "kept_runs")
+    for run_path in glob.glob(os.path.join(kept_runs_root, "*")):
+
+        run_config = json_io.load_json(run_path)
+        target_farm_name =  run_config["target_datasets"][0]["target_farm_name"]
+        target_field_name =  run_config["target_datasets"][0]["target_field_name"]
+        target_mission_date =  run_config["target_datasets"][0]["target_mission_date"]
+        results_path = os.path.join("usr", "data", "runs", "display", 
+                     target_farm_name, target_field_name, target_mission_date, "results.json")
+        results = json_io.load_json(results_path)
+        
+        annotations_path = os.path.join("usr", "data", "image_sets",
+                            target_farm_name, target_field_name, target_mission_date,
+                            "annotations", "annotations_w3c.json")
+        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+        completed_images = w3c_io.get_completed_images(annotations)
+        rel_error_results = []
+        rel_opt_error_results = []
+        for job_uuid in run_config["job_uuids"]:
+            job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+            job_config = json_io.load_json(job_config_path)
+
+            model_uuid = job_config["model_info"][0]["model_uuid"]
+            predictions_path = os.path.join("usr", "data", "results", target_farm_name,
+                                    target_field_name, target_mission_date, job_uuid, model_uuid,
+                                    "predictions.json")
+            predictions = json_io.load_json(predictions_path)
+
+
+            metrics_path = os.path.join("usr", "data", "results", target_farm_name,
+                                    target_field_name, target_mission_date, job_uuid, model_uuid,
+                                    "metrics.json")
+            metrics = json_io.load_json(metrics_path)
+
+            relative_errors = []
+            relative_opt_errors = []
+            for image_name in completed_images:
+                pred_plant_count = predictions["image_predictions"][image_name]["pred_class_counts"]["plant"]
+                actual_plant_count = annotations[image_name]["boxes"].shape[0]
+                relative_error = ((abs(pred_plant_count - actual_plant_count)) / actual_plant_count) * 100
+                relative_errors.append(relative_error)
+
+                thresh_val = metrics["point"]["optimal_score_threshold"]["threshold_value"]
+                pred_opt_plant_count = (np.where(np.array(predictions["image_predictions"][image_name]["pred_scores"]) >= thresh_val)[0]).size
+                relative_opt_error = ((abs(pred_opt_plant_count - actual_plant_count)) / actual_plant_count) * 100
+                relative_opt_errors.append(relative_opt_error)
+
+            rel_error_results.append(np.mean(relative_errors))
+            rel_opt_error_results.append(np.mean(relative_opt_errors))
+
+        i = 0
+        res_d = {
+            "graph_subset": [], 
+            "even_subset": [], 
+            "direct": []
+        }
+        res_d_opt = {
+            "graph_subset": [], 
+            "even_subset": [], 
+            "direct": []
+        }        
+        for dataset_size in run_config["dataset_sizes"]:
+            for method in run_config["methods"]:
+                
+                res_d[method].append(rel_error_results[i])
+                res_d_opt[method].append(rel_opt_error_results[i])
+                i += 1
+        inds = np.argsort(run_config["dataset_sizes"])
+
+        for method in res_d.keys():
+            results["results"][method]["Image Mean Percent Error in Count"] = (np.array(res_d[method])[inds]).tolist()
+            results["results"][method]["Image Mean Percent Error in Count at Optimal Score Thresh."] = (np.array(res_d_opt[method])[inds]).tolist()
+
+
+        print("results for : {}-{}-{}: {}".format(target_farm_name, 
+        target_field_name, target_mission_date, results))
+        print()
+        print("--------")
+        print()
+
+        json_io.save_json(results_path, results)
+
+    #     farm_name = os.path.basename(farm_path)
+    #     if farm_name not in image_set_stats:
+    #         image_set_stats[farm_name] = {}
+    #     for field_path in glob.glob(os.path.join(farm_path, "*")):
+    #         field_name = os.path.basename(field_path)
+    #         if field_name not in image_set_stats[farm_name]:
+    #             image_set_stats[farm_name][field_name] = {}
+    #         for mission_path in glob.glob(os.path.join(field_path, "*")):
+    #             mission_date = os.path.basename(mission_path)
+
+    #             if len(mission_date) == 10:
+    #                 results_path = os.path.join(mission_path, "results.json")
+    #                 results = json_io.load_json(results_path)
+    #                 gs_res = np.array(results["results"]["graph_subset"][metric])
+    #                 es_res = np.array(results["results"]["even_subset"][metric])
+    #                 diff_sum = np.sum(gs_res - es_res)
+
+    #                 image_sets.append(farm_name + "::" + field_name + "::" + mission_date)
+    #                 scores.append(diff_sum)
+
+    # scores = np.array(scores)
+    # image_sets = np.array(image_sets)
+
+    # inds = np.argsort(-scores)
+    # sorted_scores = scores[inds]
+    # sorted_image_sets = image_sets[inds]
+
+    # print("sorted_order")
+    # for i in range(len(sorted_image_sets)):
+    #     print("ImageSet: {} | Score: {}".format(sorted_image_sets[i], sorted_scores[i]))
+
+
+
+def display_results_order():
+    image_set_stats = {}
+    metric = "Image Mean Percent Error in Count at Optimal Score Thresh." #"MS COCO mAP"
+
+    scores = []
+    image_sets = []
+    display_root = os.path.join("usr", "data", "runs", "display")
+    for farm_path in glob.glob(os.path.join(display_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        if farm_name not in image_set_stats:
+            image_set_stats[farm_name] = {}
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            if field_name not in image_set_stats[farm_name]:
+                image_set_stats[farm_name][field_name] = {}
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                if len(mission_date) == 10 or mission_date == "2021-06-01-high-res":
+                    results_path = os.path.join(mission_path, "results.json")
+                    results = json_io.load_json(results_path)
+                    gs_res = np.array(results["results"]["graph_subset"][metric])
+                    es_res = np.array(results["results"]["even_subset"][metric])
+                    dir_res = np.array(results["results"]["direct"][metric])
+                    #diff_sum = np.sum((gs_res - es_res) / (dir_res - es_res))
+                    diff_sum = np.sum(((dir_res - gs_res))) # / (es_res - dir_res)**2)
+                    #diff_sum = np.sum(gs_res / ((dir_res - es_res) / 2)) / 6
+                    #diff_sum = np.sum((es_res - gs_res) / (es_res - dir_res))
+
+                    image_sets.append(farm_name + "::" + field_name + "::" + mission_date)
+                    scores.append(diff_sum)
+
+    scores = np.array(scores)
+    print("scores", scores)
+    # max_score = np.max(scores)
+    # print("max score", max_score)
+    # scores /= max_score
+    # print("scores", scores)
+    # scores = 1 - scores
+    # print("scores", scores)
+    image_sets = np.array(image_sets)
+
+    inds = np.argsort(-scores)
+    sorted_scores = scores[inds]
+    sorted_image_sets = image_sets[inds]
+
+    print("sorted_order")
+    for i in range(len(sorted_image_sets)):
+        print("ImageSet: {} | Score: {}".format(sorted_image_sets[i], sorted_scores[i]))
+
+                    
+
+def gather_image_set_stats():
+    image_set_stats = {}
+    image_set_root = os.path.join("usr", "data", "image_sets")
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        if farm_name not in image_set_stats:
+            image_set_stats[farm_name] = {}
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            if field_name not in image_set_stats[farm_name]:
+                image_set_stats[farm_name][field_name] = {}
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+                # if mission_date not in record[farm_name][field_name]:
+                #     record[farm_name][field_name][mission_date] = {}
+
+                annotations_path = os.path.join(image_set_root, farm_name, field_name, mission_date,
+                                             "annotations", "annotations_w3c.json")
+                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+                num_completed_images = len(w3c_io.get_completed_images(annotations))
+                num_annotations = 0
+                for image_name in annotations.keys():
+                    num_annotations += annotations[image_name]["boxes"].shape[0]
+                image_set_stats[farm_name][field_name][mission_date] = {
+                    "num_annotated_images": num_completed_images,
+                    "num_annotations": num_annotations
+                }
+
+    display_dir = os.path.join("usr", "data", "runs", "display")
+    image_set_stats_path = os.path.join(display_dir, "image_set_stats.json")
+    json_io.save_json(image_set_stats_path, image_set_stats)
+                
+
+
 def run_kaylie_test():
     dataset_sizes = [20000] #3000] #[15000] #250] #10000]
     methods = ["direct"]
@@ -251,7 +501,7 @@ def run_kaylie_test():
 
                 job_config = {
                     "job_uuid": job_uuid,
-                    "replications": 1,
+                    "replications": 3,
                     "job_name": "test_name_" + job_uuid,
                     "source_construction_params": {
                         "method_name": method,
@@ -650,3 +900,65 @@ def report(run_uuid):
 
 # if __name__ == "__main__":
 #     run_tests()
+
+
+
+
+
+def run_test():
+    dataset_sizes = [20000] #20000] #3000] #[15000] #250] #10000]
+    methods = ["direct"]
+
+    method_params = {
+            "match_method": "bipartite_b_matching",
+            "extraction_type": "excess_green_box_combo",
+            "patch_size": "image_set_dependent",
+            "exclude_target_from_source": True 
+    }
+
+    target_datasets = [
+        {
+            "target_farm_name": "row_spacing",
+            "target_field_name": "brown",
+            "target_mission_date": "2021-06-01" #-low-res"
+        }
+    ]
+
+    epoch_patience = {
+        256: 30,
+        1024: 30,
+        4096: 30,
+        8192: 30,
+        16384: 30
+    }
+
+    for dataset in target_datasets:
+        for dataset_size in dataset_sizes:
+            for i, method in enumerate(methods):
+                job_uuid = str(uuid.uuid4())
+
+                job_config = {
+                    "job_uuid": job_uuid,
+                    "replications": 1,
+                    "job_name": "test_name_" + "translate_test", #job_uuid,
+                    "source_construction_params": {
+                        "method_name": method,
+                        "method_params": method_params,
+                        "size": dataset_size
+                    },
+                    "target_farm_name": dataset["target_farm_name"],
+                    "target_field_name": dataset["target_field_name"],
+                    "target_mission_date": dataset["target_mission_date"],
+                    "predict_on_completed_only": True, #True,
+                    "supplementary_targets": [],
+                    "tol_test": 30, #30, #epoch_patience[dataset_size]
+                    "test_reserved_images": ["204", "311", "805", "810", "817", "819", "821", "824"],
+                    "variation_config": {
+                        "param_configs": ["inference", "inference"],
+                        "param_names": ["rm_edge_boxes", "patch_border_buffer_percent"],
+                        "param_values": [[True, None]] #, [False, 0.10], [False, None]]
+                    }
+                }
+                job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+                json_io.save_json(job_config_path, job_config)
+                job_interface.run_job(job_uuid)

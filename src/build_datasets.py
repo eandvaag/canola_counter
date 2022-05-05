@@ -19,54 +19,54 @@ import manual_descriptor as md
 from io_utils import w3c_io, tf_record_io
 
 
-def build_train_val_thresh_dataset(config):
-    targets = [
-        {
-            "farm_name": config.inference["target_farm_name"],
-            "field_name": config.inference["target_field_name"],
-            "mission_date": config.inference["target_mission_date"]
-        }
-    ]
+# def build_train_val_thresh_dataset(config):
+#     targets = [
+#         {
+#             "farm_name": config.inference["target_farm_name"],
+#             "field_name": config.inference["target_field_name"],
+#             "mission_date": config.inference["target_mission_date"]
+#         }
+#     ]
 
 
     
-    model_dir = os.path.join("usr", "data", "models", config.arch["model_uuid"])
+#     model_dir = os.path.join("usr", "data", "models", config.arch["model_uuid"])
     
-    for target in targets:
-        target_farm_name = target["farm_name"]
-        target_field_name = target["field_name"]
-        target_mission_date = target["mission_date"]
-        image_set_root = os.path.join("usr", "data", "image_sets", 
-                                        target_farm_name, target_field_name, target_mission_date)
-        annotations_path = os.path.join(image_set_root,
-                                        "annotations", "annotations_w3c.json")
+#     for target in targets:
+#         target_farm_name = target["farm_name"]
+#         target_field_name = target["field_name"]
+#         target_mission_date = target["mission_date"]
+#         image_set_root = os.path.join("usr", "data", "image_sets", 
+#                                         target_farm_name, target_field_name, target_mission_date)
+#         annotations_path = os.path.join(image_set_root,
+#                                         "annotations", "annotations_w3c.json")
 
-        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+#         annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-        patch_dir = os.path.join(model_dir, "training_validation_opt_patches")
-        os.makedirs(patch_dir)
-        annotated_patches_record_path = os.path.join(patch_dir, "annotated-patches-record.tfrec")
+#         patch_dir = os.path.join(model_dir, "training_validation_opt_patches")
+#         os.makedirs(patch_dir)
+#         annotated_patches_record_path = os.path.join(patch_dir, "annotated-patches-record.tfrec")
 
-        annotated_tf_records = []
+#         annotated_tf_records = []
 
-        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-        patch_size = w3c_io.get_patch_size(annotations)
+#         annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+#         patch_size = w3c_io.get_patch_size(annotations)
 
-        image_names = config["training_validation_images"]
+#         image_names = config["training_validation_images"]
 
-        for image_name in tqdm.tqdm(image_names, desc="Extracting train/val opt patches"):
+#         for image_name in tqdm.tqdm(image_names, desc="Extracting train/val opt patches"):
 
-            image_path = glob.glob(os.path.join(image_set_root, "images", image_name + ".*"))[0]
-            image = Image(image_path)
+#             image_path = glob.glob(os.path.join(image_set_root, "images", image_name + ".*"))[0]
+#             image = Image(image_path)
 
-            image_patches = ep.extract_patch_records_from_image_tiled(image, patch_size, annotations[image.image_name])
+#             image_patches = ep.extract_patch_records_from_image_tiled(image, patch_size, annotations[image.image_name])
 
-            ep.write_patches(patch_dir, image_patches)
-            tf_records_for_image = tf_record_io.create_patch_tf_records(image_patches, patch_dir, is_annotated=True)
+#             ep.write_patches(patch_dir, image_patches)
+#             tf_records_for_image = tf_record_io.create_patch_tf_records(image_patches, patch_dir, is_annotated=True)
 
-            annotated_tf_records.extend(tf_records_for_image)
+#             annotated_tf_records.extend(tf_records_for_image)
 
-        tf_record_io.output_patch_tf_records(annotated_patches_record_path, annotated_tf_records)
+#         tf_record_io.output_patch_tf_records(annotated_patches_record_path, annotated_tf_records)
 
 
 
@@ -1103,6 +1103,14 @@ def get_source_annotations(config):
                     annotation_records.append(annotation_record)
 
     return annotation_records, total_annotation_count
+
+
+
+# def build_direct2(config):
+
+#     # ratio should maybe be determined by amount of plant coverage
+
+#     #determine_number_of_patches_for_each_image(image_names, annotations, total_plants_needed, total_other_needed, allow_box_reuse=True)
 
 def build_direct(config):
         

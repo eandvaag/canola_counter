@@ -89,6 +89,17 @@ def clip_boxes_and_get_small_visibility_mask(boxes, patch_coords, min_visibility
     return clipped_boxes, mask
 
 
+def get_edge_boxes_mask(boxes, patch_shape):
+    #if box_fmt == "xywh":
+    #    boxes = convert_to_corners_tf(boxes)
+    mask = np.logical_or(np.logical_or(boxes[:, 0] <= 0, boxes[:, 1] <= 0), 
+                  np.logical_or(boxes[:, 2] >= patch_shape[0]-1, boxes[:, 3] >= patch_shape[1]-1))
+    #edge_boxes = boxes[mask]
+    #non_edge_boxes = boxes[np.logical_not(mask)]
+    return mask #edge_boxes, non_edge_boxes
+
+
+
 # def get_normalized_patch_wh(training_dataset):
 
 #     BOX_PATCH_RATIO = 0.02
@@ -122,7 +133,7 @@ def clip_boxes_np(boxes, patch_coords):
     #                           np.minimum(boxes[:,3], patch_coords[3]-1)], axis=-1)
 
     boxes = np.concatenate([np.maximum(boxes[:, :2], [patch_coords[0], patch_coords[1]]),
-                            np.minimum(boxes[:, 2:], [patch_coords[2]-1, patch_coords[3]-1])], axis=-1)
+                            np.minimum(boxes[:, 2:], [patch_coords[2], patch_coords[3]])], axis=-1)
     return boxes
 
 def non_max_suppression_with_classes(boxes, classes, scores, iou_thresh):
@@ -158,14 +169,17 @@ def compute_iou(boxes1, boxes2, box_format="xywh"):
         jth column holds the IOU between ith box and jth box from
         boxes1 and boxes2 respectively.
     """
+
+
+
     if box_format == "xywh":
         boxes1_corners = convert_to_corners_tf(boxes1)
         boxes2_corners = convert_to_corners_tf(boxes2)
         #boxes1_area = boxes1[:, 2] * boxes1[:, 3]
         #boxes2_area = boxes2[:, 2] * boxes2[:, 3]
     elif box_format == "corners_yx":
-        boxes1_corners = swap_xy_tf(tf.convert_to_tensor(boxes1, dtype=tf.float32))
-        boxes2_corners = swap_xy_tf(tf.convert_to_tensor(boxes2, dtype=tf.float32))
+        boxes1_corners = swap_xy_tf(boxes1) #tf.convert_to_tensor(boxes1, dtype=tf.float32))
+        boxes2_corners = swap_xy_tf(boxes2) #tf.convert_to_tensor(boxes2, dtype=tf.float32))
     elif box_format == "corners_xy":
         boxes1_corners = boxes1
         boxes2_corners = boxes2
@@ -184,6 +198,45 @@ def compute_iou(boxes1, boxes2, box_format="xywh"):
     union_area = tf.maximum(
         boxes1_area[:, None] + boxes2_area - intersection_area, 1e-8
     )
-    return tf.clip_by_value(intersection_area / union_area, 0.0, 1.0)
+    res = tf.clip_by_value(intersection_area / union_area, 0.0, 1.0)
 
+
+    return res
+
+
+
+
+def compute_iou_np(boxes1, boxes2):
+    """Computes pairwise IOU matrix for given two sets of boxes
+
+    Arguments:
+      boxes1: A tensor with shape `(N, 4)` representing bounding boxes
+        where each box is of the format `[x, y, width, height]`.
+        boxes2: A tensor with shape `(M, 4)` representing bounding boxes
+        where each box is of the format `[x, y, width, height]`.
+
+      box_format: [min_y, min_x, max_y, max_x]
+    Returns:
+      pairwise IOU matrix with shape `(N, M)`, where the value at ith row
+        jth column holds the IOU between ith box and jth box from
+        boxes1 and boxes2 respectively.
+    """
+
+    boxes1_corners = boxes1
+    boxes2_corners = boxes2
+
+    boxes1_area = (boxes1_corners[:,2] - boxes1_corners[:,0]) * (boxes1_corners[:,3] - boxes1_corners[:,1])
+    boxes2_area = (boxes2_corners[:,2] - boxes2_corners[:,0]) * (boxes2_corners[:,3] - boxes2_corners[:,1])
+
+    lu = np.maximum(boxes1_corners[:, None, :2], boxes2_corners[:, :2])
+    rd = np.minimum(boxes1_corners[:, None, 2:], boxes2_corners[:, 2:])
+    intersection = np.maximum(0.0, rd - lu)
+    intersection_area = intersection[:, :, 0] * intersection[:, :, 1]
+
+    union_area = np.maximum(
+        boxes1_area[:, None] + boxes2_area - intersection_area, 1e-8
+    )
+    res = np.clip(intersection_area / union_area, 0.0, 1.0)
+
+    return res
 

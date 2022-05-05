@@ -22,7 +22,7 @@ class DataLoader:
 
         dataset_size = np.sum([1 for _ in dataset])
 
-        dataset = dataset.take(1)
+        #dataset = dataset.take(1)
 
         autotune = tf.data.experimental.AUTOTUNE
         dataset = dataset.prefetch(autotune)
@@ -70,7 +70,7 @@ def output_result(img, boxes, classes, out_path):
     ], axis=-1).astype(np.int32)
 
     #print("boxes", boxes)
-    out = model_vis.draw_boxes_on_img(img,
+    out = model_vis.draw_boxes_on_image(img,
                                     boxes,
                                     classes,
                                     np.ones(shape=classes.shape),
@@ -85,16 +85,23 @@ def output_result(img, boxes, classes, out_path):
 if __name__ == "__main__":
 
 
-    tf_record_path = "/home/eaa299/Documents/work/2021/plant_detection/plant_detection" + \
-                     "/src/usr/data/image_sets/canola_row_spacing_2/2020_06_08/patches/" + \
-                     "02916d2e-aac0-45bb-9658-caa33082462b/patches-with-boxes-record.tfrec"
-    out_dir = "/home/eaa299/Documents/work/2021/augmentation_test"
+    #tf_record_path = "/home/eaa299/Documents/work/2021/plant_detection/plant_detection" + \
+    #                 "/src/usr/data/image_sets/canola_row_spacing_2/2020_06_08/patches/" + \
+    #                 "02916d2e-aac0-45bb-9658-caa33082462b/patches-with-boxes-record.tfrec"
+
+    tf_record_path = "/home/eaa299/workspace/plant_detection/plant_detection/src/usr/data/models/" + \
+                    "6dbabda4-6756-4fb1-aa0b-e94b06754635/source_patches/0/training/annotated-patches-record.tfrec"
+    out_dir = "/home/eaa299/workspace/augmentation/" #Documents/work/2021/augmentation_test"
     
     data_loader = DataLoader([tf_record_path])
     dataset, dataset_size = data_loader.create_dataset()
-    steps = 1
+    steps = 5
+    max_steps = 5
 
     for step, tf_sample in enumerate(tqdm.tqdm(dataset, total=steps, desc="Generating augmented images")):
+
+        if step == max_steps:
+            break
 
         img_path, img, boxes, classes = data_loader.read_tf_sample(tf_sample)
         img_id = os.path.basename(img_path)[:-4]
@@ -134,21 +141,30 @@ if __name__ == "__main__":
         #                                  "rotate": [-360, 360], 
         #                                  "shear": [-40, 40]}}],
         #                                  img, boxes, classes)
+        # aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
+        #                                  [{"type": "affine", "parameters": 
+        #                                  {"probability": 1.0, 
+        #                                  "scale": 1.0, 
+        #                                  "translate_percent": (-0.3, 0.3), 
+        #                                  "rotate": 0, 
+        #                                  "shear": 0}}],
+        #                                  img, boxes, classes)
+
 
         #aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
         #    [{"type": "brightness",
         #      "parameters": {"probability": 1.0, "limit": [0, 0]}}],
         #      img, boxes, classes)
-        #aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
-        #    [{"type": "brightness_contrast",
-        #      "parameters": {"probability": 1.0, "brightness_limit": [-0.2, -0.2], "contrast_limit": [-0.2, -0.2]}}],
-        #      img, boxes, classes)
+        aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
+           [{"type": "brightness_contrast",
+             "parameters": {"probability": 1.0, "brightness_limit": [-0.2, 0.2], "contrast_limit": [-0.2, 0.2]}}],
+             img, boxes, classes)
         #print(aug_img)
 
-        aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
-            [{"type": "rgb_shift",
-              "parameters": {"probability": 1.0, "r_shift_limit": [-20, 20], "g_shift_limit": [-20, 20], "b_shift_limit": [-20, 20]}}],
-              img, boxes, classes)
+        # aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
+        #     [{"type": "rgb_shift",
+        #       "parameters": {"probability": 1.0, "r_shift_limit": [-20, 20], "g_shift_limit": [-20, 20], "b_shift_limit": [-20, 20]}}],
+        #       img, boxes, classes)
         # shear: -40, 40, rotate: -360, 360
         # output_result(aug_img, aug_boxes, aug_classes, os.path.join(out_dir, img_id + "_affine.png"))        
 

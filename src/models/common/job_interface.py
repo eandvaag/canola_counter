@@ -47,6 +47,7 @@ def create_model_configs(job_config, model_index):
     target_mission_date = job_config["target_mission_date"]
     test_reserved_images = job_config["test_reserved_images"]
     training_validation_images = job_config["training_validation_images"]
+    #rm_edge_boxes = job_config["rm_edge_boxes"]
 
     m = job_config["model_info"][model_index]
 
@@ -68,6 +69,7 @@ def create_model_configs(job_config, model_index):
         config["target_mission_date"] = target_mission_date
         config["test_reserved_images"] = test_reserved_images
         config["training_validation_images"] = training_validation_images
+        #config["rm_edge_boxes"] = rm_edge_boxes
 
     
     training_config["source_construction_params"] = job_config["source_construction_params"]
@@ -351,25 +353,26 @@ def build_job_excel(job_config):
     job_uuid = job_config["job_uuid"]
     job_results_dir = os.path.join("usr", "data", "results", target_farm_name, target_field_name, target_mission_date, job_uuid)
     out_path = os.path.join(job_results_dir, "results.xlsx")
-    model_info = job_config["model_info"]
+    model_info_lst = job_config["model_info"]
 
 
 
-    model_uuid = model_info[0]["model_uuid"]
+    model_uuid = model_info_lst[0]["model_uuid"]
+    model_name = model_info_lst[0]["model_name"]
     model_dir = os.path.join(job_results_dir, model_uuid)
     excel_path = os.path.join(model_dir, "results.xlsx")
     job_df = pd.read_excel(excel_path)
-    job_df.rename(columns={"model_plant_count": "model_1_plant_count"}, inplace=True)
-    job_df.rename(columns={"model_plant_count_at_optimal_score": "model_1_plant_count_at_optimal_score"}, inplace=True)
+    job_df.rename(columns={"model_plant_count": model_name + "_plant_count"}, inplace=True)
+    job_df.rename(columns={"model_plant_count_at_optimal_score": model_name + "_plant_count_at_optimal_score"}, inplace=True)
 
-    for i, model_info in model_info[1:]:
+    for model_info in model_info_lst[1:]:
         model_uuid = model_info["model_uuid"]
         model_dir = os.path.join(job_results_dir, model_uuid)
         excel_path = os.path.join(model_dir, "results.xlsx")
         df = pd.read_excel(excel_path)
 
-        job_df["model_" + str(i+1) + "_plant_count"] = df["model_plant_count"]
-        job_df["model_" + str(i+1) + "_plant_count_at_optimal_score"] = df["model_plant_count_at_optimal_score"]
+        job_df[model_info["model_name"] + "_plant_count"] = df["model_plant_count"]
+        job_df[model_info["model_name"] + "_plant_count_at_optimal_score"] = df["model_plant_count_at_optimal_score"]
 
     #print("job_df", job_df)
     pandas.io.formats.excel.ExcelFormatter.header_style = None
@@ -388,14 +391,102 @@ def build_job_excel(job_config):
 
 
 
+# def resume_job(job_uuid):
+
+
+#     logger = logging.getLogger(__name__)
+
+#     #job_uuid = str(uuid.uuid4())
+    
+
+
+#     def signal_handler(sig, frame):
+#         raise_job_exception(job_uuid, Exception("Interrupted by user"))
+#     signal.signal(signal.SIGINT, signal_handler)
+
+#     job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+#     job_config = json_io.load_json(job_config_path)
+
+#     job_name = job_config["job_name"]
+
+#     job_config["start_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+#     logger.info("Resumed job '{}' (uuid: {}).".format(job_name, job_uuid))
+
+#     try:
+#         # Save the job before training the models. If aborted, the job can now be destroyed.
+#         job_config["status"] = JOB_RUNNING
+#         if "exception" in job_config:
+#             del job_config["exception"]
+#         json_io.save_json(job_config_path, job_config)
+
+#          #, farm_name, field_name, mission_date, config_type="full_source")
+#         #fill_job_config(job_config, farm_name, field_name, mission_date)
+#         #configure_job.fill_job_config(job_config)
+#         #json_io.save_json(job_config_path, job_config)
+
+
+#         if "variation_config" in job_config:
+#             outer_loop_range = len(job_config["variation_config"]["param_values"])
+#         else:
+#             outer_loop_range = 1
+
+
+#         model_index = 0
+
+#         for _ in range(outer_loop_range):
+#             for _ in range(job_config["replications"]):
+
+#                 arch_config, training_config, inference_config = create_model_configs(job_config, 
+#                                                                                       model_index)
+
+#                 m = job_config["model_info"][model_index]
+#                 #print(m)
+#                 #exit()
+
+#                 if m["stage"] == MODEL_ENQUEUED:
+#                     model_interface.create_model(arch_config)
+#                     m["stage"] = MODEL_TRAINING
+
+#                 if m["stage"] == MODEL_TRAINING:
+#                     json_io.save_json(job_config_path, job_config)
+#                     model_interface.train_model(training_config)
+#                     m["stage"] = MODEL_PREDICTING
+
+#                 if m["stage"] == MODEL_PREDICTING:
+#                     json_io.save_json(job_config_path, job_config)
+#                     model_interface.run_inference(inference_config)
+#                     m["stage"] = MODEL_FINISHED
+
+#                 json_io.save_json(job_config_path, job_config)
+
+#                 logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
+                
+#                 model_index += 1
+
+#     except Exception as e:
+#         #if exception_handle_method == "raise":
+#             #raise e
+#         raise_job_exception(job_uuid, e)
+#         #elif exception_handle_method == "destroy_and_raise":
+#         #    destroy_job({"job_uuid": job_uuid})
+#         #    raise e
+#         #else:
+#         #    raise e
+
+
+#     job_config["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#     job_config["status"] = JOB_FINISHED  
+#     json_io.save_json(job_config_path, job_config)
+#     logger.info("Finished processing job '{}' (uuid: {}).".format(job_config["job_name"], job_uuid))
+
+
 def resume_job(job_uuid):
 
 
     logger = logging.getLogger(__name__)
 
     #job_uuid = str(uuid.uuid4())
-    
-
 
     def signal_handler(sig, frame):
         raise_job_exception(job_uuid, Exception("Interrupted by user"))
@@ -403,24 +494,37 @@ def resume_job(job_uuid):
 
     job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
     job_config = json_io.load_json(job_config_path)
-
     job_name = job_config["job_name"]
 
-    job_config["start_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    logger.info("Resumed job '{}' (uuid: {}).".format(job_name, job_uuid))
+    #job_config["start_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    logger.info("Resuming job '{}' (uuid: {}).".format(job_name, job_uuid))
 
     try:
-        # Save the job before training the models. If aborted, the job can now be destroyed.
-        job_config["status"] = JOB_RUNNING
-        if "exception" in job_config:
-            del job_config["exception"]
-        json_io.save_json(job_config_path, job_config)
 
-         #, farm_name, field_name, mission_date, config_type="full_source")
-        #fill_job_config(job_config, farm_name, field_name, mission_date)
-        #configure_job.fill_job_config(job_config)
-        #json_io.save_json(job_config_path, job_config)
+        # target_farm_name = job_config["target_farm_name"]
+        # target_field_name = job_config["target_field_name"]
+        # target_mission_date = job_config["target_mission_date"]
+        # test_reserved_images = job_config["test_reserved_images"]
+
+        # annotations_path = os.path.join("usr", "data", "image_sets",
+        #                                 target_farm_name, target_field_name, target_mission_date,
+        #                                 "annotations", "annotations_w3c.json")
+        # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+        # completed_image_names = w3c_io.get_completed_images(annotations)
+        # job_config["training_validation_images"] = [image_name for image_name in completed_image_names if image_name not in test_reserved_images]
+
+
+
+        # # Save the job before training the models. If aborted, the job can now be destroyed.
+        # job_config["status"] = JOB_RUNNING
+        # json_io.save_json(job_config_path, job_config)
+
+        #  #, farm_name, field_name, mission_date, config_type="full_source")
+        # #fill_job_config(job_config, farm_name, field_name, mission_date)
+        # configure_job.fill_job_config(job_config)
+        # json_io.save_json(job_config_path, job_config)
 
 
         if "variation_config" in job_config:
@@ -428,7 +532,7 @@ def resume_job(job_uuid):
         else:
             outer_loop_range = 1
 
-
+        exception_handle_method = job_config["on_exception"] if "on_exception" in job_config else "raise"
         model_index = 0
 
         for _ in range(outer_loop_range):
@@ -438,24 +542,23 @@ def resume_job(job_uuid):
                                                                                       model_index)
 
                 m = job_config["model_info"][model_index]
-                #print(m)
-                #exit()
 
+                
                 if m["stage"] == MODEL_ENQUEUED:
                     model_interface.create_model(arch_config)
                     m["stage"] = MODEL_TRAINING
+                    json_io.save_json(job_config_path, job_config)
 
                 if m["stage"] == MODEL_TRAINING:
-                    json_io.save_json(job_config_path, job_config)
                     model_interface.train_model(training_config)
                     m["stage"] = MODEL_PREDICTING
+                    json_io.save_json(job_config_path, job_config)
 
                 if m["stage"] == MODEL_PREDICTING:
-                    json_io.save_json(job_config_path, job_config)
                     model_interface.run_inference(inference_config)
                     m["stage"] = MODEL_FINISHED
+                    json_io.save_json(job_config_path, job_config)
 
-                json_io.save_json(job_config_path, job_config)
 
                 logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
                 
@@ -471,75 +574,14 @@ def resume_job(job_uuid):
         #else:
         #    raise e
 
+    
+    build_job_excel(job_config)
+
 
     job_config["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    job_config["status"] = JOB_FINISHED  
+    job_config["status"] = JOB_FINISHED
     json_io.save_json(job_config_path, job_config)
     logger.info("Finished processing job '{}' (uuid: {}).".format(job_config["job_name"], job_uuid))
-
-
-# def resume_job(req_args):
-
-#     logger = logging.getLogger(__name__)
-
-#     job_uuid = req_args["job_uuid"]
-#     job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
-#     job_config = json_io.load_json(job_config_path)
-
-#     job_name = job_config["job_name"]
-
-#     logger.info("Resuming processing of job '{}' (uuid: {}).".format(job_name, job_uuid))
-
-#     if "variation_config" in job_config:
-#         outer_loop_range = len(job_config["variation_config"]["param_values"])
-#     else:
-#         outer_loop_range = 1
-
-
-#     exception_handle_method = job_config["on_exception"] if "on_exception" in job_config else "raise"
-#     model_index = 0
-#     try:
-#         for _ in range(outer_loop_range):
-#             for _ in range(job_config["replications"]):
-
-
-#                 arch_config, training_config, inference_config = create_model_configs(job_config, 
-#                                                                                       model_index)
-
-
-#                 m = job_config["model_info"][model_index]
-                
-#                 if m["stage"] == ADDED_TO_JOB:
-#                     model_interface.create_model(arch_config, on_found="replace")
-#                     m["stage"] = FINISHED_ARCH
-#                     json_io.save_json(job_config_path, job_config)
-
-#                 if m["stage"] == FINISHED_ARCH:
-#                     model_interface.train_model(training_config, on_found="replace")
-#                     m["stage"] = FINISHED_TRAINING
-#                     json_io.save_json(job_config_path, job_config)
-
-#                 if m["stage"] == FINISHED_TRAINING:
-#                     model_interface.run_inference(inference_config, on_found="replace")
-#                     m["stage"] = FINISHED_INFERENCE
-#                     json_io.save_json(job_config_path, job_config)
-
-#                 logger.info("Processing of model '{}' is complete.".format(m["model_name"]))
-
-#                 model_index += 1
-
-#     except Exception as e:
-#         if exception_handle_method == "raise":
-#             raise e
-#         elif exception_handle_method == "destroy_and_raise":
-#             destroy_job({"job_uuid": job_uuid}, e)
-#             raise e
-#         else:
-#             raise e
-
-  
-
-#     logger.info("Finished processing job '{}' (uuid: {}).".format(job_config["job_name"], job_uuid))
 
 
 

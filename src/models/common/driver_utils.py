@@ -248,7 +248,7 @@ def set_active_training_params(config, seq_num):
 
 
 def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coords, 
-                      image_path, buffer_pct=None):
+                      image_path, trim=True, patch_border_buffer_percent=None): # buffer_pct=None):
 
     if patch_abs_boxes.size == 0:
         image_abs_boxes = np.array([], dtype=np.int32)
@@ -256,14 +256,20 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
         image_classes = np.array([], dtype=np.int32)
 
     else:
+        patch_height = patch_coords[2] - patch_coords[0]
+        patch_width = patch_coords[3] - patch_coords[1]
+
         image_width, image_height = Image(image_path).get_wh()
 
-        image_abs_boxes = (np.array(patch_abs_boxes) + \
-                         np.tile(patch_coords[:2], 2)).astype(np.int32)
 
-        if buffer_pct is not None:
+        
+
+        image_abs_boxes = (np.array(patch_abs_boxes) + \
+                           np.tile(patch_coords[:2], 2)).astype(np.int32)
+
+        if patch_border_buffer_percent is not None:
             patch_wh = (patch_coords[2] - patch_coords[0])
-            buffer_px = (buffer_pct / 100 ) * patch_wh
+            buffer_px = (patch_border_buffer_percent / 100 ) * patch_wh
 
             mask = np.logical_and(
                     np.logical_and(
@@ -277,9 +283,57 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
             image_abs_boxes = image_abs_boxes[mask]
             image_scores = patch_scores[mask]
             image_classes = patch_classes[mask]
+
+
+        elif trim:
+
+            accept_bottom = 0 if patch_coords[0] == 0 else patch_coords[0] + round(patch_height / 4)
+            accept_left = 0 if patch_coords[1] == 0 else patch_coords[1] + round(patch_width / 4)
+            accept_top = image_height if patch_coords[2] == image_height else patch_coords[2] - round(patch_height / 4)
+            accept_right = image_width if patch_coords[3] == image_width else patch_coords[3] - round(patch_width / 4)
+
+
+            box_centres = (image_abs_boxes[..., :2] + image_abs_boxes[..., 2:]) / 2.0
+            mask = np.logical_and(
+                np.logical_and(box_centres[:,0] >= accept_bottom, box_centres[:,0] < accept_top),
+                np.logical_and(box_centres[:,1] >= accept_left, box_centres[:,1] < accept_right)
+            )
+
+            image_abs_boxes = image_abs_boxes[mask]
+            image_scores = patch_scores[mask]
+            image_classes = patch_classes[mask]
         else:
             image_scores = patch_scores
             image_classes = patch_classes
+
+
+
+
+
+        
+
+        # image_abs_boxes = (np.array(patch_abs_boxes) + \
+        #                  np.tile(patch_coords[:2], 2)).astype(np.int32)
+
+        # if buffer_pct is not None:
+        #     patch_wh = (patch_coords[2] - patch_coords[0])
+        #     buffer_px = (buffer_pct / 100 ) * patch_wh
+
+        #     mask = np.logical_and(
+        #             np.logical_and(
+        #              np.logical_or(image_abs_boxes[:, 0] > patch_coords[0] + buffer_px, image_abs_boxes[:, 0] <= buffer_px),
+        #              np.logical_or(image_abs_boxes[:, 1] > patch_coords[1] + buffer_px, image_abs_boxes[:, 1] <= buffer_px)),
+        #             np.logical_and(
+        #              np.logical_or(image_abs_boxes[:, 2] < patch_coords[2] - buffer_px, image_abs_boxes[:, 2] >= image_height - buffer_px),
+        #              np.logical_or(image_abs_boxes[:, 3] < patch_coords[3] - buffer_px, image_abs_boxes[:, 3] >= image_width - buffer_px))
+        #         )
+
+        #     image_abs_boxes = image_abs_boxes[mask]
+        #     image_scores = patch_scores[mask]
+        #     image_classes = patch_classes[mask]
+        # else:
+        #     image_scores = patch_scores
+        #     image_classes = patch_classes
 
         #print("image_abs_boxes", image_abs_boxes)
         #print("image_scores", image_scores)
@@ -299,6 +353,56 @@ def clip_image_boxes(image_predictions):
             image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
             pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
             image_predictions[image_name]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+
+
+        # if len(image_predictions[image_name]["nt_pred_image_abs_boxes"]) > 0:
+        #     pred_image_abs_boxes = np.array(image_predictions[image_name]["nt_pred_image_abs_boxes"])
+        #     image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
+        #     pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+        #     image_predictions[image_name]["nt_pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+
+
+def apply_careful_nms_to_image_boxes(image_predictions, iou_thresh):
+
+    for image_name in image_predictions.keys():
+
+        taken_boxes = []
+        taken_scores = []
+        taken_classes = []
+
+        pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
+        scores = np.array(image_predictions[image_name]["pred_scores"])
+        classes = np.array(image_predictions[image_name]["pred_classes"])
+        iou_mat = box_utils.compute_iou_np(pred_image_abs_boxes, pred_image_abs_boxes)
+        
+
+        i = 0
+        starting_ind = 0
+        for patch_num_boxes in image_predictions[image_name]["boxes_added_per_patch"]:
+            
+            for _ in range(patch_num_boxes):
+                iou_mat[i, starting_ind:starting_ind+patch_num_boxes] = 0
+
+                sel_mask = iou_mat[i, :] > iou_thresh
+                sel_scores = scores[sel_mask]
+                box_score = scores[i]
+
+                if np.all(box_score > sel_scores):
+                    # take box
+                    taken_boxes.append(pred_image_abs_boxes[i].tolist())
+                    taken_scores.append(float(scores[i]))
+                    taken_classes.append(int(classes[i]))
+
+                i += 1
+            starting_ind += patch_num_boxes
+
+        image_predictions[image_name]["pred_image_abs_boxes"] = taken_boxes
+        image_predictions[image_name]["pred_classes"] = taken_classes
+        image_predictions[image_name]["pred_scores"] = taken_scores
+        
+
+
+
 
 
 def apply_nms_to_image_boxes(image_predictions, iou_thresh):
