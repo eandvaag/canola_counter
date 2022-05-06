@@ -312,9 +312,7 @@ def fill_job_config(job_config):
 
                     "save_method": "best_validation_loss",
                     "percent_of_training_set_used": 100,
-                    "percent_of_validation_set_used": 100,
-                    "rm_edge_boxes": True,
-                    "patch_border_buffer_percent": None
+                    "percent_of_validation_set_used": 100
 
                 }
             ]
@@ -338,7 +336,9 @@ def fill_job_config(job_config):
             "batch_size": 16,
             "patch_nms_iou_thresh": 0.4,
             "image_nms_iou_thresh": 0.4,
-            "score_thresh": 0.5
+            "score_thresh": 0.5,
+            "rm_edge_boxes": True,
+            "patch_border_buffer_percent": None
         }
     })
 
