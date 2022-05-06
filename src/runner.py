@@ -906,8 +906,8 @@ def report(run_uuid):
 
 
 def run_test():
-    dataset_sizes = [5000, 10000] #20000] #3000] #[15000] #250] #10000]
-    methods = ["direct_2", "direct"]
+    dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
+    methods = ["direct_2"]
 
     method_params = {
             "match_method": "bipartite_b_matching",
@@ -918,9 +918,9 @@ def run_test():
 
     target_datasets = [
         {
-            "target_farm_name": "BlaineLake", #"row_spacing",
-            "target_field_name": "River", #"brown",
-            "target_mission_date": "2021-06-09" #"2021-06-01" #-low-res"
+            "target_farm_name": "UNI", #"row_spacing",
+            "target_field_name": "LowN1", #"River", #"brown",
+            "target_mission_date": "2021-06-07" #"2021-06-01" #-low-res"
         }
     ]
 
@@ -931,19 +931,21 @@ def run_test():
         8192: 30,
         16384: 30
     }
-    run_record = {
-        "job_uuids": [],
-        "method_params": method_params,
-        "methods": methods,
-        "dataset_sizes": dataset_sizes,
-        "target_datasets": target_datasets,
-        "explanation": "test limits of repeated extraction"
-    }
+    # run_record = {
+    #     "job_uuids": [],
+    #     "method_params": method_params,
+    #     "methods": methods,
+    #     "dataset_sizes": dataset_sizes,
+    #     "target_datasets": target_datasets,
+    #     "explanation": "test limits of repeated extraction"
+    # }
 
 
 
-    all_images = ["3", "4", "5", "7", "22", "23", "28", "30", "34", "39", "45", "48", "50", "52"]
-    training_images = ["7"]
+    #all_images = ["3", "4", "5", "7", "22", "23", "28", "30", "34", "39", "45", "48", "50", "52"]
+    #training_images = ["7"]
+    all_images = ["1", "4", "6", "8", "11", "14", "16", "18", "21", "26", "27", "31", "36", "40"]
+    training_images = ["27"]
     test_reserved_images = [image for image in all_images if image not in training_images]
 
     for dataset in target_datasets:
@@ -958,7 +960,7 @@ def run_test():
                     "source_construction_params": {
                         "method_name": method,
                         "method_params": method_params,
-                        "size": dataset_size
+                        #"size": dataset_size
                     },
                     "target_farm_name": dataset["target_farm_name"],
                     "target_field_name": dataset["target_field_name"],
@@ -967,20 +969,26 @@ def run_test():
                     "supplementary_targets": [],
                     "tol_test": 30, #30, #epoch_patience[dataset_size]
                     "test_reserved_images": test_reserved_images,
+                    # "variation_config": {
+                    #     "param_configs": ["inference", "inference"],
+                    #     "param_names": ["rm_edge_boxes", "patch_border_buffer_percent"],
+                    #     "param_values": [[True, None]] #, [False, 0.10], [False, None]]
+                    # },
                     "variation_config": {
-                        "param_configs": ["inference", "inference"],
-                        "param_names": ["rm_edge_boxes", "patch_border_buffer_percent"],
-                        "param_values": [[True, None]] #, [False, 0.10], [False, None]]
+                        "param_configs": ["training"],
+                        "param_names": ["source_construction_params/size"],
+                        "param_values": [[500],[5000],[10000],[20000]] #, [False, 0.10], [False, None]]
                     }
+
                 }
                 job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
                 json_io.save_json(job_config_path, job_config)
                 job_interface.run_job(job_uuid)
 
 
-                run_record["job_uuids"].append(job_uuid)
+    #             run_record["job_uuids"].append(job_uuid)
     
-    run_uuid = str(uuid.uuid4())
-    run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
-    json_io.save_json(run_path, run_record)
-    prepare_report_for_display(run_uuid)
+    # run_uuid = str(uuid.uuid4())
+    # run_path = os.path.join("usr", "data", "runs", run_uuid + ".json")
+    # json_io.save_json(run_path, run_record)
+    # prepare_report_for_display(run_uuid)
