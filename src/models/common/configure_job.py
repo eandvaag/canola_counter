@@ -312,7 +312,9 @@ def fill_job_config(job_config):
 
                     "save_method": "best_validation_loss",
                     "percent_of_training_set_used": 100,
-                    "percent_of_validation_set_used": 100                    
+                    "percent_of_validation_set_used": 100,
+                    "rm_edge_boxes": True,
+                    "patch_border_buffer_percent", None
 
                 }
             ]
