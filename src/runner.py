@@ -907,7 +907,7 @@ def report(run_uuid):
 
 def run_test():
     dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
-    methods = ["direct_2"]
+    methods = ["direct_tiled"]
 
     method_params = {
             "match_method": "bipartite_b_matching",
@@ -918,9 +918,9 @@ def run_test():
 
     target_datasets = [
         {
-            "target_farm_name": "UNI", #"row_spacing",
-            "target_field_name": "LowN1", #"River", #"brown",
-            "target_mission_date": "2021-06-07" #"2021-06-01" #-low-res"
+            "target_farm_name": "BlaineLake", #"row_spacing", #"UNI", #"row_spacing",
+            "target_field_name": "HornerWest", #"brown", #"LowN1", #"River", #"brown",
+            "target_mission_date": "2021-06-09" #2021-06-01" # "2021-06-07" #"2021-06-01" #-low-res"
         }
     ]
 
@@ -940,13 +940,19 @@ def run_test():
     #     "explanation": "test limits of repeated extraction"
     # }
 
+    test_reserved_images = []
+
 
 
     #all_images = ["3", "4", "5", "7", "22", "23", "28", "30", "34", "39", "45", "48", "50", "52"]
     #training_images = ["7"]
-    all_images = ["1", "4", "6", "8", "11", "14", "16", "18", "21", "26", "27", "31", "36", "40"]
-    training_images = ["27"]
-    test_reserved_images = [image for image in all_images if image not in training_images]
+    
+    #all_images = ["1", "4", "6", "8", "11", "14", "16", "18", "21", "26", "27", "31", "36", "40"]
+    #training_images = ["1", "4", "6", "8", "11", "14", "16", "18", "21", "26", "27", "31", "36", "40"] #["27"]
+    #test_reserved_images = [image for image in all_images if image not in training_images]
+
+    #test_reserved_images = ["204", "311", "805", "810", "817", "819", "821", "824"]
+
 
     for dataset in target_datasets:
         for dataset_size in dataset_sizes:
@@ -956,7 +962,7 @@ def run_test():
                 job_config = {
                     "job_uuid": job_uuid,
                     "replications": 1,
-                    "job_name": "test_name_" + "translate_test", #job_uuid,
+                    "job_name": "test_name_" + job_uuid,
                     "source_construction_params": {
                         "method_name": method,
                         "method_params": method_params,
@@ -977,7 +983,7 @@ def run_test():
                     "variation_config": {
                         "param_configs": ["training"],
                         "param_names": ["source_construction_params/size"],
-                        "param_values": [[500],[5000],[10000],[20000]] #, [False, 0.10], [False, None]]
+                        "param_values": [[20000]] #, [False, 0.10], [False, None]]
                     }
 
                 }

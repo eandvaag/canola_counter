@@ -278,15 +278,15 @@ def fill_job_config(job_config):
                             "parameters": {
                                 "probability": 0.5
                             }
-                        },
-                        {
-                            "type": "brightness_contrast",
-                            "parameters": {
-                                "probability": 1.0, 
-                                "brightness_limit": [-0.2, 0.2], 
-                                "contrast_limit": [-0.2, 0.2]
-                            }
                         }
+                        # {
+                        #     "type": "brightness_contrast",
+                        #     "parameters": {
+                        #         "probability": 1.0, 
+                        #         "brightness_limit": [-0.2, 0.2], 
+                        #         "contrast_limit": [-0.2, 0.2]
+                        #     }
+                        # }
                         # {
                         #     "type": "affine",
                         #     "parameters": {
