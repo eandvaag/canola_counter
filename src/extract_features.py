@@ -203,7 +203,7 @@ def build_feature_vectors(config):
 
 
 
-def build_target_feature_vectors(config):
+def build_target_feature_vectors(config, completed_only=False):
 
     logger = logging.getLogger(__name__)
     image_set_root = os.path.join("usr", "data", "image_sets")
@@ -221,8 +221,10 @@ def build_target_feature_vectors(config):
 
     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-
-    image_names = list(annotations.keys())
+    if completed_only:
+        image_names = w3c_io.get_completed_images(annotations)
+    else:
+        image_names = list(annotations.keys())
 
     image_set_features = []
     image_set_coords = {
