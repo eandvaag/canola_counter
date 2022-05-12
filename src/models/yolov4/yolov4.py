@@ -139,7 +139,7 @@ class YOLOv4Tiny(tf.keras.Model):
 
 class YOLOv4TinyBackbone(tf.keras.Model):
 
-    def __init__(self, config):
+    def __init__(self, config, max_pool):
         super(YOLOv4TinyBackbone, self).__init__(name="YOLOv4TinyBackbone")
 
         out_shape = config.arch["anchors_per_scale"] * (5 + config.arch["num_classes"])
@@ -155,11 +155,26 @@ class YOLOv4TinyBackbone(tf.keras.Model):
         self.head_m._name = "yolov4_tiny_head_m"
         self.head_l._name = "yolov4_tiny_head_l"
 
+        self.apply_max_pool = max_pool
+            
         self.max_pool = tf.keras.layers.GlobalMaxPooling2D()
+        #self.pool1 = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))
+        #self.pool2 = tf.keras.layers.MaxPooling2D(pool_size=(4, 4), strides=4)
+
 
     def call(self, images, training=None):
         x = self.backbone(images, training=training)
-        res = self.max_pool(x[1])
+        #save = x[2]
+        #x = x[:2]
+        if self.apply_max_pool:
+            res = self.max_pool(x[1])
+            #res = self.pool1(x[1])
+            #res = self.pool2(res)
+        else:
+            #res = save #x[1]
+            res = x[1]
+            #tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=)
+
         route_medium, route_large = self.neck(x, training=training)
 
         out_m = self.head_m(route_medium, training=training)

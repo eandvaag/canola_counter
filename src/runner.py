@@ -907,7 +907,7 @@ def report(run_uuid):
 
 def run_test():
     dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
-    methods = ["direct_tiled"]
+    methods = ["transfer"] #"direct_tiled"]
 
     method_params = {
             "match_method": "bipartite_b_matching",
@@ -983,7 +983,7 @@ def run_test():
                     "variation_config": {
                         "param_configs": ["training"],
                         "param_names": ["source_construction_params/size"],
-                        "param_values": [[20000]] #, [False, 0.10], [False, None]]
+                        "param_values": [["max"]] #, [False, 0.10], [False, None]]
                     }
 
                 }

@@ -70,6 +70,7 @@ class CSPDarkNet53Tiny(tf.keras.layers.Layer):
 
         x = self.conv(inputs, training=training)
         x = self.conv2(x, training=training)
+        #save = x
 
         x, _ = self.csp_blocktiny1(x, training=training)
         x, _ = self.csp_blocktiny2(x, training=training)
@@ -77,4 +78,4 @@ class CSPDarkNet53Tiny(tf.keras.layers.Layer):
 
         x = self.conv3(x, training=training)
 
-        return route_1, x
+        return route_1, x #, save

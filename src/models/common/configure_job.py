@@ -250,9 +250,9 @@ def fill_job_config(job_config):
 
                 {
 
-                    "data_loader": {
-                        "type": "default"
-                    },
+                    # "data_loader": {
+                    #     "type": "default"
+                    # },
 
                     "learning_rate_schedule": {
                         "schedule_type": "constant",

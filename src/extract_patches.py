@@ -622,22 +622,26 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations,
 
     h, w = image_array.shape[:2]
     patch_num = starting_patch_num
-    for row_ind in range(0, h, tile_size - overlap_px):
-        for col_ind in range(0, w, tile_size - overlap_px):
 
-            patch_min_y = row_ind
-            patch_min_x = col_ind
 
-            patch_max_y = row_ind + tile_size
-            if patch_max_y > h:
-                patch_min_y = h - tile_size
-                patch_max_y = h
+    col_covered = False
+    patch_min_y = 0
+    while not col_covered:
+        patch_max_y = patch_min_y + tile_size
+        if patch_max_y >= h:
+            patch_min_y = h - tile_size
+            patch_max_y = h
+            col_covered = True
 
-            patch_max_x = col_ind + tile_size
-            if patch_max_x > w:
+        row_covered = False
+        patch_min_x = 0
+        while not row_covered:
+
+            patch_max_x = patch_min_x + tile_size
+            if patch_max_x >= w:
                 patch_min_x = w - tile_size
                 patch_max_x = w
-
+                row_covered = True
 
             patch = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
             patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
@@ -653,6 +657,43 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations,
                 annotate_patch(patch_data, annotation_boxes, annotation_classes)
             image_patches.append(patch_data)
             patch_num += 1
+            
+            patch_min_x += (tile_size - overlap_px)
+
+        patch_min_y += (tile_size - overlap_px)
+
+
+    # for row_ind in range(0, h, tile_size - overlap_px):
+    #     for col_ind in range(0, w, tile_size - overlap_px):
+
+    #         patch_min_y = row_ind
+    #         patch_min_x = col_ind
+
+    #         patch_max_y = row_ind + tile_size
+    #         if patch_max_y > h:
+    #             patch_min_y = h - tile_size
+    #             patch_max_y = h
+
+    #         patch_max_x = col_ind + tile_size
+    #         if patch_max_x > w:
+    #             patch_min_x = w - tile_size
+    #             patch_max_x = w
+
+
+    #         patch = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
+    #         patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+    #         patch_data = {}
+    #         patch_data["patch"] = patch
+    #         patch_data["image_name"] = image.image_name
+    #         patch_data["image_path"] = image.image_path
+    #         patch_data["patch_name"] = image.image_name + "-patch-" + str(patch_num).zfill(5) + ".png"
+    #         patch_data["patch_coords"] = patch_coords
+            
+    #         if annotation_status == "completed":
+    #             annotate_patch(patch_data, annotation_boxes, annotation_classes)
+    #         image_patches.append(patch_data)
+    #         patch_num += 1
 
     return image_patches
 
@@ -664,25 +705,54 @@ def extract_patches_from_image_array_tiled(image_array, patch_size, patch_overla
 
     h, w = image_array.shape[:2]
     patches = []
-    for row_ind in range(0, h, tile_size - overlap_px):
-        for col_ind in range(0, w, tile_size - overlap_px):
 
-            patch_min_y = row_ind
-            patch_min_x = col_ind
+    col_covered = False
+    patch_min_y = 0
+    while not col_covered:
+        patch_max_y = patch_min_y + tile_size
+        if patch_max_y >= h:
+            patch_min_y = h - tile_size
+            patch_max_y = h
+            col_covered = True
 
-            patch_max_y = row_ind + tile_size
-            if patch_max_y > h:
-                patch_min_y = h - tile_size
-                patch_max_y = h
+        row_covered = False
+        patch_min_x = 0
+        while not row_covered:
 
-            patch_max_x = col_ind + tile_size
-            if patch_max_x > w:
+            patch_max_x = patch_min_x + tile_size
+            if patch_max_x >= w:
                 patch_min_x = w - tile_size
                 patch_max_x = w
-
+                row_covered = True
 
             patch = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
             patches.append(patch)
+            
+            patch_min_x += (tile_size - overlap_px)
+
+        patch_min_y += (tile_size - overlap_px)
+            
+    
+    
+    # for row_ind in range(0, h, tile_size - overlap_px):
+    #     for col_ind in range(0, w, tile_size - overlap_px):
+
+    #         patch_min_y = row_ind
+    #         patch_min_x = col_ind
+
+    #         patch_max_y = row_ind + tile_size
+    #         if patch_max_y > h:
+    #             patch_min_y = h - tile_size
+    #             patch_max_y = h
+
+    #         patch_max_x = col_ind + tile_size
+    #         if patch_max_x > w:
+    #             patch_min_x = w - tile_size
+    #             patch_max_x = w
+
+
+    #         patch = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
+    #         patches.append(patch)
 
     return patches  
 

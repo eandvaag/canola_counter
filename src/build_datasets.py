@@ -4,14 +4,13 @@ import glob
 import tqdm
 
 import random
-import math as m
 import numpy as np
-import tensorflow as tf
-from sklearn.metrics import pairwise_distances
 
 import extract_patches as ep
-from graph import graph_match, graph_model
+import extract_features as ef
 from image_set import DataSet, Image
+from matching import match
+
 
 import manual_descriptor as md
 
@@ -102,6 +101,8 @@ def build_training_datasets(config):
         build_direct_2(config)
     elif method_name == "direct_tiled":
         build_direct_tiled(config)
+    elif method_name == "transfer":
+        build_transfer(config)
     else:
         raise RuntimeError("Unrecognized source dataset construction method: {}".format(method_name))
 
@@ -222,55 +223,42 @@ def determine_number_of_patches_for_each_image(image_names, annotations, total_p
 
 
 
+def build_transfer(config):
 
-def extract_patch_features(patches, extraction_type, config):
     logger = logging.getLogger(__name__)
 
-    logger.info("Extracting patch features...")
-    all_features = []
+    logger.info("Building feature vectors...")
+    #ef.build_feature_vectors(config)
+    #build_target_feature_vectors(config)
+    logger.info("Finished building feature vectors.")
 
-    manual = False #False
-    if manual:
-        #md.manual_desc(data, extraction_type, config)
-        raise RuntimeError("unimplemented")
-    else:
-        model = graph_model.get_model("YOLOv4TinyBackbone", config)
-        #model = graph_model.get_model("resnet_50", config)
+    logger.info("Performing matching...")
+    #patches = match.match(config)
+    #match.retrieval(config)
+    patches = match.get_nn(config)
+    logger.info("Finished performing matching.")
 
-        batch_size = 16 # 256 #16 #256 #1024
-        #for dataset_loc in ["source", "target"]:
+    #exit()
 
-            #patches = data[dataset_loc + "_patches"]
-        #features_lst = data[dataset_loc + "_features"]
-        
-        num_patches = patches.size #[0]
+    usr_data_root = os.path.join("usr", "data")
+    patches_dir = os.path.join(usr_data_root, "models", config.arch["model_uuid"], "source_patches", "0")
+    training_patches_dir = os.path.join(patches_dir, "training")
+    validation_patches_dir = os.path.join(patches_dir, "validation")
+    os.makedirs(training_patches_dir)
+    os.makedirs(validation_patches_dir)
 
-        if extraction_type == "box_patches":
-            input_image_shape = np.array([150, 150, 3])
-        else:
-            input_image_shape = config.arch["input_image_shape"]
+    training_size = round(patches.size * 0.8)
+    training_subset = random.sample(np.arange(patches.size).tolist(), training_size)
+
+    training_patches = patches[training_subset]
+    validation_patches = np.delete(patches, training_subset)
 
 
-        for i in tqdm.trange(0, num_patches, batch_size):
-            batch_patches = []
-            for j in range(i, min(num_patches, i+batch_size)):
-                patch = tf.convert_to_tensor(patches[j]["patch"], dtype=tf.float32)
-                patch = tf.image.resize(images=patch, size=input_image_shape[:2])
-                batch_patches.append(patch)
-            batch_patches = tf.stack(values=batch_patches, axis=0)
-            
-            features = model.predict(batch_patches)
-            for f in features:
-                f = f.flatten()
-                if i == 0:
-                    print("f.shape: {}".format(f.shape))
-                all_features.append(f)
-
-    logger.info("Finished extracting patch features.")
-
-    #data["source_features"] = np.array(data["source_features"])
-    #data["target_features"] = np.array(data["target_features"])
-    return np.array(all_features)
+    logger.info("Extracted {} training patches and {} validation patches".format(training_patches.size, validation_patches.size))
+    logger.info("Writing patches...")
+    ep.write_annotated_patch_records(training_patches, training_patches_dir)
+    ep.write_annotated_patch_records(validation_patches, validation_patches_dir)
+    logger.info("Finished writing patches.")
 
 
 
@@ -293,14 +281,12 @@ def build_direct_tiled(config):
 
     patches = []
 
-    dataset = DataSet({
-        "farm_name": target_farm_name,
-        "field_name": target_field_name,
-        "mission_date": target_mission_date
-    })
-    print("now processing", dataset.image_set_name)
 
-    annotations = w3c_io.load_annotations(dataset.annotations_path, {"plant": 0})
+    annotations_path = os.path.join("usr", "data", "image_sets", 
+                               target_farm_name, target_field_name, target_mission_date, 
+                               "annotations", "annotations_w3c.json")
+
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
     image_names = config.arch["training_validation_images"]
 
@@ -311,10 +297,6 @@ def build_direct_tiled(config):
             image_set_patch_size = w3c_io.get_patch_size(annotations)
         else:
             image_set_patch_size = patch_size
-
-
-        logger.info("Assignment complete. Extracting patches...")
-
 
         for image_name in image_names:
 
@@ -477,6 +459,4 @@ def build_direct_2(config):
     ep.write_annotated_patch_records(training_patches, training_patches_dir)
     ep.write_annotated_patch_records(validation_patches, validation_patches_dir)
     logger.info("Finished writing patches.")
-
-
 

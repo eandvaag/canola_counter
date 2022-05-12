@@ -229,11 +229,18 @@ def get_model(model_name, config):
         #]
         return model
     elif model_name == "YOLOv4TinyBackbone":
-        model = yolov4.YOLOv4TinyBackbone(config)
-        input_shape = (16, *(config.arch["input_image_shape"]))
+        model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
+        input_shape = (256, *(config.arch["input_image_shape"]))
         model.build(input_shape=input_shape)
         model.load_weights(os.path.join("weights", "weights.h5"), by_name=False)
         return model
+
+    elif model_name == "YOLOv4TinyBackboneNoPool":
+        model = yolov4.YOLOv4TinyBackbone(config, max_pool=False)
+        input_shape = (256, *(config.arch["input_image_shape"]))
+        model.build(input_shape=input_shape)
+        model.load_weights(os.path.join("weights", "weights.h5"), by_name=False)
+        return model    
 
 
 

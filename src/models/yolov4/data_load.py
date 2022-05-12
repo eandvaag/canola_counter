@@ -3,6 +3,7 @@ import math as m
 import numpy as np
 import tensorflow as tf
 import cv2
+import psutil
 
 import models.common.box_utils as box_utils
 import models.common.data_augment as data_augment
@@ -11,6 +12,8 @@ from models.yolov4.encode import LabelEncoder
 
 from io_utils import tf_record_io
 
+
+MAX_MEMORY_LIMIT = 75.0
 
 
 class DataLoader(ABC):
@@ -269,6 +272,9 @@ class PreLoadedTrainDataLoader(DataLoader):
                 "boxes": boxes,
                 "classes": classes
             }
+
+            if psutil.virtual_memory()[2] > MAX_MEMORY_LIMIT:
+                raise RuntimeError("Max memory limit exceeded while loading patches.")
         
         #dataset = tf.data.Dataset.from_tensor_slices(np.arange())
 

@@ -1148,27 +1148,42 @@ def train(config):
         #     training_tf_record_paths.append(os.path.join(training_patch_dir, "patches-record.tfrec"))
         #     validation_tf_record_paths.append(os.path.join(validation_patch_dir, "patches-record.tfrec"))
 
-        data_loader_type = config.training["active"]["data_loader"]["type"]
-        if data_loader_type == "default":
+        #data_loader_type = config.training["active"]["data_loader"]["type"]
+        #if data_loader_type == "default":
             #train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
             #val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
-            train_data_loader = data_load.PreLoadedTrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
-            val_data_loader = data_load.PreLoadedTrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
-            
+
         # elif data_loader_type == "split":
         #     train_data_loader = data_load.SplitDataLoader(training_tf_record_paths_obj, training_tf_record_paths_bg,
         #                                                   config, shuffle=True, augment=True)
         #     val_data_loader = data_load.SplitDataLoader(validation_tf_record_paths_obj, validation_tf_record_paths_bg,
         #                                                   config, shuffle=False, augment=False)
-        else:
-            raise RuntimeError("Unrecognized data loader type: {}".format(data_loader_type))
+        #else:
+        #    raise RuntimeError("Unrecognized data loader type: {}".format(data_loader_type))
+        try:
+            train_data_loader = data_load.PreLoadedTrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+            val_data_loader = data_load.PreLoadedTrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
+
+            train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+                                                    take_percent=config.training["active"]["percent_of_training_set_used"])
+
+            val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+                                                    take_percent=config.training["active"]["percent_of_validation_set_used"])
+        
+        except RuntimeError:
+            logger.info("Switching to non-preloaded data loader due to high memory usage.")
+            train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+            val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
+
+            train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+                                                    take_percent=config.training["active"]["percent_of_training_set_used"])
+
+            val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+                                                    take_percent=config.training["active"]["percent_of_validation_set_used"])
 
 
-        train_dataset, num_train_images = train_data_loader.create_batched_dataset(
-                                                take_percent=config.training["active"]["percent_of_training_set_used"])
+        logger.info("Building model...")
 
-        val_dataset, num_val_images = val_data_loader.create_batched_dataset(
-                                                take_percent=config.training["active"]["percent_of_validation_set_used"])
 
         if config.arch["model_type"] == "yolov4":
             yolov4 = YOLOv4(config)
@@ -1180,6 +1195,8 @@ def train(config):
 
         input_shape = (config.training["active"]["batch_size"], *(train_data_loader.get_model_input_shape()))
         yolov4.build(input_shape=input_shape)
+
+        logger.info("Model built.")
 
 
         if seq_num == 0:
