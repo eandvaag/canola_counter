@@ -422,6 +422,7 @@ def get_nn(config):
 
     target_features, target_coords_rec = ef.load_features(
         target_farm_name, target_field_name, target_mission_date, include_coords=True)
+    print("target_features.shape", target_features.shape)
 
     target_images_dir = os.path.join("usr", "data", "image_sets",
     target_farm_name, target_field_name, target_mission_date, "images")
@@ -460,10 +461,12 @@ def get_nn(config):
     # end_time = time.time()
     # print("Finished querying in {} seconds".format(end_time-start_time))
     # exit()
+    #prev_count = 0
     for i in tqdm.trange(target_features.shape[0], desc="Querying for nearest neighbours"):
     #for i in tqdm.trange(m_indices.shape[0], desc="Building extraction record"):
         #m_indices[0][0]
         m_distances, m_indices = tree.query((target_features[i]).reshape(1, -1), k=1)
+        #print("m_indices", m_indices)
 
         source_image_set_ind = np.searchsorted(intervals, m_indices[0][0], side="right") - 1
         source_image_set = source_image_sets[source_image_set_ind]
@@ -471,16 +474,44 @@ def get_nn(config):
         patch_ind = m_indices[0][0] - starting_ind
 
         source_image_name = source_patch_coords[source_image_set]["image_names"][patch_ind]
-        patch_coords_lst = source_patch_coords[source_image_set]["patch_coords"][patch_ind]
+        patch_coords = source_patch_coords[source_image_set]["patch_coords"][patch_ind]
+
+        # print("source_image_set", source_image_set)
+        # print("starting_ind", starting_ind)
+        # print("patch_ind", patch_ind)
+        # print("source_image_name", source_image_name)
+        # print("patch_coords", patch_coords)
+        #exit()
         
         if source_image_set not in extraction_rec:
             extraction_rec[source_image_set] = {}
         if source_image_name not in extraction_rec[source_image_set]:
             extraction_rec[source_image_set][source_image_name] = []
-        extraction_rec[source_image_set][source_image_name].append(patch_coords_lst)
+        extraction_rec[source_image_set][source_image_name].append(patch_coords)
+
+        # count = 0
+        # for i_image_set in extraction_rec.keys():
+        #     for i_image_name in extraction_rec[i_image_set].keys():
+        #         patch_coords_lst = extraction_rec[i_image_set][i_image_name]
+        #         count += len(patch_coords_lst)
+
+        # if count != prev_count + 1:
+        #     print("Count != prev count || count: {}, prev_count: {}".format(count, prev_count))
+        #     print(extraction_rec)
+        #     exit()
+        # prev_count = count
+        # print("Found {} coord lists in extraction rec".format(count))
+
+    # count = 0
+    # for i_image_set in extraction_rec.keys():
+    #     for i_image_name in extraction_rec[i_image_set].keys():
+    #         patch_coords_lst = extraction_rec[i_image_set][i_image_name]
+    #         count += len(patch_coords_lst)
+    # print("Found {} coord lists in extraction rec".format(count))
+
 
     image_num = 0
-    for image_set in tqdm.tqdm(extraction_rec.keys(), desc="Extracting patches"):
+    for source_image_set in tqdm.tqdm(extraction_rec.keys(), desc="Extracting patches"):
 
         image_set_dir = os.path.join("usr", "data", "image_sets",
                                      source_image_set[0], source_image_set[1], source_image_set[2])
@@ -501,7 +532,9 @@ def get_nn(config):
 
             image_num += len(patch_coords_lst)
 
-    return np.array(patch_records)
+    patch_records = np.array(patch_records)
+    print("Generated {} patch records.".format(patch_records.size))
+    return patch_records
             
 
 
