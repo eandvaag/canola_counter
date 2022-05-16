@@ -249,7 +249,7 @@ def run_test_job():
 
 def run_job(job_uuid):
 
-
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
     #job_uuid = str(uuid.uuid4())
@@ -483,8 +483,9 @@ def build_job_excel(job_config):
 
 def resume_job(job_uuid):
 
-
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
+    
 
     #job_uuid = str(uuid.uuid4())
 

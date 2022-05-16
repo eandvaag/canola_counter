@@ -511,6 +511,7 @@ def get_nn(config):
 
 
     image_num = 0
+    num_unique = 0
     for source_image_set in tqdm.tqdm(extraction_rec.keys(), desc="Extracting patches"):
 
         image_set_dir = os.path.join("usr", "data", "image_sets",
@@ -524,6 +525,8 @@ def get_nn(config):
             image = Image(image_path)
             
             patch_coords_lst = extraction_rec[source_image_set][source_image_name]
+            #patch_coords_lst = #(np.unique(np.array(extraction_rec[source_image_set][source_image_name]), axis=0)).tolist()
+            num_unique += len((np.unique(np.array(extraction_rec[source_image_set][source_image_name]), axis=0)).tolist())
 
             patch_records.extend(ep.extract_patch_records_from_image(image, 
                                     patch_coords_lst, 
@@ -534,6 +537,7 @@ def get_nn(config):
 
     patch_records = np.array(patch_records)
     print("Generated {} patch records.".format(patch_records.size))
+    print("Number of unique patches: {}".format(num_unique))
     return patch_records
             
 
