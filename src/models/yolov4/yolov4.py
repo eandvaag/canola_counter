@@ -135,6 +135,40 @@ class YOLOv4Tiny(tf.keras.Model):
         }
         return layer_lookup
 
+# class YOLOv4UltraTiny(tf.keras.Model):
+#     def __init__(self, config):
+#         super(YOLOv4Tiny, self).__init__(name="YOLOv4Tiny")
+#         out_shape = config.arch["anchors_per_scale"] * (5 + config.arch["num_classes"])
+
+#         self.backbone = build_backbone(config)
+#         self.neck = build_neck(config)
+
+#         self.head_m = build_head(64, out_shape)
+#         self.head_l = build_head(128, out_shape)
+
+#         self.backbone._name = "yolov4_ultra_tiny_backbone"
+#         self.neck._name = "yolov4_ultra_tiny_neck"
+#         self.head_m._name = "yolov4_ultra_tiny_head_m"
+#         self.head_l._name = "yolov4_ultra_tiny_head_l"
+
+#     def call(self, images, training=None):
+
+#         x = self.backbone(images, training=training)
+#         route_medium, route_large = self.neck(x, training=training)
+
+#         out_m = self.head_m(route_medium, training=training)
+#         out_l = self.head_l(route_large, training=training)
+
+#         return [out_m, out_l]
+
+#     def get_layer_lookup(self):
+#         layer_lookup = {
+#             "backbone": [self.backbone.name],
+#             "neck": [self.neck.name],
+#             "head": [self.head_m.name, self.head_l.name]
+#         }
+#         return layer_lookup
+
 
 
 class YOLOv4TinyBackbone(tf.keras.Model):

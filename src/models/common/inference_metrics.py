@@ -3,6 +3,7 @@ import tqdm
 import os
 import numpy as np
 from mean_average_precision import MetricBuilder
+import matplotlib.pyplot as plt
 
 
 import models.common.box_utils as box_utils
@@ -224,6 +225,77 @@ def calculate_optimal_score_threshold(annotations, predictions, image_names):
     logger.info("Optimal score threshold for all images is: {}".format(optimal_thresh_val))
 
     return optimal_thresh_val, optimal_mean_abs_diff
+
+
+
+def similarity_analysis(config, predictions):
+
+    
+
+    distance_record_path = os.path.join(config.model_dir, "patch_distances.json")
+
+    if not os.path.exists(distance_record_path):
+        return
+
+    distance_record = json_io.load_json(distance_record_path)
+
+    class_map = config.arch["class_map"]
+    reverse_class_map = {v: k for k, v in config.arch["class_map"].items()}
+
+
+    # annotated_patch_counts = {k: [] for k in class_map.keys()}
+    # pred_patch_counts = {k: [] for k in class_map.keys()} 
+
+    res = []
+    for patch_name, patch_pred in predictions["patch_predictions"].items():
+        if "patch_classes" in patch_pred:
+
+            patch_classes = patch_pred["patch_classes"]
+            unique, counts = np.unique(patch_classes, return_counts=True)
+            class_num_to_count = dict(zip(unique, counts))
+            cur_patch_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
+            for class_num in class_num_to_count.keys():
+                cur_patch_class_counts[reverse_class_map[class_num]] = class_num_to_count[class_num]
+                #cur_patch_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
+
+            pred_patch_classes = patch_pred["pred_classes"]
+            pred_unique, pred_counts = np.unique(pred_patch_classes, return_counts=True)
+            class_num_to_pred_count = dict(zip(pred_unique, pred_counts))
+            cur_patch_pred_class_counts = {k: 0 for k in class_map.keys()} #config.arch["class_map"].keys()}
+
+
+            annotated_patch_plant_count = cur_patch_class_counts["plant"]
+            pred_patch_plant_count = cur_patch_pred_class_counts["plant"]
+            
+            abs_diff = abs(annotated_patch_plant_count - pred_patch_plant_count)
+            diff = (annotated_patch_plant_count - pred_patch_plant_count)
+            distance = distance_record[patch_name]
+            res.append({
+                "abs_diff": abs_diff,
+                "diff": diff,
+                "distance": distance
+            })
+            # for class_name in class_map.keys(): #config.arch["class_map"].keys():
+            #     annotated_patch_counts[class_name].append(cur_patch_class_counts[class_name])
+            #     pred_patch_counts[class_name].append(cur_patch_pred_class_counts[class_name])
+
+    xs = [d["distance"] for d in res]
+    ys = [d["abs_diff"] for d in res]
+
+    out_path = os.path.join(config.model_dir, "distance_versus_abs_count_diff.png")
+    plt.scatter(xs, ys)
+    plt.xlabel("Euclidean Feature Distance")
+    plt.ylabel("Absolute difference in predicted count")
+    plt.savefig(out_path)
+
+    xs = [d["distance"] for d in res]
+    ys = [d["diff"] for d in res]
+
+    out_path = os.path.join(config.model_dir, "distance_versus_count_diff.png")
+    plt.scatter(xs, ys)
+    plt.xlabel("Euclidean Feature Distance")
+    plt.ylabel("Absolute difference in predicted count")
+    plt.savefig(out_path)
 
 
 

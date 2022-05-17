@@ -859,6 +859,8 @@ def generate_predictions(config):
         all_image_names = predictions["image_predictions"].keys()
         inference_metrics.collect_statistics(all_image_names, metrics, predictions, config, inference_times=inference_times)
         inference_metrics.collect_metrics(all_image_names, metrics, predictions, dataset, config)
+        inference_metrics.similarity_analysis(config, predictions)
+
 
         results_dir = os.path.join("usr", "data", "results",
                                    dataset.farm_name, dataset.field_name, dataset.mission_date,
@@ -1218,6 +1220,7 @@ def train(config):
             with tf.GradientTape() as tape:
                 conv = yolov4(batch_images, training=True)
                 loss_value = loss_fn(batch_labels, conv)
+                loss_value += sum(yolov4.losses)
 
             #if np.isnan(loss_value):
             #    raise RuntimeError("NaN loss has occurred.")
@@ -1295,6 +1298,7 @@ def train(config):
                 batch_images, batch_labels = val_data_loader.read_batch_data(batch_data)
                 conv = yolov4(batch_images, training=False)
                 loss_value = loss_fn(batch_labels, conv)
+                loss_value += sum(yolov4.losses)
 
                 val_loss_metric.update_state(values=loss_value)
                 if np.isnan(val_loss_metric.result()):

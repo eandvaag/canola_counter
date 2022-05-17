@@ -907,7 +907,7 @@ def report(run_uuid):
 
 def run_test():
     dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
-    methods = ["transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
+    methods = ["direct_tiled"] #transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
 
     method_params = {
             "match_method": "bipartite_b_matching",
@@ -920,7 +920,7 @@ def run_test():
         {
             "target_farm_name": "Biggar", #"BlaineLake", #"row_spacing", #"UNI", #"row_spacing",
             "target_field_name": "Dennis3", #"HornerWest", #"brown", #"LowN1", #"River", #"brown",
-            "target_mission_date": "2021-06-09" #2021-06-01" # "2021-06-07" #"2021-06-01" #-low-res"
+            "target_mission_date": "2021-06-04" #2021-06-01" # "2021-06-07" #"2021-06-01" #-low-res"
         }
     ]
 
@@ -962,7 +962,7 @@ def run_test():
                 job_config = {
                     "job_uuid": job_uuid,
                     "replications": 1,
-                    "job_name": "reg_test_0.0005_" + job_uuid,
+                    "job_name": "reg_test_5.0_" + job_uuid,
                     "source_construction_params": {
                         "method_name": method,
                         "method_params": method_params,

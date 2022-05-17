@@ -7,7 +7,7 @@ import imagesize
 import numpy as np
 import cv2
 
-from io_utils import json_io, xml_io, w3c_io
+from io_utils import json_io, xml_io, w3c_io, exif_io
 from models.common import box_utils
 
 
@@ -205,33 +205,40 @@ class Image(object):
 #         w, h = imagesize.get(self.img_path)
 #         return w, h
 
-    # def get_gsd(self, flight_metadata=None, prioritize_exif=False):
-    #     metadata = exif_io.get_exif_metadata(self.img_path)
+    def get_gsd(self, flight_metadata=None, prioritize_exif=False):
+        metadata = exif_io.get_exif_metadata(self.img_path)
 
-    #     # TODO
-    #     #sensor_x_res = metadata["EXIF:FocalPlaneXResolution"]
-    #     #sensor_y_res = metadata["EXIF:FocalPlaneYResolution"]
-    #     #focal_length = metadata["EXIF:FocalLength"]
+        # TODO
+        #sensor_x_res = metadata["EXIF:FocalPlaneXResolution"]
+        #sensor_y_res = metadata["EXIF:FocalPlaneYResolution"]
+        #focal_length = metadata["EXIF:FocalLength"]
 
-    #     flight_height = flight_metadata["flight_height_m"]
-    #     sensor_height = flight_metadata["sensor_height_mm"] * 1000
-    #     sensor_width = flight_metadata["sensor_width_mm"] * 1000
-    #     focal_length = flight_metadata["focal_length_mm"] * 1000
+        x_res = metadata["EXIF:XResolution"]
+        y_res = metadata["EXIF:YResolution"]
+        res_unit = metadata["EXIF:ResolutionUnit"]
 
-    #     img_width, img_height = self.get_wh()
-
-    #     gsd_h = (flight_height * sensor_height) / (focal_length * img_height)
-    #     gsd_w = (flight_height * sensor_width) / (focal_length * img_width)
-    #     gsd = max(gsd_h, gsd_w)
         
-    #     return gsd
 
-    # def get_area_m2(self, flight_metadata=None, prioritize_exif=False):
 
-    #     gsd = self.get_gsd(flight_metadata=flight_metadata, prioritize_exif=prioritize_exif)
-    #     img_width, img_height = self.get_wh()
-    #     area_m2 = (img_width * gsd) * (img_height * gsd)
-    #     return area_m2
+        flight_height = flight_metadata["flight_height_m"]
+        sensor_height = flight_metadata["sensor_height_mm"] * 1000
+        sensor_width = flight_metadata["sensor_width_mm"] * 1000
+        focal_length = flight_metadata["focal_length_mm"] * 1000
+
+        img_width, img_height = self.get_wh()
+
+        gsd_h = (flight_height * sensor_height) / (focal_length * img_height)
+        gsd_w = (flight_height * sensor_width) / (focal_length * img_width)
+        gsd = min(gsd_h, gsd_w)
+        
+        return gsd
+
+    def get_area_m2(self, flight_metadata=None, prioritize_exif=False):
+
+        gsd = self.get_gsd(flight_metadata=flight_metadata, prioritize_exif=prioritize_exif)
+        img_width, img_height = self.get_wh()
+        area_m2 = (img_width * gsd) * (img_height * gsd)
+        return area_m2
 
 
 # def register_image_set(req_args):

@@ -1,8 +1,17 @@
 
 import exiftool
-
+import json
 
 EXIF_TAG_ERROR = "ExifTool:Error"
+
+
+specs = {
+    
+    "Hasseblad L1D-20c": {
+        "sensor_width": "13.2mm",
+        "sensor_height": "8.8mm"
+    }
+}
 
 
 def get_exif_metadata(file_path, tags_to_grab=None, raise_on_tags_missing=True):
@@ -22,3 +31,14 @@ def get_exif_metadata(file_path, tags_to_grab=None, raise_on_tags_missing=True):
             "file at path {} is not a valid image (exiftool did not recognize it).".format(file_path))
 
     return metadata
+
+
+
+def get_camera_specs(file_path):
+
+    make = metadata["EXIF:Make"]
+    model = metadata["EXIF:Camera Model Name"]
+
+    camera_specs = specs[make + " " + model]
+
+    return camera_specs

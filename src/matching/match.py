@@ -398,6 +398,20 @@ def target_retrieval(config):
             out_path = os.path.join(out_dir, "match_" + str(i) + ".png")
             cv2.imwrite(out_path, cv2.cvtColor(patches[0], cv2.COLOR_RGB2BGR))
 
+
+def approximate_best_match(config):
+    target_farm_name = config.arch["target_farm_name"]
+    target_field_name = config.arch["target_field_name"]
+    target_mission_date = config.arch["target_mission_date"]
+
+    target_tup = (target_farm_name, target_field_name, target_mission_date)
+    print("loading all features")
+    source_features, source_patch_coords = ef.load_all_features(omit=[target_tup])
+
+
+    # match with 
+
+
 def get_nn(config):
     target_farm_name = config.arch["target_farm_name"]
     target_field_name = config.arch["target_field_name"]
@@ -486,9 +500,12 @@ def get_nn(config):
         if source_image_set not in extraction_rec:
             extraction_rec[source_image_set] = {}
         if source_image_name not in extraction_rec[source_image_set]:
-            extraction_rec[source_image_set][source_image_name] = []
-        extraction_rec[source_image_set][source_image_name].append(patch_coords)
-
+            extraction_rec[source_image_set][source_image_name] = {
+                "patch_coords": [],
+                "distances": []
+        }
+        extraction_rec[source_image_set][source_image_name]["patch_coords"].append(patch_coords)
+        extraction_rec[source_image_set][source_image_name]["distances"].append(m_distances[0][0])
         # count = 0
         # for i_image_set in extraction_rec.keys():
         #     for i_image_name in extraction_rec[i_image_set].keys():
@@ -512,6 +529,7 @@ def get_nn(config):
 
     image_num = 0
     num_unique = 0
+    all_distances = []
     for source_image_set in tqdm.tqdm(extraction_rec.keys(), desc="Extracting patches"):
 
         image_set_dir = os.path.join("usr", "data", "image_sets",
@@ -524,7 +542,8 @@ def get_nn(config):
             image_path = glob.glob(os.path.join(image_set_dir, "images", source_image_name + ".*"))[0]
             image = Image(image_path)
             
-            patch_coords_lst = extraction_rec[source_image_set][source_image_name]
+            patch_coords_lst = extraction_rec[source_image_set][source_image_name]["patch_coords"]
+            distances = extraction_rec[source_image_set][source_image_name]["distances"]
             #patch_coords_lst = #(np.unique(np.array(extraction_rec[source_image_set][source_image_name]), axis=0)).tolist()
             num_unique += len((np.unique(np.array(extraction_rec[source_image_set][source_image_name]), axis=0)).tolist())
 
@@ -532,8 +551,17 @@ def get_nn(config):
                                     patch_coords_lst, 
                                     annotations[source_image_name], 
                                     starting_patch_num=image_num))
+            all_distances.append(distances)
 
             image_num += len(patch_coords_lst)
+
+    distance_record = {}
+    for distance, patch_record in zip(all_distances, patch_records):
+        distance_record[patch_record["patch_name"]] = distance
+
+    distance_record_path = os.path.join(config.model_dir, "patch_distances.json")
+    json_io.save_json(distance_record_path, distance_record)
+
 
     patch_records = np.array(patch_records)
     print("Generated {} patch records.".format(patch_records.size))
