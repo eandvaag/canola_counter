@@ -907,7 +907,7 @@ def report(run_uuid):
 
 def run_test():
     dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
-    methods = ["direct_tiled"] #transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
+    methods = ["transfer"] #"direct_tiled"] #transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
 
     method_params = {
             "match_method": "bipartite_b_matching",
@@ -918,9 +918,9 @@ def run_test():
 
     target_datasets = [
         {
-            "target_farm_name": "Biggar", #"BlaineLake", #"row_spacing", #"UNI", #"row_spacing",
-            "target_field_name": "Dennis3", #"HornerWest", #"brown", #"LowN1", #"River", #"brown",
-            "target_mission_date": "2021-06-04" #2021-06-01" # "2021-06-07" #"2021-06-01" #-low-res"
+            "target_farm_name": "UNI", #"BlaineLake", #"row_spacing", #"UNI", #"row_spacing",
+            "target_field_name": "LowN1", #"HornerWest", #"brown", #"LowN1", #"River", #"brown",
+            "target_mission_date": "2021-06-07" #2021-06-01" # "2021-06-07" #"2021-06-01" #-low-res"
         }
     ]
 
@@ -962,7 +962,7 @@ def run_test():
                 job_config = {
                     "job_uuid": job_uuid,
                     "replications": 1,
-                    "job_name": "reg_test_5.0_" + job_uuid,
+                    "job_name": "interp_test_" + job_uuid,
                     "source_construction_params": {
                         "method_name": method,
                         "method_params": method_params,
@@ -971,15 +971,15 @@ def run_test():
                     "target_farm_name": dataset["target_farm_name"],
                     "target_field_name": dataset["target_field_name"],
                     "target_mission_date": dataset["target_mission_date"],
-                    "predict_on_completed_only": True, #True,
+                    "predict_on_completed_only": False, #True, #True,
                     "supplementary_targets": [],
                     "tol_test": 30, #30, #epoch_patience[dataset_size]
                     "test_reserved_images": test_reserved_images,
-                    "supplementary_targets": [{
-                        "target_farm_name": "Biggar",
-                        "target_field_name": "Dennis1",
-                        "target_mission_date": "2021-06-04"
-                    }],
+                    # "supplementary_targets": [{
+                    #     "target_farm_name": "Biggar",
+                    #     "target_field_name": "Dennis1",
+                    #     "target_mission_date": "2021-06-04"
+                    # }],
                     # "variation_config": {
                     #     "param_configs": ["inference", "inference"],
                     #     "param_names": ["rm_edge_boxes", "patch_border_buffer_percent"],

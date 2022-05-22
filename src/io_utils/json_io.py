@@ -14,3 +14,6 @@ def load_json(path):
     with open(path, 'r') as fp:
         data = json.load(fp)
     return data
+
+def print_json(data):
+    print(json.dumps(data, indent=4, sort_keys=True))

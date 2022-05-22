@@ -6,6 +6,8 @@ import tqdm
 import imagesize
 import numpy as np
 import cv2
+import json
+import requests
 
 from io_utils import json_io, xml_io, w3c_io, exif_io
 from models.common import box_utils
@@ -205,40 +207,91 @@ class Image(object):
 #         w, h = imagesize.get(self.img_path)
 #         return w, h
 
-    def get_gsd(self, flight_metadata=None, prioritize_exif=False):
-        metadata = exif_io.get_exif_metadata(self.img_path)
+    def get_metadata(self):
+        return exif_io.get_exif_metadata(self.image_path)
 
-        # TODO
-        #sensor_x_res = metadata["EXIF:FocalPlaneXResolution"]
-        #sensor_y_res = metadata["EXIF:FocalPlaneYResolution"]
-        #focal_length = metadata["EXIF:FocalLength"]
 
-        x_res = metadata["EXIF:XResolution"]
-        y_res = metadata["EXIF:YResolution"]
-        res_unit = metadata["EXIF:ResolutionUnit"]
+    def get_height_m(self, metadata):
 
+        gps_altitude = metadata["EXIF:GPSAltitude"]
+        gps_latitude = metadata["EXIF:GPSLatitude"]
+        gps_longitude = metadata["EXIF:GPSLongitude"]
+        gps_latitude_ref = metadata["EXIF:GPSLatitudeRef"]
+        gps_longitude_ref = metadata["EXIF:GPSLongitudeRef"]
+
+        if gps_latitude_ref == "S":
+            gps_latitude *= -1.0
+        if gps_longitude_ref == "W":
+            gps_longitude *= -1.0
+
+
+
+        request = "https://api.open-elevation.com/api/v1/lookup?locations=" + str(gps_latitude) + "," + str(gps_longitude)
+        # print("Request", request)
+        res = requests.get(request) #52.36134444444445,-107.94438333333333")
+
+        ground_elevation = float(res.json()["results"][0]["elevation"])
         
+        # print("GPS Altitude: {}, ground_elevation: {}".format(gps_altitude, ground_elevation))
+        height_m = (gps_altitude - ground_elevation) #* 1000
+
+        return height_m
+
+    def get_gsd(self, metadata, flight_height):
+        # try:
+            
+            # print(json.dumps(metadata, indent=4, sort_keys=True))
+
+        make = metadata["EXIF:Make"]
+        model = metadata["EXIF:Model"]
+
+        cameras = json_io.load_json(os.path.join("usr", "data", "cameras", "cameras.json"))
+
+        specs = cameras[make][model]
+        sensor_width = float(specs["sensor_width"][:-2])
+        sensor_height = float(specs["sensor_height"][:-2])
+        focal_length = float(specs["focal_length"][:-2])
+
+        #flight_height = self.get_height_m(metadata)
+
+        # flight_height = flight_metadata["flight_height_m"]
+        # sensor_height = flight_metadata["sensor_height_mm"] * 1000
+        # sensor_width = flight_metadata["sensor_width_mm"] * 1000
+        # focal_length = flight_metadata["focal_length_mm"] * 1000
+        # print("flight_height: {}, sensor_height: {}, sensor_width: {}, focal_length: {}".format(
+        #     flight_height, sensor_height, sensor_width, focal_length
+        # ))
 
 
-        flight_height = flight_metadata["flight_height_m"]
-        sensor_height = flight_metadata["sensor_height_mm"] * 1000
-        sensor_width = flight_metadata["sensor_width_mm"] * 1000
-        focal_length = flight_metadata["focal_length_mm"] * 1000
 
-        img_width, img_height = self.get_wh()
+        image_width, image_height = self.get_wh()
+        # print("image_width: {}, image_height: {}".format(image_width, image_height))
 
-        gsd_h = (flight_height * sensor_height) / (focal_length * img_height)
-        gsd_w = (flight_height * sensor_width) / (focal_length * img_width)
+
+
+        gsd_h = (flight_height * sensor_height) / (focal_length * image_height)
+        gsd_w = (flight_height * sensor_width) / (focal_length * image_width)
+
+        # print("gsd_h: {}, gsd_w: {}".format(gsd_h, gsd_w))
         gsd = min(gsd_h, gsd_w)
-        
+
         return gsd
+            
+        # except:
+        #     raise RuntimeError("Missing EXIF data needed to determine GSD.")
 
-    def get_area_m2(self, flight_metadata=None, prioritize_exif=False):
 
-        gsd = self.get_gsd(flight_metadata=flight_metadata, prioritize_exif=prioritize_exif)
-        img_width, img_height = self.get_wh()
-        area_m2 = (img_width * gsd) * (img_height * gsd)
+    def get_area_m2(self, metadata, flight_height):
+        # try:
+        gsd = self.get_gsd(metadata, flight_height)
+        image_width, image_height = self.get_wh()
+        image_width_m = image_width * gsd
+        image_height_m = image_height * gsd
+        #print("Dw: {}, Dh: {}".format(image_width_m, image_height_m))
+        area_m2 = image_width_m * image_height_m
         return area_m2
+        # except:
+        #     raise RuntimeError("Missing EXIF data needed to determine image area.")
 
 
 # def register_image_set(req_args):
