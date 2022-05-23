@@ -71,14 +71,20 @@ def extract_metadata(image_set_dir, flight_height=None):
         #     image_set_metadata["missing"]["height_m"]  = True
 
 
-        if "EXIF:GPSLatitude" in md:
+        if "EXIF:GPSLatitude" in md and "EXIF:GPSLatitudeRef" in md:
             gps_latitude = md["EXIF:GPSLatitude"]
+            gps_latitude_ref = md["EXIF:GPSLatitudeRef"]
+            if gps_latitude_ref == "S":
+                gps_latitude *= -1.0
         else:
             gps_latitude = "unknown"
             image_set_metadata["missing"]["latitude"] = True
 
-        if "EXIF:GPSLongitude" in md:
+        if "EXIF:GPSLongitude" in md and "EXIF:GPSLongitudeRef" in md:
             gps_longitude = md["EXIF:GPSLongitude"]
+            gps_longitude_ref = md["EXIF:GPSLongitudeRef"]
+            if gps_longitude_ref == "W":
+                gps_longitude *= -1.0
         else:
             gps_longitude = "unknown"
             image_set_metadata["missing"]["longitude"] = True
