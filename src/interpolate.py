@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import argparse
 
+from sklearn.metrics import pairwise_distances
+
+
 from image_set import DataSet
 from io_utils import json_io, exif_io
 
@@ -16,7 +19,77 @@ def range_map(old_val, old_min, old_max, new_min, new_max):
     return new_val
 
 
-def create_interpolation_map(dataset, out_dir, interpolation="linear", completed_only=False, pred_path=None):
+def similarity_map(dataset):
+
+    farm_name = dataset.farm_name
+    field_name = dataset.field_name
+    mission_date = dataset.mission_date
+
+    
+    image_set_dir =  os.path.join("usr", "data", "image_sets",
+                        farm_name, field_name, mission_date)
+
+    annotations_path = os.path.join(image_set_dir,
+                        "annotations", "annotations_w3c.json")
+    
+    annotations = json_io.load_json(annotations_path)
+
+    annotated_features = []
+    unannotated_features = []
+    feature_counts = []
+    unannotated_image_names = []
+    for image_name in annotations.keys():
+        print("image_name", image_name)
+        features_path = os.path.join(image_set_dir, "features", image_name + ".npy")
+        features = np.load(features_path)
+
+        if annotations[image_name]["status"] == "completed":
+            annotated_features.extend(features.tolist())
+        else:
+            unannotated_features.extend(features.tolist())
+            feature_counts.append(features.shape[0])
+            unannotated_image_names.append(image_name)
+
+    print("calculating pairwise distances")
+    distances = pairwise_distances(unannotated_features, annotated_features)
+    print("finished")
+    #print("feature_counts", feature_counts)
+    scores = []
+    prev_feature_sum = 0
+    for i, feature_count in enumerate(feature_counts):
+        sel = distances[prev_feature_sum:prev_feature_sum + feature_count, :]
+        sel_sum = np.sum(sel)
+        #print("adding {}, score: {}".format(unannotated_image_names[i], sel_sum))
+        #res[unannotated_image_names[i]] = sel_sum
+        scores.append(sel_sum)
+        prev_feature_sum = prev_feature_sum + feature_count
+
+    #json_io.print_json(res)
+    scores = np.array(scores)
+    inds = np.argsort(scores)
+    sorted_scores = scores[inds]
+    sorted_names = np.array(unannotated_image_names)[inds]
+    for i, (score, name) in enumerate(zip(sorted_scores, sorted_names)):
+        print("{}: Image: {} | Score: {}".format(i, name, score))
+
+
+def create_plot(grid_z0, extent, vmin, vmax, cmap, out_path):
+    plt.figure()
+    plt.imshow(grid_z0.T, extent=extent, origin="lower", vmin=vmin, vmax=vmax, cmap=cmap)
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+
+    plt.gca().set_axis_off()
+    plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+    plt.margins(0,0)
+    plt.gca().xaxis.set_major_locator(plt.NullLocator())
+    plt.gca().yaxis.set_major_locator(plt.NullLocator())
+
+    #out_path = os.path.join(out_dir, "annotated_map.svg")
+    plt.savefig(out_path, bbox_inches='tight', transparent=True, pad_inches=0)
+
+
+def create_interpolation_map(dataset, out_dir, interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
 
     farm_name = dataset.farm_name
     field_name = dataset.field_name
@@ -43,39 +116,6 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
     if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["missing"]["area_m2"]:
         raise RuntimeError("Cannot compute map due to missing metadata.")
 
-    # data = {}
-    # for image_name in annotations.keys():
-    #     image_path = glob.glob(os.path.join(images_root, image_name + ".*"))[0]
-    #     #metadata = exif_io.get_exif_metadata(image_path)
-
-
-    #     if pred_path is None:
-    #         predicted_density = None
-    #     else:
-    #         predicted_density = len(predictions["image_predictions"][image_name]["pred_image_abs_boxes"])
-
-    #     status = annotations[image_name]["status"]
-    #     data[image_name] = {
-    #         #"predicted_count": predicted_count,
-    #         "latitude": metadata["images"][image_name]["latitude"], # ["EXIF:GPSLatitude"],
-    #         "longitude": metadata["images"][image_name]["longitude"], #["EXIF:GPSLongitude"],
-    #         "status": status,
-    #         "annotated_density": len(annotations[image_name]["annotations"]) / metadata["images"][image_name]["area_m2"]
-    #     }
-
-    #     # predicted_values = .append()
-
-    #     #gps_latitude = 
-    #     #gps_longitude = 
-    #     #points.append([gps_longitude, gps_latitude])
-
-        
-
-    #     # if status == "completed":
-    #     #     annotated_count = len(annotations[image_name]["annotations"])
-
-    #     #     completed_points.append([gps_longitude, gps_latitude])
-    #     #     values.append(annotated_count)
 
     all_points = []
     predicted_values = []
@@ -99,9 +139,6 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
                 predicted_values.append(predicted_value)
 
 
-
-
-    #print(completed_points)
     all_points = np.array(all_points)
     completed_points = np.array(completed_points)
     annotated_values = np.array(annotated_values)
@@ -130,48 +167,12 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
 
     grid_x, grid_y = np.mgrid[np.min(completed_points[:,0]):np.max(completed_points[:,0]):1000j, 
                               np.min(completed_points[:,1]):np.max(completed_points[:,1]):1000j]
-    #grid_x, grid_y = np.mgrid[0:1:100j, 
-    #                          0:1:100j]
+
     grid_z0 = griddata(completed_points, annotated_values, (grid_x, grid_y), method=interpolation)
-    # print("grid_x", grid_x)
-    # print("grd_y", grid_y)
-    # print("grid_z0", grid_z0)
+
 
     extent = (np.min(completed_points[:,0]), np.max(completed_points[:,0]),
-              np.min(completed_points[:,1]), np.max(completed_points[:,1]))
-
-    print("grid_z0.shape", grid_z0.shape)
-    
-    if pred_path is None:
-        max_val = m.ceil(np.max(annotated_values))
-    elif num_completed < 3:
-        max_val = m.ceil(np.max(predicted_values))
-    else:
-        max_val = m.ceil(max(np.max(predicted_values), np.max(annotated_values)))
-
-
-
-    colors = ["wheat", "forestgreen"]
-    cmap = LinearSegmentedColormap.from_list("mycmap", colors)
-
-    if num_completed >= 3:
-        fig = plt.figure(figsize=(5, 5))
-        plt.imshow(grid_z0.T, extent=extent, origin="lower", vmin=0, vmax=max_val, cmap=cmap)
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
-
-        plt.gca().set_axis_off()
-        plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-        plt.margins(0,0)
-        plt.gca().xaxis.set_major_locator(plt.NullLocator())
-        plt.gca().yaxis.set_major_locator(plt.NullLocator())
-
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
-        out_path = os.path.join(out_dir, "annotated_map.svg")
-
-        plt.savefig(out_path, bbox_inches='tight', transparent=True, pad_inches=0)
-
+                np.min(completed_points[:,1]), np.max(completed_points[:,1]))
 
     if pred_path is not None:
 
@@ -179,7 +180,7 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
             pred_grid_z0 = griddata(completed_points, predicted_values, (grid_x, grid_y), method=interpolation)
 
             pred_extent = (np.min(completed_points[:,0]), np.max(completed_points[:,0]),
-                           np.min(completed_points[:,1]), np.max(completed_points[:,1]))
+                        np.min(completed_points[:,1]), np.max(completed_points[:,1]))
         else:
             pred_grid_z0 = griddata(all_points, predicted_values, (grid_x, grid_y), method=interpolation)
 
@@ -187,47 +188,64 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
                            np.min(all_points[:,1]), np.max(all_points[:,1]))
 
 
-        fig = plt.figure(figsize=(5, 5))
-        plt.imshow(pred_grid_z0.T, extent=pred_extent, origin="lower", vmin=0, vmax=max_val, cmap=cmap)
 
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
 
-        plt.gca().set_axis_off()
-        plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-        plt.margins(0,0)
-        plt.gca().xaxis.set_major_locator(plt.NullLocator())
-        plt.gca().yaxis.set_major_locator(plt.NullLocator())
+    if comparison_type == "side_by_side":
+
+        if pred_path is None:
+            vmax = m.ceil(np.max(annotated_values))
+        elif num_completed < 3:
+            vmax = m.ceil(np.max(predicted_values))
+        else:
+            vmax = m.ceil(max(np.max(predicted_values), np.max(annotated_values)))
+
+        vmin = 0
+
+
+        colors = ["wheat", "forestgreen"]
+        cmap = LinearSegmentedColormap.from_list("mycmap", colors)
+
 
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
-        out_path = os.path.join(out_dir, "predicted_map.svg")
 
-        plt.savefig(out_path, bbox_inches='tight', transparent=True, pad_inches=0)
+        if num_completed >= 3:
+
+            out_path = os.path.join(out_dir, "annotated_map.svg")
+            create_plot(grid_z0, extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
 
 
+        if pred_path is not None:
 
-    # if predictions is not None:
+            out_path = os.path.join(out_dir, "predicted_map.svg")
+            create_plot(pred_grid_z0, pred_extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
+    
+    elif comparison_type == "diff":
 
-    #     all_predicted_values = np.array(all_predicted_values)
-    #     grid_x, grid_y = np.mgrid[np.min(all_points[:,0]):np.max(all_points[:,0]):1000j, 
-    #                           np.min(all_points[:,1]):np.max(all_points[:,1]):1000j]
+        diff_grid_z0 = pred_grid_z0 - grid_z0
 
-    #     grid_z0 = griddata(all_points, all_predicted_values, (grid_x, grid_y), method="linear")
+        vmin = m.floor(np.nanmin(diff_grid_z0))
+        vmax = m.ceil(np.nanmax(diff_grid_z0))
+        vlim = max(abs(vmin), abs(vmax))
+        vmin = -vlim
+        vmax = vlim
 
-    #     extent = (np.min(all_points[:,0]), np.max(all_points[:,0]),
-    #               np.min(all_points[:,1]), np.max(all_points[:,1]))
 
-    #     plt.figure()
-    #     plt.imshow(grid_z0.T, extent=extent, origin="lower", vmin=0, vmax=max_val, cmap=cmap)
-    #     plt.plot(all_points[:,0], all_points[:,1], 'k.')
-    #     #plt.plot(completed_points[:,0], completed_points[:,1], 'r.') #, extent=extent, origin="lower")
+        colors = ["royalblue", "oldlace", "tomato"] #"ghostwhite", "tomato"]
+        #colors = ["royalblue", "whitesmoke", "tomato"]  #"tomato"]
+        cmap = LinearSegmentedColormap.from_list("mycmap", colors)
 
-    #     plt.xlim([min_x-0.0001, max_x+0.0001])
-    #     plt.ylim([min_y-0.0001, max_y+0.0001])
-    #     plt.colorbar()
+        out_path = os.path.join(out_dir, "difference_map.svg")
+        create_plot(diff_grid_z0, pred_extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
 
-    #     plt.savefig("predicted_map.svg")
+
+    min_max_rec = {
+        "vmin": vmin,
+        "vmax": vmax
+    }
+    min_max_rec_path = os.path.join(out_dir, "min_max_rec.json")
+    json_io.save_json(min_max_rec_path, min_max_rec)
+
 
 
 def remove_all_maps():
@@ -261,6 +279,7 @@ if __name__ == "__main__":
     parser.add_argument('-nearest', action='store_true')
     parser.add_argument('-completed_only', action='store_true')
     parser.add_argument('-pred_path', type=str)
+    parser.add_argument('-diff', action='store_true')
     args = parser.parse_args()
     
     dataset = DataSet({
@@ -279,9 +298,15 @@ if __name__ == "__main__":
     else:
         interpolation = "linear"
 
+    if args.diff:
+        comparison_type = "diff"
+    else:
+        comparison_type = "side_by_side"
+
 
     create_interpolation_map(dataset, 
                             args.out_dir, 
                             interpolation=interpolation, 
                             completed_only=args.completed_only,
-                            pred_path=args.pred_path)
+                            pred_path=args.pred_path,
+                            comparison_type=comparison_type)

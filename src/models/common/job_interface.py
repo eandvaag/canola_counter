@@ -363,7 +363,7 @@ def build_job_excel(job_config):
     excel_path = os.path.join(model_dir, "results.xlsx")
     job_df = pd.read_excel(excel_path)
     job_df.rename(columns={"model_plant_count": model_name + "_plant_count"}, inplace=True)
-    job_df.rename(columns={"model_plant_count_at_optimal_score": model_name + "_plant_count_at_optimal_score"}, inplace=True)
+    #job_df.rename(columns={"model_plant_count_at_optimal_score": model_name + "_plant_count_at_optimal_score"}, inplace=True)
 
     for model_info in model_info_lst[1:]:
         model_uuid = model_info["model_uuid"]
@@ -372,7 +372,7 @@ def build_job_excel(job_config):
         df = pd.read_excel(excel_path)
 
         job_df[model_info["model_name"] + "_plant_count"] = df["model_plant_count"]
-        job_df[model_info["model_name"] + "_plant_count_at_optimal_score"] = df["model_plant_count_at_optimal_score"]
+        #job_df[model_info["model_name"] + "_plant_count_at_optimal_score"] = df["model_plant_count_at_optimal_score"]
 
     #print("job_df", job_df)
     pandas.io.formats.excel.ExcelFormatter.header_style = None

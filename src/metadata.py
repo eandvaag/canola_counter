@@ -138,6 +138,10 @@ def extract_metadata_for_all_image_sets():
             for mission_path in glob.glob(os.path.join(field_path, "*")):
                 mission_date = os.path.basename(mission_path)
 
+                metadata_dir = os.path.join(mission_path, "metadata")
+                #if not os.path.exists(metadata_dir):
+                #    print("Missing: {} {} {}".format(farm_name, field_name, mission_date))
+
                 extract_metadata(mission_path, flight_height=2)
 
 

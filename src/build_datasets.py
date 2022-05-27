@@ -228,13 +228,16 @@ def build_transfer(config):
     logger = logging.getLogger(__name__)
 
     logger.info("Building feature vectors...")
-    #ef.build_feature_vectors(config)
+    ef.build_feature_vectors(config)
+    
     #ef.build_target_feature_vectors(config, completed_only=True)
     logger.info("Finished building feature vectors.")
+    #exit()
 
     logger.info("Performing matching...")
     #patches = match.match(config)
     #match.retrieval(config)
+    #exit()
     patches = match.get_nn(config)
     logger.info("Finished performing matching.")
 

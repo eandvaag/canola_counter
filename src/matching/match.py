@@ -340,6 +340,9 @@ def output_debug_matches(config, distances, intervals, source_image_sets, target
     #                                 starting_patch_num=0))
 
 
+def target_retrieval_2(config):
+    pass
+
 
 def target_retrieval(config):
 
@@ -412,6 +415,7 @@ def approximate_best_match(config):
     # match with 
 
 
+
 def get_nn(config):
     target_farm_name = config.arch["target_farm_name"]
     target_field_name = config.arch["target_field_name"]
@@ -419,8 +423,10 @@ def get_nn(config):
 
     target_tup = (target_farm_name, target_field_name, target_mission_date)
     print("loading all features")
-    source_features, source_patch_coords = ef.load_all_features(omit=[target_tup])
+    r_s_nasser = ("row_spacing", "nasser", "2020-06-08-low-res")
+    source_features, source_patch_coords = ef.load_all_features(omit=[target_tup, r_s_nasser], completed_only=True)
     #exit()
+    print("all features loaded")
     
 
     c_source_features = np.empty((0,source_features[list(source_features.keys())[0]].shape[1])) #None
@@ -434,8 +440,8 @@ def get_nn(config):
     del source_features
     print("c_source_features.shape", c_source_features.shape)
 
-    target_features, target_coords_rec = ef.load_features(
-        target_farm_name, target_field_name, target_mission_date, include_coords=True)
+    target_features, target_patch_coords = ef.load_features(
+        target_farm_name, target_field_name, target_mission_date, include_coords=True, completed_only=True) #False)
     print("target_features.shape", target_features.shape)
 
     target_images_dir = os.path.join("usr", "data", "image_sets",
@@ -476,36 +482,56 @@ def get_nn(config):
     # print("Finished querying in {} seconds".format(end_time-start_time))
     # exit()
     #prev_count = 0
+    target_extraction_rec = {}
+    k = 2
     for i in tqdm.trange(target_features.shape[0], desc="Querying for nearest neighbours"):
     #for i in tqdm.trange(m_indices.shape[0], desc="Building extraction record"):
         #m_indices[0][0]
-        m_distances, m_indices = tree.query((target_features[i]).reshape(1, -1), k=1)
-        #print("m_indices", m_indices)
+        m_distances, m_indices = tree.query((target_features[i]).reshape(1, -1), k=k)
+        print("m_indices", m_indices)
 
-        source_image_set_ind = np.searchsorted(intervals, m_indices[0][0], side="right") - 1
-        source_image_set = source_image_sets[source_image_set_ind]
-        starting_ind = intervals[source_image_set_ind]
-        patch_ind = m_indices[0][0] - starting_ind
 
-        source_image_name = source_patch_coords[source_image_set]["image_names"][patch_ind]
-        patch_coords = source_patch_coords[source_image_set]["patch_coords"][patch_ind]
+        for neighbour_ind in range(k):
+            source_image_set_ind = np.searchsorted(intervals, m_indices[0][neighbour_ind], side="right") - 1
+            print("source_image_set_ind", source_image_set_ind)
+            source_image_set = source_image_sets[source_image_set_ind]
+            print("source_image_set", source_image_set)
+            starting_ind = intervals[source_image_set_ind]
+            print("starting_ind", starting_ind)
+            patch_ind = m_indices[0][neighbour_ind] - starting_ind
+            print("patch_ind", patch_ind)
 
-        # print("source_image_set", source_image_set)
-        # print("starting_ind", starting_ind)
-        # print("patch_ind", patch_ind)
-        # print("source_image_name", source_image_name)
-        # print("patch_coords", patch_coords)
-        #exit()
-        
-        if source_image_set not in extraction_rec:
-            extraction_rec[source_image_set] = {}
-        if source_image_name not in extraction_rec[source_image_set]:
-            extraction_rec[source_image_set][source_image_name] = {
-                "patch_coords": [],
-                "distances": []
-        }
-        extraction_rec[source_image_set][source_image_name]["patch_coords"].append(patch_coords)
-        extraction_rec[source_image_set][source_image_name]["distances"].append(m_distances[0][0])
+            source_image_name = source_patch_coords[source_image_set]["image_names"][patch_ind]
+            print("source_image_name", source_image_name)
+            patch_coords = source_patch_coords[source_image_set]["patch_coords"][patch_ind]
+            print("patch_coords", patch_coords)
+
+            # print("source_image_set", source_image_set)
+            # print("starting_ind", starting_ind)
+            # print("patch_ind", patch_ind)
+            # print("source_image_name", source_image_name)
+            # print("patch_coords", patch_coords)
+            #exit()
+            target_image_name = target_patch_coords["image_names"][i]
+            target_coords = target_patch_coords["patch_coords"][i]
+            if target_image_name not in target_extraction_rec:
+                target_extraction_rec[target_image_name] = {
+                    "patch_coords": [],
+                    "distances": []
+                }
+            target_extraction_rec[target_image_name]["patch_coords"].append(target_coords)
+            target_extraction_rec[target_image_name]["distances"].append(m_distances[0][neighbour_ind])
+
+            
+            if source_image_set not in extraction_rec:
+                extraction_rec[source_image_set] = {}
+            if source_image_name not in extraction_rec[source_image_set]:
+                extraction_rec[source_image_set][source_image_name] = {
+                    "patch_coords": [],
+                    "distances": []
+            }
+            extraction_rec[source_image_set][source_image_name]["patch_coords"].append(patch_coords)
+            extraction_rec[source_image_set][source_image_name]["distances"].append(m_distances[0][neighbour_ind])
         # count = 0
         # for i_image_set in extraction_rec.keys():
         #     for i_image_name in extraction_rec[i_image_set].keys():
@@ -545,7 +571,7 @@ def get_nn(config):
             patch_coords_lst = extraction_rec[source_image_set][source_image_name]["patch_coords"]
             distances = extraction_rec[source_image_set][source_image_name]["distances"]
             #patch_coords_lst = #(np.unique(np.array(extraction_rec[source_image_set][source_image_name]), axis=0)).tolist()
-            num_unique += len((np.unique(np.array(extraction_rec[source_image_set][source_image_name]), axis=0)).tolist())
+            num_unique += len((np.unique(np.array(extraction_rec[source_image_set][source_image_name]["patch_coords"]), axis=0)).tolist())
 
             patch_records.extend(ep.extract_patch_records_from_image(image, 
                                     patch_coords_lst, 
@@ -555,13 +581,42 @@ def get_nn(config):
 
             image_num += len(patch_coords_lst)
 
-    distance_record = {}
-    for distance, patch_record in zip(all_distances, patch_records):
-        distance_record[patch_record["patch_name"]] = distance
+    # distance_record = {}
+    # for distance, patch_record in zip(all_distances, patch_records):
+    #     distance_record[patch_record["patch_name"]] = distance
+
+    # distance_record_path = os.path.join(config.model_dir, "patch_distances.json")
+    # json_io.save_json(distance_record_path, distance_record)
+
+
+    DEBUG_MATCH_OUT_DIR = os.path.join(config.model_dir, "DEBUG_MATCH")
+    if not os.path.exists(DEBUG_MATCH_OUT_DIR):
+        os.makedirs(DEBUG_MATCH_OUT_DIR)
+    DEBUG_DISTANCES = {}
+    target_image_num = 0
+
+    image_set_dir = os.path.join("usr", "data", "image_sets",
+                                 target_farm_name, target_field_name, target_mission_date)
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+    for target_image_name in target_extraction_rec.keys():
+
+        image_path = glob.glob(os.path.join(image_set_dir, "images", target_image_name + ".*"))[0]
+        image = Image(image_path)
+        patch_coords_lst = target_extraction_rec[target_image_name]["patch_coords"]
+        distances = target_extraction_rec[target_image_name]["distances"]
+        target_patch_records = (ep.extract_patch_records_from_image(image, 
+                                patch_coords_lst, 
+                                annotations[target_image_name], 
+                                starting_patch_num=target_image_num))
+        target_image_num += len(patch_coords_lst)
+
+        ep.write_annotated_patch_records(target_patch_records, DEBUG_MATCH_OUT_DIR)
+        for i, patch_record in enumerate(target_patch_records):
+            DEBUG_DISTANCES[patch_record["patch_name"]] = distances[i]
 
     distance_record_path = os.path.join(config.model_dir, "patch_distances.json")
-    json_io.save_json(distance_record_path, distance_record)
-
+    json_io.save_json(distance_record_path, DEBUG_DISTANCES)
 
     patch_records = np.array(patch_records)
     print("Generated {} patch records.".format(patch_records.size))
@@ -578,7 +633,8 @@ def retrieval(config):
 
     target_tup = (target_farm_name, target_field_name, target_mission_date)
     print("loading all features")
-    source_features, source_patch_coords = ef.load_all_features(omit=[target_tup])
+    r_s_nasser = ("row_spacing", "nasser", "2020-06-08-low-res")
+    source_features, source_patch_coords = ef.load_all_features(omit=[target_tup, r_s_nasser], completed_only=True)
     #exit()
     
 
@@ -598,7 +654,7 @@ def retrieval(config):
     print("c_source_features.shape", c_source_features.shape)
 
     target_features, target_coords_rec = ef.load_features(
-        target_farm_name, target_field_name, target_mission_date, include_coords=True)
+        target_farm_name, target_field_name, target_mission_date, include_coords=True, completed_only=True)
 
     target_images_dir = os.path.join("usr", "data", "image_sets",
     target_farm_name, target_field_name, target_mission_date, "images")

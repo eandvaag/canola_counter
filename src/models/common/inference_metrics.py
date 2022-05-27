@@ -269,7 +269,7 @@ def similarity_analysis(config, predictions):
             
             abs_diff = abs(annotated_patch_plant_count - pred_patch_plant_count)
             diff = (annotated_patch_plant_count - pred_patch_plant_count)
-            distance = distance_record[patch_name]
+            distance = distance_record[patch_name + ".png"]
             res.append({
                 "abs_diff": abs_diff,
                 "diff": diff,
@@ -283,6 +283,7 @@ def similarity_analysis(config, predictions):
     ys = [d["abs_diff"] for d in res]
 
     out_path = os.path.join(config.model_dir, "distance_versus_abs_count_diff.png")
+    plt.figure()
     plt.scatter(xs, ys)
     plt.xlabel("Euclidean Feature Distance")
     plt.ylabel("Absolute difference in predicted count")
@@ -292,9 +293,10 @@ def similarity_analysis(config, predictions):
     ys = [d["diff"] for d in res]
 
     out_path = os.path.join(config.model_dir, "distance_versus_count_diff.png")
+    plt.figure()
     plt.scatter(xs, ys)
     plt.xlabel("Euclidean Feature Distance")
-    plt.ylabel("Absolute difference in predicted count")
+    plt.ylabel("Difference in predicted count")
     plt.savefig(out_path)
 
 
@@ -303,29 +305,6 @@ def collect_metrics(image_names, metrics, predictions, dataset, config,
                     collect_patch_metrics=True, calculate_mAP=True):
 
     logger = logging.getLogger(__name__)
-
-    # datasets = {}
-    # if len(image_set.training_dataset.images) > 0:
-    #     datasets["training"] = image_set.training_dataset
-    # if len(image_set.validation_dataset.images) > 0:
-    #     datasets["validation"] = image_set.validation_dataset    
-    # if len(image_set.test_dataset.images) > 0:
-    #     datasets["test"] = image_set.test_dataset
-
-    # datasets["all"] = image_set.all_dataset
-    # # datasets = {
-    # #     "training": image_set.training_dataset,
-    # #     "validation": image_set.validation_dataset,
-    # #     "test": image_set.test_dataset
-    # # }
-
-    # datasets["all"] = DataSet({
-
-    # })
-    # metric_subsets = {
-    #     "all": predictions["image_predictions"].keys(),
-    #     "test": config.arch["test_reserve_images"]
-    # }
 
     num_classes = len(config.arch["class_map"].keys())
 
@@ -339,21 +318,19 @@ def collect_metrics(image_names, metrics, predictions, dataset, config,
 
     annotations = w3c_io.load_annotations(dataset.annotations_path, config.arch["class_map"])
 
-    #for (dataset_name, dataset) in datasets.items():
-    completed_images = w3c_io.get_completed_images(annotations)
-    optimal_thresh_val, optimal_mean_abs_diff = calculate_optimal_score_threshold(annotations, predictions, completed_images)
-    # if optimal_thresh_val is None:
-    #     optimal_thresh_val = "unknown"
-    #     optimal_mean_abs_diff = "unknown"
+
+    # completed_images = w3c_io.get_completed_images(annotations)
+    # optimal_thresh_val, optimal_mean_abs_diff = calculate_optimal_score_threshold(annotations, predictions, completed_images)
+
 
     
     point_metrics = metrics["point"]
     boxplot_metrics = metrics["boxplot"]    
     image_metrics = metrics["image"]
     
-    point_metrics["true_optimal_score_threshold"] = {}
-    point_metrics["true_optimal_score_threshold"]["threshold_value"] = optimal_thresh_val
-    point_metrics["true_optimal_score_threshold"]["mean_absolute_difference"] = optimal_mean_abs_diff
+    # point_metrics["true_optimal_score_threshold"] = {}
+    # point_metrics["true_optimal_score_threshold"]["threshold_value"] = optimal_thresh_val
+    # point_metrics["true_optimal_score_threshold"]["mean_absolute_difference"] = optimal_mean_abs_diff
 
 
 

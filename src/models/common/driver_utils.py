@@ -105,7 +105,7 @@ def output_excel(out_path, predictions, dataset, config):
     for class_name in class_map.keys(): #config.arch["class_map"].keys():
         d["annotated_" + class_name + "_count"] = []
         d["model_" + class_name + "_count"] = []
-        d["model_" + class_name + "_count_at_optimal_score"] = []
+        #d["model_" + class_name + "_count_at_optimal_score"] = []
 
     annotations = w3c_io.load_annotations(dataset.annotations_path, class_map)
     completed_image_names = w3c_io.get_completed_images(annotations)
@@ -147,14 +147,14 @@ def output_excel(out_path, predictions, dataset, config):
                 #cur_image_class_counts[config.arch["reverse_class_map"][class_num]] = class_num_to_count[class_num]
 
         cur_image_pred_class_counts = predictions["image_predictions"][image_name]["pred_class_counts"]
-        cur_image_pred_opt_class_counts = predictions["image_predictions"][image_name]["pred_opt_class_counts"]
+        #cur_image_pred_opt_class_counts = predictions["image_predictions"][image_name]["pred_opt_class_counts"]
         for class_name in class_map.keys(): #config.arch["class_map"].keys():
             if annotations[image_name]["status"] == "completed":
                 d["annotated_" + class_name + "_count"].append(cur_image_class_counts[class_name])
             else:
                 d["annotated_" + class_name + "_count"].append(np.nan)
             d["model_" + class_name + "_count"].append(cur_image_pred_class_counts[class_name])
-            d["model_" + class_name + "_count_at_optimal_score"].append(cur_image_pred_opt_class_counts[class_name])
+            #d["model_" + class_name + "_count_at_optimal_score"].append(cur_image_pred_opt_class_counts[class_name])
 
     
     pandas.io.formats.excel.ExcelFormatter.header_style = None
@@ -248,7 +248,7 @@ def set_active_training_params(config, seq_num):
 
 
 def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coords, 
-                      image_path, trim=True, patch_border_buffer_percent=None): # buffer_pct=None):
+                      image_path, trim=True): #, patch_border_buffer_percent=None): # buffer_pct=None):
 
     if patch_abs_boxes.size == 0:
         image_abs_boxes = np.array([], dtype=np.int32)
@@ -267,25 +267,25 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
         image_abs_boxes = (np.array(patch_abs_boxes) + \
                            np.tile(patch_coords[:2], 2)).astype(np.int32)
 
-        if patch_border_buffer_percent is not None:
-            patch_wh = (patch_coords[2] - patch_coords[0])
-            buffer_px = (patch_border_buffer_percent / 100 ) * patch_wh
+        # if patch_border_buffer_percent is not None:
+        #     patch_wh = (patch_coords[2] - patch_coords[0])
+        #     buffer_px = (patch_border_buffer_percent / 100 ) * patch_wh
 
-            mask = np.logical_and(
-                    np.logical_and(
-                     np.logical_or(image_abs_boxes[:, 0] > patch_coords[0] + buffer_px, image_abs_boxes[:, 0] <= buffer_px),
-                     np.logical_or(image_abs_boxes[:, 1] > patch_coords[1] + buffer_px, image_abs_boxes[:, 1] <= buffer_px)),
-                    np.logical_and(
-                     np.logical_or(image_abs_boxes[:, 2] < patch_coords[2] - buffer_px, image_abs_boxes[:, 2] >= image_height - buffer_px),
-                     np.logical_or(image_abs_boxes[:, 3] < patch_coords[3] - buffer_px, image_abs_boxes[:, 3] >= image_width - buffer_px))
-                )
+        #     mask = np.logical_and(
+        #             np.logical_and(
+        #              np.logical_or(image_abs_boxes[:, 0] > patch_coords[0] + buffer_px, image_abs_boxes[:, 0] <= buffer_px),
+        #              np.logical_or(image_abs_boxes[:, 1] > patch_coords[1] + buffer_px, image_abs_boxes[:, 1] <= buffer_px)),
+        #             np.logical_and(
+        #              np.logical_or(image_abs_boxes[:, 2] < patch_coords[2] - buffer_px, image_abs_boxes[:, 2] >= image_height - buffer_px),
+        #              np.logical_or(image_abs_boxes[:, 3] < patch_coords[3] - buffer_px, image_abs_boxes[:, 3] >= image_width - buffer_px))
+        #         )
 
-            image_abs_boxes = image_abs_boxes[mask]
-            image_scores = patch_scores[mask]
-            image_classes = patch_classes[mask]
+        #     image_abs_boxes = image_abs_boxes[mask]
+        #     image_scores = patch_scores[mask]
+        #     image_classes = patch_classes[mask]
 
 
-        elif trim:
+        if trim:
 
             accept_bottom = 0 if patch_coords[0] == 0 else patch_coords[0] + round(patch_height / 4)
             accept_left = 0 if patch_coords[1] == 0 else patch_coords[1] + round(patch_width / 4)
@@ -428,7 +428,7 @@ def apply_nms_to_image_boxes(image_predictions, iou_thresh):
         image_predictions[image_name]["pred_scores"] = nms_scores.tolist()
 
 
-def add_class_detections(image_predictions, config, opt_thresh_val):
+def add_class_detections(image_predictions, config): #, opt_thresh_val):
 
     class_map = config.arch["class_map"]
     reverse_class_map = {v: k for k, v in class_map.items()}
@@ -442,7 +442,7 @@ def add_class_detections(image_predictions, config, opt_thresh_val):
         pred_class_counts = {k: 0 for k in class_map.keys()}
         pred_class_boxes = {k: [] for k in class_map.keys()}
         pred_class_scores = {k: [] for k in class_map.keys()}
-        pred_opt_class_counts = {k: 0 for k in class_map.keys()}
+        #pred_opt_class_counts = {k: 0 for k in class_map.keys()}
 
         for class_num in unique:
             class_name = reverse_class_map[class_num]
@@ -451,7 +451,7 @@ def add_class_detections(image_predictions, config, opt_thresh_val):
             pred_class_counts[class_name] = int(pred_scores[inds].size)
             pred_class_boxes[class_name] = (pred_boxes[inds]).tolist()
             pred_class_scores[class_name] = (pred_scores[inds]).tolist()
-            pred_opt_class_counts[class_name] = int((np.where(pred_scores[inds] >= opt_thresh_val)[0]).size)
+            #pred_opt_class_counts[class_name] = int((np.where(pred_scores[inds] >= opt_thresh_val)[0]).size)
 
         
         # class_num_to_count = dict(zip(unique, counts))
@@ -470,7 +470,7 @@ def add_class_detections(image_predictions, config, opt_thresh_val):
         image_predictions[image_name]["pred_class_counts"] = pred_class_counts
         image_predictions[image_name]["pred_class_boxes"] = pred_class_boxes
         image_predictions[image_name]["pred_class_scores"] = pred_class_scores
-        image_predictions[image_name]["pred_opt_class_counts"] = pred_opt_class_counts
+        #image_predictions[image_name]["pred_opt_class_counts"] = pred_opt_class_counts
 
 
 

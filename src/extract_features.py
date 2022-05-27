@@ -14,22 +14,69 @@ from image_set import Image
 from graph import graph_model
 from io_utils import w3c_io, json_io
 
-def load_features(farm_name, field_name, mission_date, include_coords=True):
+
+
+def tmp_del():
+    image_set_root = os.path.join("usr", "data", "image_sets")
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                features_dir = os.path.join(mission_path, "features")
+                features_path = os.path.join(features_dir, "features.npy")
+                if os.path.exists(features_path):
+                    os.remove(features_path)
+                coords_path = os.path.join(features_dir, "patch_coords.json")
+                if os.path.exists(coords_path):
+                    os.remove(coords_path)
+
+
+
+
+def load_features(farm_name, field_name, mission_date, include_coords=True, completed_only=False):
     image_set_dir = os.path.join("usr", "data", "image_sets", 
                                              farm_name, field_name, mission_date)
-    features_path = os.path.join(image_set_dir, "features", "features.npy")
-    if not os.path.exists(features_path):
-        raise RuntimeError("Features path does not exist")
-    features = np.load(features_path)
+    features_dir = os.path.join(image_set_dir, "features") #, "features.npy")
+    #if not os.path.exists(features_path):
+    #    raise RuntimeError("Features path does not exist")
+
+    annotations_path = os.path.join("usr", "data", "image_sets", 
+                            farm_name, field_name, mission_date, 
+                            "annotations", "annotations_w3c.json")
+
+    annotations = json_io.load_json(annotations_path)
+
+    coords = {
+        "patch_coords": [],
+        "image_names": []
+    }
+    image_set_features = []
+    for features_path in glob.glob(os.path.join(features_dir, "*.npy")):
+        image_name = os.path.basename(features_path)[:-4]
+        if not completed_only or annotations[image_name]["status"] == "completed":
+            coords_path = features_path[:-4] + "_patch_coords.json"
+            image_features = np.load(features_path)
+            if include_coords:
+                image_patch_coords = json_io.load_json(coords_path)
+                coords["patch_coords"].extend(image_patch_coords)
+                coords["image_names"].extend([image_name for _ in range(image_features.shape[0])])
+        
+            image_set_features.extend(image_features.tolist())
+
+    image_set_features = np.array(image_set_features)
+    #features = np.load(features_path)
     if include_coords:
-        coords_path = os.path.join(image_set_dir, "features", "patch_coords.json")
-        coords = json_io.load_json(coords_path)
-        return features, coords
+        #coords_path = os.path.join(image_set_dir, "features", "patch_coords.json")
+        #coords = json_io.load_json(coords_path)
+        return image_set_features, coords
     else:
-        return features
+        return image_set_features
 
 
-def load_all_features(nonzero_only=True, omit=[]):
+def load_all_features(nonzero_only=True, omit=[], completed_only=False):
     all_features = {}
     all_coords = {}
 
@@ -44,7 +91,7 @@ def load_all_features(nonzero_only=True, omit=[]):
                 image_set_tup = (farm_name, field_name, mission_date)
                 if image_set_tup not in omit:
                     f, c = load_features(farm_name, field_name, mission_date, 
-                                  include_coords=True)
+                                  include_coords=True, completed_only=completed_only)
                     if f.size > 0 or not nonzero_only:
                         all_features[image_set_tup] = f
                         all_coords[image_set_tup] = c
@@ -121,86 +168,104 @@ def build_feature_vectors(config):
             for mission_path in glob.glob(os.path.join(field_path, "*")):
                 mission_date = os.path.basename(mission_path)
 
-
-                logger.info("Now processing {} {} {}".format(farm_name, field_name, mission_date))
-
                 image_set_dir = os.path.join("usr", "data", "image_sets", 
                                              farm_name, field_name, mission_date)
-                annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-
-                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-
-                
-                is_target = farm_name == target_farm_name and \
-                            field_name == target_field_name and \
-                            mission_date == target_mission_date
-
-                if is_target:           
-                    image_names = list(annotations.keys())
-                    #max_size = TARGET_MAX_DATASET_SIZE
-                else:
-                    image_names = w3c_io.get_completed_images(annotations)
-                    #max_size = MAX_DATASET_SIZE
-                
 
 
-                image_set_features = []
-                image_set_coords = {
-                    "patch_coords": [],
-                    "image_names": []
-                }
+
                 features_dir = os.path.join(image_set_dir, "features")
+
                 if not os.path.exists(features_dir):
                     os.makedirs(features_dir)
 
-                images_dir = os.path.join(image_set_dir, "images")
-                try:
-                    #if patch_size == "image_set_dependent":
-                    image_set_patch_size = w3c_io.get_patch_size(annotations)
-                    #else:
-                    #    image_set_patch_size = patch_size
+                    logger.info("Now processing {} {} {}".format(farm_name, field_name, mission_date))
 
 
-                    for image_name in image_names:
+                    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
 
-                        image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
-                        image = Image(image_path)
+                    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-                        patches = ep.extract_patch_records_from_image_tiled(
-                            image, 
-                            image_set_patch_size, 
-                            annotations[image_name],
-                            patch_overlap_percent=50)
-
-                        #image_features = extract_patch_features(patches, config)
-                        image_features = extract_patch_features_hist(patches, config)
-                        image_set_features.extend(image_features.tolist())
-                        image_set_coords["patch_coords"].extend([patch["patch_coords"] for patch in patches])
-                        image_set_coords["image_names"].extend([image_name for _ in patches])
                     
+                    # is_target = farm_name == target_farm_name and \
+                    #             field_name == target_field_name and \
+                    #             mission_date == target_mission_date
 
-                except RuntimeError:
-                    pass
-                    #raise RuntimeError("Need annotations in image set to determine image set dependent patch size.")
-
-
-                image_set_features = np.array(image_set_features)
-
-
-
-                # if image_set_features.shape[0] > max_size:
-                #     inds = np.random.choice(image_set_features.shape[0], MAX_DATASET_SIZE, replace=False)
-                #     image_set_features = image_set_features[inds]
-                #     image_set_coords["patch_coords"] = (np.array(image_set_coords["patch_coords"])[inds]).tolist()
-                #     image_set_coords["image_names"] = (np.array(image_set_coords["image_names"])[inds]).tolist()
+                    # if is_target:           
+                    #     image_names = list(annotations.keys())
+                    #     #max_size = TARGET_MAX_DATASET_SIZE
+                    # else:
+                    #     image_names = w3c_io.get_completed_images(annotations)
+                    #     #max_size = MAX_DATASET_SIZE
 
 
-                features_path = os.path.join(features_dir, "features.npy")
-                patch_coords_path = os.path.join(features_dir, "patch_coords.json")
-                np.save(features_path, image_set_features)
-                json_io.save_json(patch_coords_path, image_set_coords)
+                    image_names = list(annotations.keys())
 
 
+                    # image_set_features = []
+                    # image_set_coords = {
+                    #     "patch_coords": [],
+                    #     "image_names": []
+                    # }
+
+                    images_dir = os.path.join(image_set_dir, "images")
+
+                    try:
+                        #if patch_size == "image_set_dependent":
+                        image_set_patch_size = w3c_io.get_patch_size(annotations)
+                        #else:
+                        #    image_set_patch_size = patch_size
+
+
+                        for image_name in image_names:
+
+                            image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+                            image = Image(image_path)
+
+                            patches = ep.extract_patch_records_from_image_tiled(
+                                image, 
+                                image_set_patch_size, 
+                                annotations[image_name],
+                                patch_overlap_percent=50)
+
+                            #image_features = extract_patch_features(patches, config)
+                            image_features = extract_patch_features_hist(patches, config)
+                            #image_set_features.extend(image_features.tolist())
+                            #image_set_coords["patch_coords"].extend([patch["patch_coords"] for patch in patches])
+                            #image_set_coords["image_names"].extend([image_name for _ in patches])
+                            patch_coords = [patch["patch_coords"] for patch in patches]
+
+                            features_path = os.path.join(features_dir, image_name + ".npy")
+                            patch_coords_path = os.path.join(features_dir, image_name + "_patch_coords.json")
+                            np.save(features_path, image_features)
+                            json_io.save_json(patch_coords_path, patch_coords)
+                        
+
+                    except RuntimeError:
+                        pass
+                        #raise RuntimeError("Need annotations in image set to determine image set dependent patch size.")
+
+
+                    # image_set_features = np.array(image_set_features)
+
+
+
+                    # if image_set_features.shape[0] > max_size:
+                    #     inds = np.random.choice(image_set_features.shape[0], MAX_DATASET_SIZE, replace=False)
+                    #     image_set_features = image_set_features[inds]
+                    #     image_set_coords["patch_coords"] = (np.array(image_set_coords["patch_coords"])[inds]).tolist()
+                    #     image_set_coords["image_names"] = (np.array(image_set_coords["image_names"])[inds]).tolist()
+
+
+                    # features_path = os.path.join(features_dir, "features.npy")
+                    # patch_coords_path = os.path.join(features_dir, "patch_coords.json")
+                    # np.save(features_path, image_set_features)
+                    # json_io.save_json(patch_coords_path, image_set_coords)
+
+
+
+
+def build_image_feature_vectors(config):
+    pass
 
 
 def build_target_feature_vectors(config, completed_only=False):

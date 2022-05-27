@@ -278,7 +278,7 @@ def fill_job_config(job_config):
                             "parameters": {
                                 "probability": 0.5
                             }
-                        }
+                        },
                         # {
                         #     "type": "brightness_contrast",
                         #     "parameters": {
@@ -336,9 +336,9 @@ def fill_job_config(job_config):
             "batch_size": 16,
             "patch_nms_iou_thresh": 0.4,
             "image_nms_iou_thresh": 0.4,
-            "score_thresh": 0.5,
-            "rm_edge_boxes": True,
-            "patch_border_buffer_percent": None
+            "score_thresh": 0.5
+            # "rm_edge_boxes": True,
+            # "patch_border_buffer_percent": None
         }
     })
 
