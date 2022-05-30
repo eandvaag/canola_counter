@@ -13,7 +13,7 @@ from models.yolov4.encode import LabelEncoder
 from io_utils import tf_record_io
 
 
-MAX_MEMORY_LIMIT = 75.0
+MAX_MEMORY_LIMIT = 85.0
 
 
 class DataLoader(ABC):

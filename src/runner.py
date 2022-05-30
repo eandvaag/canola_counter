@@ -903,11 +903,60 @@ def report(run_uuid):
 
 
 
+def run_all():
+
+    targets = []
+    image_set_root = os.path.join("usr", "data", "image_sets")
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                targets.append({
+                    "target_farm_name": farm_name,
+                    "target_field_name": field_name,
+                    "target_mission_date": mission_date
+                })
+
+
+    target = targets[0]
+    supplementary_targets = targets[1:]
+
+
+
+    job_uuid = str(uuid.uuid4())
+
+    job_config = {
+        "job_uuid": job_uuid,
+        "replications": 1,
+        "job_name": "train_on_everything_test_" + job_uuid,
+        "source_construction_params": {
+            "method_name": "everything",
+            "method_params": [],
+        },
+        "target_farm_name": target["target_farm_name"],
+        "target_field_name": target["target_field_name"],
+        "target_mission_date": target["target_mission_date"],
+        "predict_on_completed_only": False,
+        "supplementary_targets": [],
+        "tol_test": 30,
+        "test_reserved_images": [],
+        "supplementary_targets": supplementary_targets
+
+    }
+    job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+    json_io.save_json(job_config_path, job_config)
+    job_interface.run_job(job_uuid)
+
+
+
 
 
 def run_test():
     dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
-    methods = ["transfer"] #"direct_tiled"] #transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
+    methods = ["direct_tiled"] #"transfer"] #"direct_tiled"] #transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
 
     method_params = {
             "match_method": "bipartite_b_matching",
@@ -919,7 +968,7 @@ def run_test():
     target_datasets = [
         {
             "target_farm_name": "Saskatoon", # "BlaineLake", #"row_spacing", #"UNI", #"row_spacing",
-            "target_field_name": "Norheim1", #"HornerWest", #"brown", #"LowN1", #"River", #"brown",
+            "target_field_name": "Norheim2", #"HornerWest", #"brown", #"LowN1", #"River", #"brown",
             "target_mission_date": "2021-05-26" #"2021-06-09" #2021-06-01" # "2021-06-07" #"2021-06-01" #-low-res"
         }
     ]
@@ -962,7 +1011,7 @@ def run_test():
                 job_config = {
                     "job_uuid": job_uuid,
                     "replications": 1,
-                    "job_name": "k=2_transfer_test_" + job_uuid,
+                    "job_name": "direct_test_" + job_uuid,
                     "source_construction_params": {
                         "method_name": method,
                         "method_params": method_params,
@@ -975,11 +1024,14 @@ def run_test():
                     "supplementary_targets": [],
                     "tol_test": 30, #30, #epoch_patience[dataset_size]
                     "test_reserved_images": test_reserved_images,
-                    # "supplementary_targets": [{
+                    "supplementary_targets": [{
                     #     "target_farm_name": "Biggar",
                     #     "target_field_name": "Dennis1",
                     #     "target_mission_date": "2021-06-04"
-                    # }],
+                        "target_farm_name": "Saskatoon",
+                        "target_field_name": "Norheim1",
+                        "target_mission_date": "2021-05-26"
+                    }],
                     # "variation_config": {
                     #     "param_configs": ["inference", "inference"],
                     #     "param_names": ["rm_edge_boxes", "patch_border_buffer_percent"],

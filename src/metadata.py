@@ -146,6 +146,21 @@ def extract_metadata_for_all_image_sets():
 
 
 
+def tmp_create_lock_files():
+    
+    image_set_root = os.path.join("usr", "data", "image_sets")
+
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                lock_path = os.path.join(mission_path, "annotations", "lock.json")
+                if not os.path.exists(lock_path):
+                    json_io.save_json(lock_path, {"last_refresh": 0})
+                    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

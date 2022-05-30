@@ -113,7 +113,7 @@ def generate_predictions(config):
     # if not os.path.exists(patches_dir):
     #     os.makedirs(patches_dir)
 
-    similarity_analysis_debug(config)
+    #similarity_analysis_debug(config)
     #optimal_train_val_thresh, optimal_train_val_diff = calculate_optimal_score_thresh(config)
     #print("got optimal thresh val: {}".format(optimal_thresh_val))
 

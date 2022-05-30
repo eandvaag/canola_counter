@@ -103,6 +103,8 @@ def build_training_datasets(config):
         build_direct_tiled(config)
     elif method_name == "transfer":
         build_transfer(config)
+    elif method_name == "everything":
+        build_everything(config)
     else:
         raise RuntimeError("Unrecognized source dataset construction method: {}".format(method_name))
 
@@ -264,6 +266,84 @@ def build_transfer(config):
     logger.info("Finished writing patches.")
 
 
+def build_everything(config):
+    logger = logging.getLogger(__name__)
+
+    source_construction_params = config.training["source_construction_params"]
+
+    patch_size = "image_set_dependent"
+
+    patches = []
+
+    image_set_root = os.path.join("usr", "data", "image_sets")
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                            
+                annotations_path = os.path.join("usr", "data", "image_sets", 
+                                        farm_name, field_name, mission_date, 
+                                        "annotations", "annotations_w3c.json")
+
+                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+
+                completed_images = w3c_io.get_completed_images(annotations)
+                num_annotations = w3c_io.get_num_annotations(annotations, require_completed=True)
+
+                images_root = os.path.join("usr", "data", "image_sets", 
+                                        farm_name, field_name, mission_date, "images")
+
+
+                if len(completed_images) > 0 and num_annotations > 30:
+                    if patch_size == "image_set_dependent":
+                        image_set_patch_size = w3c_io.get_patch_size(annotations)
+                    else:
+                        image_set_patch_size = patch_size
+
+                    for image_name in completed_images:
+
+                        image_path = glob.glob(os.path.join(images_root, image_name + ".*"))[0]
+                        image = Image(image_path)
+
+
+                        patches.extend(ep.extract_patch_records_from_image_tiled(
+                            image, 
+                            image_set_patch_size, 
+                            annotations[image_name])
+                        )
+
+    logger.info("extraction complete.")
+
+    patches = np.array(patches)
+    np.random.shuffle(patches)
+
+
+    logger.info("Total number of training/validation patches is {}.".format(patches.size))
+
+    usr_data_root = os.path.join("usr", "data")
+    patches_dir = os.path.join(usr_data_root, "models", config.arch["model_uuid"], "source_patches", "0")
+    training_patches_dir = os.path.join(patches_dir, "training")
+    validation_patches_dir = os.path.join(patches_dir, "validation")
+    os.makedirs(training_patches_dir)
+    os.makedirs(validation_patches_dir)
+
+
+    training_size = round(patches.size * 0.8)
+    training_subset = random.sample(np.arange(patches.size).tolist(), training_size)
+
+    training_patches = patches[training_subset]
+    validation_patches = np.delete(patches, training_subset)
+
+
+    logger.info("Extracted {} training patches and {} validation patches".format(training_patches.size, validation_patches.size))
+    logger.info("Writing patches...")
+    ep.write_annotated_patch_records(training_patches, training_patches_dir)
+    ep.write_annotated_patch_records(validation_patches, validation_patches_dir)
+    logger.info("Finished writing patches.")
 
 def build_direct_tiled(config):
 
@@ -312,8 +392,6 @@ def build_direct_tiled(config):
                 image_set_patch_size, 
                 annotations[image_name])
             )
-
-        logger.info("extraction complete.")
 
         
 
