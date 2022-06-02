@@ -15,36 +15,38 @@ from models.common import box_utils
 
 
 
-
-
 class ImgSet(object):
+    def __init__(self):
+        pass
 
-    def __init__(self, farm_name, field_name, mission_date):
+# class ImgSet(object):
 
-        usr_data_root = os.path.join("usr", "data")
+#     def __init__(self, farm_name, field_name, mission_date):
 
-        self.farm_name = farm_name
-        self.field_name = field_name
-        self.mission_date = mission_date
-        self.root_dir = os.path.join(usr_data_root, "image_sets", farm_name, field_name, mission_date)
-        self.img_dir = os.path.join(self.root_dir, "images")
-        self.patch_dir = os.path.join(self.root_dir, "patches")
-        self.dzi_dir = os.path.join(self.root_dir, "dzi_images")
+#         usr_data_root = os.path.join("usr", "data")
 
-        img_set_data_path = os.path.join(self.root_dir, "image_set_data.json")
-        img_set_data = json_io.load_json(img_set_data_path)
+#         self.farm_name = farm_name
+#         self.field_name = field_name
+#         self.mission_date = mission_date
+#         self.root_dir = os.path.join(usr_data_root, "image_sets", farm_name, field_name, mission_date)
+#         self.img_dir = os.path.join(self.root_dir, "images")
+#         self.patch_dir = os.path.join(self.root_dir, "patches")
+#         self.dzi_dir = os.path.join(self.root_dir, "dzi_images")
+
+#         img_set_data_path = os.path.join(self.root_dir, "image_set_data.json")
+#         img_set_data = json_io.load_json(img_set_data_path)
         
-        self.class_map = img_set_data["class_map"]
-        self.reverse_class_map = {v: k for k, v in self.class_map.items()}
-        self.num_classes = img_set_data["num_classes"]
+#         self.class_map = img_set_data["class_map"]
+#         self.reverse_class_map = {v: k for k, v in self.class_map.items()}
+#         self.num_classes = img_set_data["num_classes"]
         
-        self.datasets = {
-            "training": DataSet(img_set_data["training_image_paths"], self.class_map, "training"),
-            "validation": DataSet(img_set_data["validation_image_paths"], self.class_map, "validation"),
-            "test": DataSet(img_set_data["test_image_paths"], self.class_map, "test"),
-            "all": DataSet(img_set_data["all_image_paths"], self.class_map, "all")
+#         self.datasets = {
+#             "training": DataSet(img_set_data["training_image_paths"], self.class_map, "training"),
+#             "validation": DataSet(img_set_data["validation_image_paths"], self.class_map, "validation"),
+#             "test": DataSet(img_set_data["test_image_paths"], self.class_map, "test"),
+#             "all": DataSet(img_set_data["all_image_paths"], self.class_map, "all")
 
-        }
+#         }
 
         # if (not self.datasets["training"].is_annotated) or \
         #    (not self.datasets["validation"].is_annotated) or \

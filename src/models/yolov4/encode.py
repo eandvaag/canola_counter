@@ -9,15 +9,15 @@ class LabelEncoder:
 
     def __init__(self, config):
         super(LabelEncoder, self).__init__()
-        self.strides = config.arch["strides"]
-        self.num_classes = config.arch["num_classes"]
-        self.anchors = config.arch["anchors"]
-        self.anchors_per_scale = config.arch["anchors_per_scale"]
-        self.input_image_shape = config.arch["input_image_shape"]
+        self.strides = config["arch"]["strides"]
+        self.num_classes = config["arch"]["num_classes"]
+        self.anchors = config["arch"]["anchors"]
+        self.anchors_per_scale = config["arch"]["anchors_per_scale"]
+        self.input_image_shape = config["arch"]["input_image_shape"]
         assert self.input_image_shape[0] == self.input_image_shape[1]
         self.output_dim = self.input_image_shape[0] // self.strides # an nx1 array, n == num_scales
-        self.max_detections_per_scale = config.arch["max_detections_per_scale"]
-        self.num_scales = config.arch["num_scales"]
+        self.max_detections_per_scale = config["arch"]["max_detections_per_scale"]
+        self.num_scales = config["arch"]["num_scales"]
         #self.batch_size = config.training["active"]["batch_size"]
 
 
@@ -179,13 +179,13 @@ class LabelEncoder:
 
 class Decoder:
 
-    def __init__(self, config, **kwargs):
-        super(Decoder, self).__init__(**kwargs)
-        self.num_classes = config.arch["num_classes"]
-        self.xy_scales = config.arch["xy_scales"]
-        self.strides = config.arch["strides"]
-        self.anchors = config.arch["anchors"]
-        self.anchors_per_scale = config.arch["anchors_per_scale"]
+    def __init__(self, config): #, **kwargs):
+        #super(Decoder, self).__init__(**kwargs)
+        self.num_classes = config["arch"]["num_classes"]
+        self.xy_scales = config["arch"]["xy_scales"]
+        self.strides = config["arch"]["strides"]
+        self.anchors = config["arch"]["anchors"]
+        self.anchors_per_scale = config["arch"]["anchors_per_scale"]
 
 
     def __call__(self, conv_outputs):

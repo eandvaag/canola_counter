@@ -5,7 +5,7 @@ from models.yolov4.common import Conv2d
 
 def build_neck(config):
 
-    neck_config = config.arch["neck_config"]
+    neck_config = config["arch"]["neck_config"]
     neck_type = neck_config["neck_type"]
 
     neck = None

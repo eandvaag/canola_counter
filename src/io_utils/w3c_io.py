@@ -48,7 +48,7 @@ def load_annotations(w3c_path, class_map):
 def save_annotations(annotations_path, predictions, config):
 
     annotations = {}
-    reverse_class_map = {v: k for k, v in config.arch["class_map"].items()}
+    reverse_class_map = {v: k for k, v in config["arch"]["class_map"].items()}
 
     for image_name in predictions["image_predictions"].keys():
 

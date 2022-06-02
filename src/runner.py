@@ -903,7 +903,7 @@ def report(run_uuid):
 
 
 
-def run_all():
+def run_all_dep():
 
     targets = []
     image_set_root = os.path.join("usr", "data", "image_sets")
@@ -951,10 +951,99 @@ def run_all():
     job_interface.run_job(job_uuid)
 
 
+def run_all():
+    training_image_sets = []
+    test_image_sets = []
+    image_set_root = os.path.join("usr", "data", "image_sets")
+    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
+
+                annotations_path = os.path.join("usr", "data", "image_sets", 
+                                        farm_name, field_name, mission_date, 
+                                        "annotations", "annotations_w3c.json")
+
+                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
 
+                completed_images = w3c_io.get_completed_images(annotations)
+                num_annotations = w3c_io.get_num_annotations(annotations, require_completed=True)
+
+
+                if len(completed_images) > 0 and num_annotations > 30:
+                
+                    training_image_sets.append({
+                        "farm_name": farm_name,
+                        "field_name": field_name,
+                        "mission_date": mission_date,
+                        "test_reserved_images": []
+                    })
+                    test_image_sets.append({
+                        "farm_name": farm_name,
+                        "field_name": field_name,
+                        "mission_date": mission_date
+                    })
+
+
+    job_uuid = str(uuid.uuid4())
+
+    job_config = {
+        "job_uuid": job_uuid,
+        "replications": 1,
+        "job_name": "refactor_test_" + job_uuid,
+
+        "training": {
+            "image_sets": training_image_sets
+        },
+        "inference": {
+            "image_sets": test_image_sets
+        }
+
+    }
+    job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+    json_io.save_json(job_config_path, job_config)
+    job_interface.run_job(job_uuid)
 
 def run_test():
+
+    job_uuid = str(uuid.uuid4())
+
+    job_config = {
+        "job_uuid": job_uuid,
+        "replications": 1,
+        "job_name": "refactor_test_" + job_uuid,
+
+        "training": {
+            "image_sets": [
+                {
+                    "farm_name": "Saskatoon",
+                    "field_name": "Norheim1",
+                    "mission_date": "2021-05-26",
+                    "test_reserved_images": []
+                }
+            ]
+        },
+        "inference": {
+            "image_sets": [
+                {
+                    "farm_name": "Saskatoon",
+                    "field_name": "Norheim1",
+                    "mission_date": "2021-05-26"
+                }
+            ]
+        }
+
+    }
+    job_config_path = os.path.join("usr", "data", "jobs", job_uuid + ".json")
+    json_io.save_json(job_config_path, job_config)
+    job_interface.run_job(job_uuid)
+
+
+
+def run_test_dep():
     dataset_sizes = [0] #[500, 5000, 10000, 20000] #20000] #3000] #[15000] #250] #10000]
     methods = ["direct_tiled"] #"transfer"] #"direct_tiled"] #transfer"] #["direct_tiled"] #["transfer"] #"direct_tiled"]
 

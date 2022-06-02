@@ -134,11 +134,11 @@ def collect_statistics(image_names, metrics, predictions, config, inference_time
     boxplot_metrics["Confidence"] = {}
     boxplot_metrics["Box Area"] = {}
 
-    confidences = {k: [] for k in config.arch["class_map"].keys()}
-    boxes = {k: [] for k in config.arch["class_map"].keys()}
+    confidences = {k: [] for k in config["arch"]["class_map"].keys()}
+    boxes = {k: [] for k in config["arch"]["class_map"].keys()}
     #for image in dataset.images:
     for image_name in image_names: #predictions["image_predictions"].keys():
-        for cls_name in config.arch["class_map"].keys():
+        for cls_name in config["arch"]["class_map"].keys():
             cls_confs = predictions["image_predictions"][image_name]["pred_class_scores"][cls_name] 
             confidences[cls_name].extend(cls_confs)
 
@@ -153,7 +153,7 @@ def collect_statistics(image_names, metrics, predictions, config, inference_time
     # point_metrics["Min Box Area"]["Cross-Class Weighted Average"] = 0
     # point_metrics["Max Box Area"]["Cross-Class Weighted Average"] = 0
 
-    for cls_name in config.arch["class_map"].keys():
+    for cls_name in config["arch"]["class_map"].keys():
 
         if len(confidences[cls_name]) > 0:
             mean_cls_conf = float(np.mean(confidences[cls_name]))
@@ -232,15 +232,15 @@ def similarity_analysis(config, predictions):
 
     
 
-    distance_record_path = os.path.join(config.model_dir, "patch_distances.json")
+    distance_record_path = os.path.join(config["model_dir"], "patch_distances.json")
 
     if not os.path.exists(distance_record_path):
         return
 
     distance_record = json_io.load_json(distance_record_path)
 
-    class_map = config.arch["class_map"]
-    reverse_class_map = {v: k for k, v in config.arch["class_map"].items()}
+    class_map = config["arch"]["class_map"]
+    reverse_class_map = config["arch"]["reverse_class_map"]
 
 
     # annotated_patch_counts = {k: [] for k in class_map.keys()}
@@ -282,7 +282,7 @@ def similarity_analysis(config, predictions):
     xs = [d["distance"] for d in res]
     ys = [d["abs_diff"] for d in res]
 
-    out_path = os.path.join(config.model_dir, "distance_versus_abs_count_diff.png")
+    out_path = os.path.join(config["model_dir"], "distance_versus_abs_count_diff.png")
     plt.figure()
     plt.scatter(xs, ys)
     plt.xlabel("Euclidean Feature Distance")
@@ -292,7 +292,7 @@ def similarity_analysis(config, predictions):
     xs = [d["distance"] for d in res]
     ys = [d["diff"] for d in res]
 
-    out_path = os.path.join(config.model_dir, "distance_versus_count_diff.png")
+    out_path = os.path.join(config["model_dir"], "distance_versus_count_diff.png")
     plt.figure()
     plt.scatter(xs, ys)
     plt.xlabel("Euclidean Feature Distance")
@@ -306,17 +306,17 @@ def collect_metrics(image_names, metrics, predictions, dataset, config,
 
     logger = logging.getLogger(__name__)
 
-    num_classes = len(config.arch["class_map"].keys())
+    num_classes = len(config["arch"]["class_map"].keys())
 
     annotated_image_counts = {}
     pred_image_counts = {}
 
-    class_map = config.arch["class_map"]
-    reverse_class_map = {v: k for k, v in config.arch["class_map"].items()}
+    class_map = config["arch"]["class_map"]
+    reverse_class_map =  config["arch"]["reverse_class_map"]
 
     all_images_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=num_classes) #config.arch["num_classes"])
 
-    annotations = w3c_io.load_annotations(dataset.annotations_path, config.arch["class_map"])
+    annotations = w3c_io.load_annotations(dataset.annotations_path, config["arch"]["class_map"])
 
 
     # completed_images = w3c_io.get_completed_images(annotations)

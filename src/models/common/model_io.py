@@ -12,7 +12,7 @@ def save_model_weights(model, config, seq_num, epoch):
 
     logger = logging.getLogger(__name__)
 
-    weights_dir = os.path.join(config.weights_dir, str(seq_num))
+    weights_dir = os.path.join(config["weights_dir"], str(seq_num))
     weights_path = os.path.join(weights_dir, "weights.h5")
     if os.path.exists(weights_dir):
         shutil.rmtree(weights_dir)
@@ -43,7 +43,7 @@ def load_all_weights(model, config):
 
     logger = logging.getLogger(__name__)
 
-    weights_path = get_most_recent_weights_path(config.weights_dir)
+    weights_path = get_most_recent_weights_path(config["weights_dir"])
     model.load_weights(weights_path, by_name=False)
 
     logger.info("Loaded all model weights.")
@@ -54,12 +54,12 @@ def load_select_weights(model, config):
 
     logger = logging.getLogger(__name__)
 
-    layer_lookup_path = os.path.join(config.weights_dir, "layer_lookup.json")
+    layer_lookup_path = os.path.join(config["weights_dir"], "layer_lookup.json")
     layer_lookup = json_io.load_json(layer_lookup_path)
 
     load_layer_names = []
     frozen_layer_names = []
-    load_weights_config = config.training["active"]["load_weights_config"]
+    load_weights_config = config["training"]["active"]["load_weights_config"]
 
     parts = ["backbone", "neck", "head"]
 
@@ -80,7 +80,7 @@ def load_select_weights(model, config):
 
     #logger.info("Now loading weights for the following layers: {}".format(load_layer_names))
 
-    weights_path = get_most_recent_weights_path(config.weights_dir)
+    weights_path = get_most_recent_weights_path(config["weights_dir"])
     model.load_weights(weights_path, by_name=True)
 
     for layer in model.layers:

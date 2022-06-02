@@ -3,7 +3,7 @@ import os
 import copy
 import numpy as np
 
-from models.common import class_map_utils
+# from models.common import class_map_utils
 
 class ModelConfig(ABC):
 
@@ -24,28 +24,10 @@ class ModelConfig(ABC):
 
         self.arch = copy.deepcopy(arch_config)
 
-        # self.arch = {}
-
-        # cp_keys = ["group_uuid",
-        #            "model_uuid",
-        #            "model_name",
-        #            "model_type"]
-
-        # for cp_key in cp_keys:
-        #     self.arch[cp_key] = arch_config[cp_key]
-
     def add_training_config(self, training_config):
 
-        self.training = copy.deepcopy(training_config) #{}
+        self.training = copy.deepcopy(training_config)
 
-        # cp_keys = ["group_uuid",
-        #            "model_uuid",
-        #            "model_name",
-        #            "training_sequence",
-        #            "shared_default"]
-
-        # for cp_key in cp_keys:
-        #     self.training[cp_key] = training_config[cp_key]
         class_map = self.arch["class_map"] if "class_map" in self.arch else None
         class_map_utils.create_and_save_class_map_data(training_config, class_map=class_map)
         class_map_data = class_map_utils.load_class_map_data(training_config["model_uuid"])
@@ -60,17 +42,6 @@ class ModelConfig(ABC):
     def add_inference_config(self, inference_config):
 
         self.inference = copy.deepcopy(inference_config)
-
-        # self.inference = {}
-
-        # cp_keys = ["group_uuid"
-        #            "model_uuid",
-        #            "model_name",
-        #            "image_sets",
-        #            "shared_default"]
-
-        # for cp_key in cp_keys:
-        #     self.inference[cp_key] = inference_config[cp_key]
         
         class_map_data = class_map_utils.load_class_map_data(inference_config["model_uuid"])
 
@@ -210,3 +181,76 @@ class YOLOv4Config(ModelConfig):
                                     [[1.875,3.8125], [3.875,2.8125], [3.6875,7.4375]], 
                                     [[3.625,2.8125], [4.875,6.1875], [11.65625,10.1875]]
                                 ], dtype=np.float32)
+
+
+
+
+def add_retinanet_keys(model_config):
+    pass
+
+def add_centernet_keys(model_config):
+    pass
+
+def add_efficientdet_keys(model_config):
+    pass
+
+def add_yolov4_keys(model_config):
+
+    arch_config = model_config["arch"]
+
+    arch_config["anchors_per_scale"] = 3
+
+    arch_config["max_detections_per_scale"] = arch_config["max_detections"]
+
+
+    arch_config["iou_loss_thresh"] = 0.5
+
+
+    if arch_config["model_type"] == "yolov4":
+        arch_config["num_scales"] = 3
+        arch_config["strides"] = np.array([8, 16, 32])
+        arch_config["xy_scales"] = [1.2, 1.1, 1.05]
+        arch_config["anchors"] = np.array([
+                                [[1.25,1.625], [2.0,3.75], [4.125,2.875]], 
+                                [[1.875,3.8125], [3.875,2.8125], [3.6875,7.4375]], 
+                                [[3.625,2.8125], [4.875,6.1875], [11.65625,10.1875]]
+                            ], dtype=np.float32)
+
+    elif arch_config["model_type"] == "yolov4_tiny":
+        arch_config["num_scales"] = 2
+        arch_config["strides"] = np.array([16, 32])
+        arch_config["xy_scales"] = [1.1, 1.05]
+        arch_config["anchors"] = np.array([
+                                [[1.875,3.8125], [3.875,2.8125], [3.6875,7.4375]], 
+                                [[3.625,2.8125], [4.875,6.1875], [11.65625,10.1875]]
+                            ], dtype=np.float32)
+
+
+
+def add_general_keys(model_config):
+
+    model_config["model_dir"] = os.path.join("usr", "data", "models", model_config["model_uuid"])
+    model_config["weights_dir"] = os.path.join(model_config["model_dir"], "weights")
+    model_config["loss_records_dir"] = os.path.join(model_config["model_dir"], "loss_records")
+    model_config["predictions_dir"] = os.path.join(model_config["model_dir"], "predictions")
+
+    model_config["arch"]["reverse_class_map"] = {v: k for k, v in model_config["arch"]["class_map"].items()}
+    model_config["arch"]["num_classes"] = len(model_config["arch"]["class_map"].keys())
+
+def add_specialized_keys(model_config):
+
+    model_type = model_config["arch"]["model_type"]
+
+    if model_type == "retinanet":
+        add_func = add_retinanet_keys
+    elif model_type == "centernet":
+        add_func = add_centernet_keys
+    elif model_type == "efficientdet":
+        add_func = add_efficientdet_keys
+    elif model_type == "yolov4" or model_type == "yolov4_tiny":
+        add_func = add_yolov4_keys
+    else:
+        raise RuntimeError("Unknown model type: '{}'.".format(model_type))
+
+
+    add_func(model_config)

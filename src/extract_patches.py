@@ -551,7 +551,7 @@ def extract_gt_boxes(image, gt_boxes):
 
 
 def write_patches(out_dir, patch_data_lst):
-    for patch_data in patch_data_lst:
+    for patch_data in tqdm.tqdm(patch_data_lst, desc="Writing patches"):
         #print(np.shape(patch_data["patch"]), end=" ")
         #h, w = np.shape(patch_data["patch"])[:2]
         #if h > 1 or w > 1:

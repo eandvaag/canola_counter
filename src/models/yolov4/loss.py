@@ -65,11 +65,11 @@ class YOLOv4Loss:
 
     def __init__(self, config):
 
-        self.num_classes = config.arch["num_classes"]
-        self.strides = config.arch["strides"]
-        self.iou_loss_thresh = config.arch["iou_loss_thresh"]
-        self.anchors_per_scale = config.arch["anchors_per_scale"]
-        self.num_scales = config.arch["num_scales"]
+        self.num_classes = config["arch"]["num_classes"]
+        self.strides = config["arch"]["strides"]
+        self.iou_loss_thresh = config["arch"]["iou_loss_thresh"]
+        self.anchors_per_scale = config["arch"]["anchors_per_scale"]
+        self.num_scales = config["arch"]["num_scales"]
         self.decoder = Decoder(config)
 
     @tf.function

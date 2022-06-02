@@ -26,9 +26,9 @@ from models.common import box_utils
 
 
 
-def extract_patches(dataset, config):
-    patch_dir = ep.extract_patches(dataset, config)
-    return patch_dir
+# def extract_patches(dataset, config):
+#     patch_dir = ep.extract_patches(dataset, config)
+#     return patch_dir
 
 # def constant_learning_rate_function(steps_taken, training_steps_per_epoch, config):
 #     return config.training["active"]["learning_rate_schedule"]["learning_rate"]
@@ -46,7 +46,7 @@ def extract_patches(dataset, config):
 
 def get_learning_rate(steps_taken, training_steps_per_epoch, config):
 
-    schedule = config.training["active"]["learning_rate_schedule"]
+    schedule = config["training"]["active"]["learning_rate_schedule"]
     schedule_type = schedule["schedule_type"]
 
 
@@ -57,7 +57,7 @@ def get_learning_rate(steps_taken, training_steps_per_epoch, config):
         lr_init = schedule["learning_rate_init"]
         lr_end = schedule["learning_rate_end"]
         warm_up_epochs = schedule["warm_up_epochs"]
-        num_epochs = config.training["active"]["num_epochs"]
+        num_epochs = config["training"]["active"]["num_epochs"]
         warm_up_steps = warm_up_epochs * training_steps_per_epoch
         total_steps = num_epochs * training_steps_per_epoch
 
@@ -86,7 +86,7 @@ def get_weight_names(model, input_shape):
 
 def output_excel(out_path, predictions, dataset, config):
 
-    class_map = config.arch["class_map"]
+    class_map = config["arch"]["class_map"]
     reverse_class_map = {v: k for k, v in class_map.items()}
 
     farm_name = dataset.farm_name
@@ -110,6 +110,15 @@ def output_excel(out_path, predictions, dataset, config):
     annotations = w3c_io.load_annotations(dataset.annotations_path, class_map)
     completed_image_names = w3c_io.get_completed_images(annotations)
 
+    test_reserved_images = annotations.keys()
+    for image_set_config in config["training"]["image_sets"]:
+        if image_set_config["farm_name"] == farm_name and \
+            image_set_config["field_name"] == field_name and \
+            image_set_config["mission_date"] == mission_date:
+            test_reserved_images = image_set_config["test_reserved_images"]
+            break
+
+
     #for image in dataset.images: #image_set.all_dataset.images:
     for image_name in predictions["image_predictions"].keys():
         # if image.image_name in image_set.training_dataset.image_names:
@@ -121,7 +130,7 @@ def output_excel(out_path, predictions, dataset, config):
         # else:
         #     dataset_name = "NA"
         if image_name in completed_image_names:
-            if image_name in config.arch["test_reserved_images"]:
+            if image_name in test_reserved_images:
                 dataset_name = "testing"
             else:
                 dataset_name = "training/validation"
@@ -196,14 +205,14 @@ def update_loss_tracker_entry(loss_tracker, key, cur_loss, cur_epoch):
 
 
 def stop_early(config, loss_tracker):
-    if "min_num_epochs" in config.training["active"] and \
-        len(loss_tracker["training_loss"]["values"]) < config.training["active"]["min_num_epochs"]:
+    if "min_num_epochs" in config["training"]["active"] and \
+        len(loss_tracker["training_loss"]["values"]) < config["training"]["active"]["min_num_epochs"]:
         
         return False
     
-    if config.training["active"]["early_stopping"]["apply"]:
-        key = config.training["active"]["early_stopping"]["monitor"]
-        if loss_tracker[key]["epochs_since_improvement"] >= config.training["active"]["early_stopping"]["num_epochs_tolerance"]:
+    if config["training"]["active"]["early_stopping"]["apply"]:
+        key = config["training"]["active"]["early_stopping"]["monitor"]
+        if loss_tracker[key]["epochs_since_improvement"] >= config["training"]["active"]["early_stopping"]["num_epochs_tolerance"]:
             return True
 
 
@@ -212,9 +221,9 @@ def stop_early(config, loss_tracker):
 
 def set_active_training_params(config, seq_num):
 
-    config.training["active"] = {}
-    for k in config.training["training_sequence"][seq_num]:
-        config.training["active"][k] = config.training["training_sequence"][seq_num][k]
+    config["training"]["active"] = {}
+    for k in config["training"]["training_sequence"][seq_num]:
+        config["training"]["active"][k] = config["training"]["training_sequence"][seq_num][k]
 
 # def set_active_training_params(config, seq_num):
 
@@ -430,7 +439,7 @@ def apply_nms_to_image_boxes(image_predictions, iou_thresh):
 
 def add_class_detections(image_predictions, config): #, opt_thresh_val):
 
-    class_map = config.arch["class_map"]
+    class_map = config["arch"]["class_map"]
     reverse_class_map = {v: k for k, v in class_map.items()}
 
     for image_name in image_predictions.keys():

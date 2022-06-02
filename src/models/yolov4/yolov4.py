@@ -12,35 +12,26 @@ from models.yolov4.necks import spp_pan as spp_pan_neck, \
 from models.yolov4.common import Conv2d
 
 
-# def get_backbone_class(config):
-#     csp_darknets = ["csp_darknet53"]
-
-#     if config.arch["backbone_config"]["backbone_type"] in csp_darknets:
-#         return "csp_darknet"
-#     else:
-#         raise RuntimeError("Unsupported backbone: '{}'".format(config.arch["backbone_config"]["backbone_type"]))
-
-
 def build_backbone(config):
 
 
-    if config.arch["backbone_config"]["backbone_type"] == "csp_darknet53":
+    if config["arch"]["backbone_config"]["backbone_type"] == "csp_darknet53":
         return csp_darknet_backbone.build_backbone(config)
-    elif config.arch["backbone_config"]["backbone_type"] == "csp_darknet53_tiny":
+    elif config["arch"]["backbone_config"]["backbone_type"] == "csp_darknet53_tiny":
         return csp_darknet_tiny_backbone.build_backbone(config)
     else:
-        raise RuntimeError("Unsupported backbone: '{}'".format(config.arch["backbone_config"]["backbone_type"]))
+        raise RuntimeError("Unsupported backbone: '{}'".format(config["arch"]["backbone_config"]["backbone_type"]))
 
 
 def build_neck(config):
 
-    neck_type = config.arch["neck_config"]["neck_type"]
+    neck_type = config["arch"]["neck_config"]["neck_type"]
     if neck_type == "spp_pan":
         return spp_pan_neck.build_neck(config)
     elif neck_type == "yolov4_tiny_deconv":
         return yolov4_tiny_deconv_neck.build_neck(config)
     else:
-        raise RuntimeError("Unsupported neck: '{}'".format(config.arch["neck_config"]["neck_type"]))
+        raise RuntimeError("Unsupported neck: '{}'".format(config["arch"]["neck_config"]["neck_type"]))
 
 def build_head(num_filters_1, num_filters_2):
     return YOLOv3Head(num_filters_1, num_filters_2)
@@ -65,7 +56,7 @@ class YOLOv4(tf.keras.Model):
     def __init__(self, config):
         super(YOLOv4, self).__init__(name="YOLOv4")
 
-        out_shape = config.arch["anchors_per_scale"] * (5 + config.arch["num_classes"])
+        out_shape = config["arch"]["anchors_per_scale"] * (5 + config["arch"]["num_classes"])
 
         self.backbone = build_backbone(config)
         self.neck = build_neck(config)
@@ -104,7 +95,7 @@ class YOLOv4Tiny(tf.keras.Model):
     def __init__(self, config):
         super(YOLOv4Tiny, self).__init__(name="YOLOv4Tiny")
 
-        out_shape = config.arch["anchors_per_scale"] * (5 + config.arch["num_classes"])
+        out_shape = config["arch"]["anchors_per_scale"] * (5 + config["arch"]["num_classes"])
 
         self.backbone = build_backbone(config)
         self.neck = build_neck(config)
@@ -135,40 +126,6 @@ class YOLOv4Tiny(tf.keras.Model):
         }
         return layer_lookup
 
-# class YOLOv4UltraTiny(tf.keras.Model):
-#     def __init__(self, config):
-#         super(YOLOv4Tiny, self).__init__(name="YOLOv4Tiny")
-#         out_shape = config.arch["anchors_per_scale"] * (5 + config.arch["num_classes"])
-
-#         self.backbone = build_backbone(config)
-#         self.neck = build_neck(config)
-
-#         self.head_m = build_head(64, out_shape)
-#         self.head_l = build_head(128, out_shape)
-
-#         self.backbone._name = "yolov4_ultra_tiny_backbone"
-#         self.neck._name = "yolov4_ultra_tiny_neck"
-#         self.head_m._name = "yolov4_ultra_tiny_head_m"
-#         self.head_l._name = "yolov4_ultra_tiny_head_l"
-
-#     def call(self, images, training=None):
-
-#         x = self.backbone(images, training=training)
-#         route_medium, route_large = self.neck(x, training=training)
-
-#         out_m = self.head_m(route_medium, training=training)
-#         out_l = self.head_l(route_large, training=training)
-
-#         return [out_m, out_l]
-
-#     def get_layer_lookup(self):
-#         layer_lookup = {
-#             "backbone": [self.backbone.name],
-#             "neck": [self.neck.name],
-#             "head": [self.head_m.name, self.head_l.name]
-#         }
-#         return layer_lookup
-
 
 
 class YOLOv4TinyBackbone(tf.keras.Model):
@@ -176,7 +133,7 @@ class YOLOv4TinyBackbone(tf.keras.Model):
     def __init__(self, config, max_pool):
         super(YOLOv4TinyBackbone, self).__init__(name="YOLOv4TinyBackbone")
 
-        out_shape = config.arch["anchors_per_scale"] * (5 + config.arch["num_classes"])
+        out_shape = config["arch"]["anchors_per_scale"] * (5 + config["arch"]["num_classes"])
 
         self.backbone = build_backbone(config)
         self.neck = build_neck(config)

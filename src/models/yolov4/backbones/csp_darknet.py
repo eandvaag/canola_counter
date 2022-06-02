@@ -4,7 +4,7 @@ from models.yolov4.common import Conv2d
 
 def build_backbone(config):
 
-    backbone_config = config.arch["backbone_config"]
+    backbone_config = config["arch"]["backbone_config"]
     backbone_type = backbone_config["backbone_type"]
 
     backbone = None
