@@ -20,6 +20,7 @@ def load_annotations(w3c_path, class_map):
     for image_name in annotations.keys():
         ret_annotations[image_name] = {
             "status": annotations[image_name]["status"],
+            #"available_for_training": annotations[image_name]["available_for_training"],
             "boxes": [],
             "classes": []
         }
@@ -44,28 +45,29 @@ def load_annotations(w3c_path, class_map):
 
     return ret_annotations #boxes, classes
 
+
             
-def save_annotations(annotations_path, predictions, config):
+def save_annotations(annotations_path, image_predictions, config):
 
     annotations = {}
     reverse_class_map = {v: k for k, v in config["arch"]["class_map"].items()}
 
-    for image_name in predictions["image_predictions"].keys():
+    for image_name in image_predictions.keys():
 
         annotations[image_name] = {}
         annotations[image_name]["annotations"] = []
 
-        for i in range(len(predictions["image_predictions"][image_name]["pred_image_abs_boxes"])):
+        for i in range(len(image_predictions[image_name]["pred_image_abs_boxes"])):
 
             annotation_uuid = str(uuid.uuid4())
 
-            pred_class_num = predictions["image_predictions"][image_name]["pred_classes"][i]
-            pred_score = predictions["image_predictions"][image_name]["pred_scores"][i]
+            pred_class_num = image_predictions[image_name]["pred_classes"][i]
+            pred_score = image_predictions[image_name]["pred_scores"][i]
 
-            min_y = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][0]
-            min_x = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][1]
-            max_y = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][2]
-            max_x = predictions["image_predictions"][image_name]["pred_image_abs_boxes"][i][3]
+            min_y = image_predictions[image_name]["pred_image_abs_boxes"][i][0]
+            min_x = image_predictions[image_name]["pred_image_abs_boxes"][i][1]
+            max_y = image_predictions[image_name]["pred_image_abs_boxes"][i][2]
+            max_x = image_predictions[image_name]["pred_image_abs_boxes"][i][3]
 
             h = max_y - min_y
             w = max_x - min_x
@@ -201,7 +203,7 @@ def get_num_annotations(annotations, require_completed=True):
 def get_patch_size(annotations):
     
 
-    median_box_area = get_median_box_area(annotations)
+    typical_box_area = get_typical_box_area(annotations, measure="mean")
 
     #(40000 / 288) (90000 / 2296) 
 
@@ -209,13 +211,13 @@ def get_patch_size(annotations):
     #slope = (90000 - 40000) / (2296 - 288)
     #patch_area = slope * (median_box_area - 288) + 40000
 
-    patch_area = median_box_area * (90000 / 2296)
+    patch_area = typical_box_area * (90000 / 2296)
     patch_size = round(m.sqrt(patch_area))
     print("patch_size", patch_size)
     return patch_size
     
 
-def get_median_box_area(annotations):
+def get_typical_box_area(annotations, measure="mean"):
     
     box_areas = []
     for img_name in annotations.keys():
@@ -227,5 +229,9 @@ def get_median_box_area(annotations):
     if len(box_areas) == 0:
         raise RuntimeError("No annotations found.") 
 
-    return np.median(box_areas)
-    
+    if measure == "mean":
+        return np.mean(box_areas)
+    elif measure == "median":
+        return np.median(box_areas)
+    else:
+        raise RuntimeError("Unknown measure")

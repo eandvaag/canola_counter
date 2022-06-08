@@ -136,6 +136,9 @@ def create_patch_tf_records(patch_data_lst, out_dir, is_annotated):
 
 def output_patch_tf_records(out_path, patch_tf_records):
 
+    if os.path.exists(out_path):
+        os.remove(out_path)
+
     with tf.io.TFRecordWriter(out_path) as writer:
         for patch_tf_record in patch_tf_records:
             writer.write(patch_tf_record.SerializeToString())

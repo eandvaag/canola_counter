@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 import cv2
 import psutil
+import tqdm
 
 import models.common.box_utils as box_utils
 import models.common.data_augment as data_augment
@@ -26,6 +27,7 @@ class DataLoader(ABC):
     def _image_preprocess(self, image):
         ratio = np.array(image.shape[:2]) / np.array(self.input_image_shape[:2])
         image = tf.image.resize(images=image, size=self.input_image_shape[:2])
+        #print("image shape", tf.shape(image))
         return image, ratio
 
     def _box_preprocess(self, boxes):
@@ -83,6 +85,7 @@ class InferenceDataLoader(DataLoader):
 
     def _preprocess(self, sample):
         image_path = bytes.decode((sample["patch_path"]).numpy())
+        #print("loading image from path", image_path)
         image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
 
         #image = tf.io.read_file(filename=image_path)
@@ -269,9 +272,11 @@ class PreLoadedTrainDataLoader(DataLoader):
         dataset = tf.data.TFRecordDataset(filenames=self.tf_record_paths)
 
 
-        for i, tf_sample in enumerate(dataset):
+        for i, tf_sample in enumerate(tqdm.tqdm(dataset, "Creating batched dataset")):
             sample = tf_record_io.parse_sample_from_tf_record(tf_sample, is_annotated=True)
             image_path = bytes.decode((sample["patch_path"]).numpy())
+
+            #print("loading image from path", image_path)
             image = (cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)).astype(np.uint8)
             boxes = (box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))).numpy().astype(np.float32)
             classes = tf.sparse.to_dense(sample["patch_classes"]).numpy().astype(np.uint8)

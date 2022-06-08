@@ -227,13 +227,14 @@ def add_yolov4_keys(model_config):
 
 
 
-def add_general_keys(model_config):
-
+def add_dir_shortcuts(model_config):
     model_config["model_dir"] = os.path.join("usr", "data", "models", model_config["model_uuid"])
     model_config["weights_dir"] = os.path.join(model_config["model_dir"], "weights")
     model_config["loss_records_dir"] = os.path.join(model_config["model_dir"], "loss_records")
     model_config["predictions_dir"] = os.path.join(model_config["model_dir"], "predictions")
 
+def add_general_keys(model_config):
+    
     model_config["arch"]["reverse_class_map"] = {v: k for k, v in model_config["arch"]["class_map"].items()}
     model_config["arch"]["num_classes"] = len(model_config["arch"]["class_map"].keys())
 

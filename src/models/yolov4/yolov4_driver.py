@@ -227,13 +227,14 @@ def generate_predictions(config):
         json_io.save_json(metrics_path, metrics)
 
         annotations_path = os.path.join(results_dir, "annotations.json")
-        w3c_io.save_annotations(annotations_path, predictions, config)
+        w3c_io.save_annotations(annotations_path, predictions["image_predictions"], config)
 
         excel_path = os.path.join(results_dir, "results.xlsx")
         driver_utils.output_excel(excel_path, predictions, dataset, config)
 
 
     shutil.rmtree(inference_patches_dir)
+
 
 
 
@@ -260,7 +261,7 @@ def train(config):
         val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
         
 
-        logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}".format(
+        logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}.".format(
             train_loader_is_preloaded, val_loader_is_preloaded
         ))
 
@@ -351,8 +352,8 @@ def train(config):
 
 
 
-        train_steps_per_epoch = np.sum([1 for i in train_dataset])
-        val_steps_per_epoch = np.sum([1 for i in val_dataset])
+        train_steps_per_epoch = np.sum([1 for _ in train_dataset])
+        val_steps_per_epoch = np.sum([1 for _ in val_dataset])
         loss_record = {
             "training_loss": { "values": [],
                                "best": {"epoch": -1, "value": sys.float_info.max},

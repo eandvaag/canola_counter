@@ -23,6 +23,7 @@ class DetectorWrapper(ABC):
 
     def __init__(self, model_config):
         #self.config = self.custom_config(model_dir)
+        model_keys.add_dir_shortcuts(model_config)
         model_keys.add_general_keys(model_config)
         model_keys.add_specialized_keys(model_config)
         self.config = model_config

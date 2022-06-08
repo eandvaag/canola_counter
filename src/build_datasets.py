@@ -310,10 +310,8 @@ def build_direct_tiled(config):
                     patches.extend(ep.extract_patch_records_from_image_tiled(
                         image, 
                         image_set_patch_size, 
-                        annotations[image_name])
+                        image_annotations=annotations[image_name])
                     )
-
-    logger.info("extraction complete.")
 
     patches = np.array(patches)
     np.random.shuffle(patches)
