@@ -43,16 +43,24 @@ def segment(image_path, out_path, threshold):
 
 
     #out_path = "usr/data/tmp_out_test.png"
-    img_dzi_path = "tmp_out_dzi"
-
+    # img_dzi_path = "tmp_out_dzi"
     cv2.imwrite(out_path, cv2.cvtColor(out_array, cv2.COLOR_RGB2BGR))
+
+    desired_height = 650
+    scale = desired_height / out_array.shape[0]
+    desired_width = int(out_array.shape[1] * scale)
+    resized = cv2.resize(out_array, (desired_width, desired_height))
+
+    #img_dzi_path = out_path[:-4]
+    #os.system("./MagickSlicer/magick-slicer.sh '" + out_path + "' '" + img_dzi_path + "'")
+
+    low_res_out_path = out_path[:-4] + "_low_res.png"
+    cv2.imwrite(low_res_out_path, cv2.cvtColor(resized, cv2.COLOR_RGB2BGR))
 
     #cv2.imwrite(out_path, cv2.cvtColor(binary_array, cv2.COLOR_RGB2BGR))
     # print("executing conv command")
     # conv_cmd =  "./MagickSlicer/magick-slicer.sh '" + out_path + "' '" + img_dzi_path + "'"
     # exec(conv_cmd)
-
-
 
 
 if __name__ == "__main__":

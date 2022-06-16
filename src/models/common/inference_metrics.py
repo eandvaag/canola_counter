@@ -5,6 +5,10 @@ import numpy as np
 from mean_average_precision import MetricBuilder
 import matplotlib.pyplot as plt
 
+import pandas as pd
+import pandas.io.formats.excel
+from natsort import index_natsorted
+
 
 import models.common.box_utils as box_utils
 
@@ -298,6 +302,123 @@ def similarity_analysis(config, predictions):
     plt.xlabel("Euclidean Feature Distance")
     plt.ylabel("Difference in predicted count")
     plt.savefig(out_path)
+
+
+
+def collect_image_set_metrics(image_predictions, annotations, config):
+
+    logger = logging.getLogger(__name__)
+    logger.info("Collecting image set metrics")
+
+    num_classes = len(config["arch"]["class_map"].keys())
+
+    image_metrics = {}
+
+    for image_name in tqdm.tqdm(image_predictions.keys(), desc="Collecting metrics"):
+
+        image_abs_boxes = annotations[image_name]["boxes"]
+        image_classes = annotations[image_name]["classes"]
+        image_status = annotations[image_name]["status"]
+        
+        if image_status == "completed_for_training" or image_status == "completed_for_testing":
+
+            image_metrics[image_name] = {}
+
+            pred_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
+            pred_classes = np.array(image_predictions[image_name]["pred_classes"])
+            pred_scores = np.array(image_predictions[image_name]["pred_scores"])
+
+            pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
+                                                                   image_abs_boxes, image_classes)
+
+            image_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=num_classes)
+            image_metric_fn.add(pred_for_mAP, true_for_mAP)
+            pascal_voc_mAP = image_metric_fn.value(iou_thresholds=0.5)['mAP']
+            coco_mAP = image_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+
+
+            image_metrics[image_name]["Image PASCAL VOC mAP"] = float(pascal_voc_mAP) * 100
+            image_metrics[image_name]["Image MS COCO mAP"] = float(coco_mAP) * 100
+
+
+
+    return image_metrics
+
+
+
+def prepare_report(out_path, farm_name, field_name, mission_date, 
+                   image_predictions, annotations, excess_green_record):
+
+    logger = logging.getLogger(__name__)
+    logger.info("Preparing report")
+
+    #num_classes = len(config["arch"]["class_map"].keys())
+
+    d = {
+        "farm_name": [],
+        "field_name": [],
+        "mission_date": [],
+        "image_status": [],
+        "image_name": [],
+        "annotated_plant_count": [],
+        "predicted_plant_count": [],
+        "ground_cover_percentage": [] 
+        #"COCO_mAP": [],
+        #"PASCAL_VOC_mAP": []
+    }
+
+    # for class_name in config["arch"]["class_map"].keys():
+    #     d["annotated_" + class_name + "_count"] = []
+    #     d["model_" + class_name + "_count"] = []
+
+
+    for image_name in tqdm.tqdm(image_predictions.keys(), desc="Collecting metrics"):
+
+        image_abs_boxes =annotations[image_name]["boxes"]
+        #image_classes = annotations[image_name]["classes"]
+        image_status = annotations[image_name]["status"]
+
+
+        d["farm_name"].append(farm_name)
+        d["field_name"].append(field_name)
+        d["mission_date"].append(mission_date)
+        d["image_status"].append(image_status)
+        d["image_name"].append(image_name)
+
+
+        pred_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
+        #pred_classes = np.array(image_predictions[image_name]["pred_classes"])
+        pred_scores = np.array(image_predictions[image_name]["pred_scores"])
+
+        mask = pred_scores >= 0.5
+
+        sel_pred_abs_boxes = pred_abs_boxes[mask]
+        #sel_pred_classes = pred_classes[mask]
+        sel_pred_scores = pred_scores[mask]
+
+        d["annotated_" + "plant" + "_count"].append(image_abs_boxes.shape[0])
+        d["predicted_" + "plant" + "_count"].append(sel_pred_abs_boxes.shape[0])
+
+        d["ground_cover_percentage"].append(excess_green_record[image_name]["ground_cover_percentage"])
+
+
+    pandas.io.formats.excel.ExcelFormatter.header_style = None
+    df = pd.DataFrame(data=d)
+    df.sort_values(by="image_name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_name"])))
+    writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
+    #df.to_excel(writer, index=False, sheet_name="Sheet1")
+    #for sheetname, df in dfs.items():  # loop through `dict` of dataframes
+    df.to_excel(writer, index=False, sheet_name="Sheet1", na_rep='NA')  # send df to writer
+    worksheet = writer.sheets["Sheet1"]  # pull worksheet object
+    for idx, col in enumerate(df):  # loop through all columns
+        series = df[col]
+        max_len = max((
+            series.astype(str).map(len).max(),  # len of largest item
+            len(str(series.name))  # len of column name/header
+            )) + 1  # adding a little extra space
+        worksheet.set_column(idx, idx, max_len)  # set column width
+    writer.save()            
+
 
 
 

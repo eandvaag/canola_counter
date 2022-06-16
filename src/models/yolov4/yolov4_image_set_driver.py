@@ -4,6 +4,7 @@ import shutil
 import glob
 import tqdm
 import logging
+import time
 import numpy as np
 import tensorflow as tf
 import uuid
@@ -15,6 +16,8 @@ from models.common import box_utils, \
                           inference_metrics, \
                           driver_utils, \
                           model_keys
+
+from image_set_actions import check_restart
 
 from models.yolov4.loss import YOLOv4Loss
 from models.yolov4.yolov4 import YOLOv4, YOLOv4Tiny
@@ -107,7 +110,7 @@ def create_default_config():
             "batch_size": 16,
             "patch_nms_iou_thresh": 0.4,
             "image_nms_iou_thresh": 0.4,
-            "score_thresh": 0.5,
+            "score_thresh": 0.25,
             #"predict_on_completed_only": False    
 
         }
@@ -121,7 +124,9 @@ def update_loss_record(loss_record, key, cur_loss):
     loss_record[key]["values"].append(cur_loss)
 
     best = loss_record[key]["best"]
-    if cur_loss < best:
+    #if cur_loss < best:
+    epsilon = 1e-5
+    if best - cur_loss > epsilon:
         loss_record[key]["best"] = cur_loss
         loss_record[key]["epochs_since_improvement"] = 0
         return True
@@ -134,7 +139,8 @@ def update_loss_record(loss_record, key, cur_loss):
 
 
 
-def predict(farm_name, field_name, mission_date, image_names):
+
+def predict(farm_name, field_name, mission_date, image_names, save_result):
 
     logger = logging.getLogger(__name__)
 
@@ -142,9 +148,18 @@ def predict(farm_name, field_name, mission_date, image_names):
     model_dir = os.path.join(image_set_dir, "model")
     weights_dir = os.path.join(model_dir, "weights")
     predictions_dir = os.path.join(model_dir, "prediction")
+    results_dir = os.path.join(model_dir, "results")
 
-    #annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    #annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+    #patches_dir = os.path.join(image_set_dir, "patches")
+    #patch_data_path = os.path.join(patches_dir, "patch_data.json")
+    #patch_data = json_io.load_json(patch_data_path)
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations_json = json_io.load_json(annotations_path)
+    annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
+
+    excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
+    excess_green_record = json_io.load_json(excess_green_record_path)
 
 
     config = create_default_config()
@@ -184,10 +199,14 @@ def predict(farm_name, field_name, mission_date, image_names):
 
         #is_annotated = annotations[image_name]["status"] == "completed"
 
-
+        #image_status = patch_data[image_name]["status"]
+        #is_annotated = image_status == "completed_for_training" or image_status == "completed_for_testing"
 
 
         for step, batch_data in enumerate(tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
+
+            if check_restart(farm_name, field_name, mission_date):
+                return
 
             batch_images, batch_ratios, batch_info = data_loader.read_batch_data(batch_data, False) #is_annotated)
             batch_size = batch_images.shape[0]
@@ -221,7 +240,7 @@ def predict(farm_name, field_name, mission_date, image_names):
 
 
                 pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = \
-                        post_process_sample(pred_bbox, ratio, patch_coords, config)
+                        post_process_sample(pred_bbox, ratio, patch_coords, config, score_threshold=config["inference"]["score_thresh"])
 
 
                 if image_name not in image_predictions:
@@ -255,7 +274,7 @@ def predict(farm_name, field_name, mission_date, image_names):
         driver_utils.apply_nms_to_image_boxes(image_predictions, 
                                              iou_thresh=config["inference"]["image_nms_iou_thresh"])
 
-        driver_utils.add_class_detections(image_predictions, config)
+        #driver_utils.add_class_detections(image_predictions, config)
 
         #metrics = driver_utils.create_metrics_skeleton(dataset)
 
@@ -263,13 +282,31 @@ def predict(farm_name, field_name, mission_date, image_names):
         #inference_metrics.collect_statistics(all_image_names, metrics, predictions, config, inference_times=inference_times)
         #inference_metrics.collect_metrics(all_image_names, metrics, predictions, dataset, config)
 
-        for image_name in image_names:
-            image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
-            predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
-            w3c_io.save_annotations(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
+        #for image_name in image_names:
+        print("saving predictions")
+        image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+        predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
+        w3c_io.save_annotations(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
 
 
-
+    metrics = inference_metrics.collect_image_set_metrics(image_predictions, annotations, config)
+    if save_result:
+        ts = str(int(time.time()))
+        image_set_results_dir = os.path.join(results_dir, ts)
+        os.makedirs(image_set_results_dir)
+        annotations_path = os.path.join(image_set_results_dir, "annotations_w3c.json")
+        json_io.save_json(annotations_path, annotations_json)
+        excess_green_record_path = os.path.join(image_set_results_dir, "excess_green_record.json")
+        json_io.save_json(excess_green_record_path, excess_green_record)
+        image_predictions_path = os.path.join(image_set_results_dir, "predictions_w3c.json")
+        w3c_io.save_annotations(image_predictions_path, image_predictions, config)
+        metrics_path = os.path.join(image_set_results_dir, "metrics.json")
+        json_io.save_json(metrics_path, metrics)
+        report_path = os.path.join(image_set_results_dir, "results.xlsx")
+        inference_metrics.prepare_report(report_path, farm_name, field_name, mission_date, 
+                                         image_predictions, annotations, excess_green_record)
+        
+        
 
 
 def train(farm_name, field_name, mission_date):
@@ -309,7 +346,8 @@ def train(farm_name, field_name, mission_date):
 
     train_dataset, num_train_images = train_data_loader.create_batched_dataset(
                                       take_percent=config["training"]["active"]["percent_of_training_set_used"])
-
+    if check_restart(farm_name, field_name, mission_date):
+        return
     val_dataset, num_val_images = val_data_loader.create_batched_dataset(
                                   take_percent=config["training"]["active"]["percent_of_validation_set_used"])
 
@@ -387,6 +425,9 @@ def train(farm_name, field_name, mission_date):
                                         loss_record["training_loss"]["best"]))
             steps_taken += 1
 
+
+            if check_restart(farm_name, field_name, mission_date):
+                return False
 
         cur_training_loss = float(train_loss_metric.result())
 

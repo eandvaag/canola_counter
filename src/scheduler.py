@@ -1,16 +1,18 @@
 import os
 import glob
-import requests
+#import requests
 import time
 import logging
-import psycopg2
+#import psycopg2
+
 from configparser import ConfigParser
 
 from io_utils import json_io
 
 import image_set_model
+import image_set_actions
 
-
+#import yolov4_image_set_driver
 
 
 
@@ -44,6 +46,33 @@ def update_status(cur, conn, key, status):
     conn.commit()
     cur.close()
 
+
+# import signal
+# import time
+
+# def handle_interrupt(signum, frame):
+#     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+#     print("{}, {}: sleeping for 5".format(signum, frame))
+#     filepaths = glob.glob(os.path.join("usr", "data", "restart_requests", "*"))
+#     for filepath in filepaths:
+#         print("restarting", filepath)
+#         json_io.load_json(filepath)
+#     time.sleep(5)
+
+#     print("woke up")
+#     exit()
+
+# def loop():
+#     signal.signal(signal.SIGINT, handle_interrupt)
+#     i = 0
+#     while True:
+#         time.sleep(1)
+#         print(i)
+#         i += 1
+
+
 def loop():
 
     logger = logging.getLogger(__name__)
@@ -58,9 +87,11 @@ def loop():
 
     # cur = conn.cursor()
 
+    
+
 
     while True:
-
+        image_set_actions.check_restart(None, None, None)
 
         prediction_requests_dir = os.path.join("usr", "data", "prediction_requests")
 
@@ -94,8 +125,10 @@ def loop():
                 for mission_path in glob.glob(os.path.join(field_path, "*")):
                     mission_date = os.path.basename(mission_path)
 
-                    image_set_model.check_train(farm_name, field_name, mission_date)
-
+                    try:
+                        image_set_model.check_train(farm_name, field_name, mission_date)
+                    except FileNotFoundError:
+                        pass
 
         time.sleep(0.1)
 

@@ -8,9 +8,10 @@ import numpy as np
 from io_utils import xml_io, json_io
 
 
-def load_annotations(w3c_path, class_map):
+def convert_json_annotations(annotations, class_map):
 
-    annotations = json_io.load_json(w3c_path)
+
+    
     prefix_len = len("xywh=pixel:")
 
     #boxes = {}
@@ -45,6 +46,11 @@ def load_annotations(w3c_path, class_map):
 
     return ret_annotations #boxes, classes
 
+
+def load_annotations(w3c_path, class_map):
+
+    annotations = json_io.load_json(w3c_path)
+    return convert_json_annotations(annotations, class_map)
 
             
 def save_annotations(annotations_path, image_predictions, config):

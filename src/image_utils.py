@@ -73,3 +73,6 @@ def global_contrast_normalization(image_array, s=1.0, lmda=0.0, epsilon=10^-8): 
     #scipy.misc.imsave('result.jpg', X)
 
 
+
+
+

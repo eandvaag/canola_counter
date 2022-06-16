@@ -31,7 +31,7 @@ from io_utils import json_io, tf_record_io, w3c_io
     
 
 
-def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nms=True):
+def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nms=True, score_threshold=0.5, round_scores=True):
 
     detections = np.array(detections)
 
@@ -56,10 +56,10 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nm
     #bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
     #scale_mask = np.logical_and((valid_scale[0] < bboxes_scale), (bboxes_scale < valid_scale[1]))
 
-
-    score_threshold = 0.5
     pred_classes = np.argmax(pred_prob, axis=-1)
     pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
+    if round_scores:
+        pred_scores = np.round(pred_scores, 2)
     score_mask = pred_scores > score_threshold
     #mask = np.logical_and(scale_mask, score_mask)
     mask = score_mask

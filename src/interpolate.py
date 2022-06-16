@@ -39,7 +39,6 @@ def similarity_map(dataset):
     feature_counts = []
     unannotated_image_names = []
     for image_name in annotations.keys():
-        print("image_name", image_name)
         features_path = os.path.join(image_set_dir, "features", image_name + ".npy")
         features = np.load(features_path)
 
@@ -89,19 +88,19 @@ def create_plot(grid_z0, extent, vmin, vmax, cmap, out_path):
     plt.savefig(out_path, bbox_inches='tight', transparent=True, pad_inches=0)
 
 
-def create_interpolation_map(dataset, out_dir, interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
+def create_interpolation_map(dataset, annotations_path, out_dir, interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
 
     farm_name = dataset.farm_name
     field_name = dataset.field_name
     mission_date = dataset.mission_date
 
-    annotations_path = os.path.join("usr", "data", "image_sets",
-                        farm_name, field_name, mission_date,
-                        "annotations", "annotations_w3c.json")
+    #annotations_path = os.path.join("usr", "data", "image_sets",
+    #                    farm_name, field_name, mission_date,
+    #                    "annotations", "annotations_w3c.json")
     annotations = json_io.load_json(annotations_path)
 
-    images_root = os.path.join("usr", "data", "image_sets",
-                        farm_name, field_name, mission_date, "images")
+    #images_root = os.path.join("usr", "data", "image_sets",
+    #                    farm_name, field_name, mission_date, "images")
 
     metadata_path = os.path.join("usr", "data", "image_sets",
                         farm_name, field_name, mission_date,
@@ -128,15 +127,27 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
         all_points.append([lon, lat])
 
         status = annotations[image_name]["status"]
-        if status == "completed":
+        if status == "completed_for_training" or status == "completed_for_testing":
+            #print("image_name", image_name)
             annotated_value = len(annotations[image_name]["annotations"]) / metadata["images"][image_name]["area_m2"]
             completed_points.append([lon, lat])
             annotated_values.append(annotated_value)
 
         if pred_path is not None:
-            if not completed_only or status == "completed":  
-                predicted_value = len(predictions["image_predictions"][image_name]["pred_image_abs_boxes"]) / metadata["images"][image_name]["area_m2"]
+            if not completed_only or (status == "completed_for_training" or status == "completed_for_testing"):  
+                #predicted_value = len(predictions["image_predictions"][image_name]["pred_image_abs_boxes"]) / metadata["images"][image_name]["area_m2"]
+                v = 0
+                for annotation in predictions[image_name]["annotations"]:
+                    for b in annotation["body"]:
+                        if b["purpose"] == "score" and float(b["value"]) >= 0.5:
+                            v += 1
+                
+                #predicted_value = len(predictions[image_name]["annotations"]) 
+                predicted_value = v / metadata["images"][image_name]["area_m2"]
                 predicted_values.append(predicted_value)
+
+    # print("predicted_values", predicted_values)
+    # print("annotated_values", annotated_values)
 
 
     all_points = np.array(all_points)
@@ -161,18 +172,25 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
 
     all_points[:,0] = range_map(all_points[:,0], min_x, max_x, 0, 1)
     all_points[:,1] = range_map(all_points[:,1], min_y, max_y, 0, 1)
-    completed_points[:,0] = range_map(completed_points[:,0], min_x, max_x, 0, 1)
-    completed_points[:,1] = range_map(completed_points[:,1], min_y, max_y, 0, 1)
+
+    if num_completed >= 3:
+        completed_points[:,0] = range_map(completed_points[:,0], min_x, max_x, 0, 1)
+        completed_points[:,1] = range_map(completed_points[:,1], min_y, max_y, 0, 1)
 
 
-    grid_x, grid_y = np.mgrid[np.min(completed_points[:,0]):np.max(completed_points[:,0]):1000j, 
-                              np.min(completed_points[:,1]):np.max(completed_points[:,1]):1000j]
+        grid_x, grid_y = np.mgrid[np.min(completed_points[:,0]):np.max(completed_points[:,0]):1000j, 
+                                np.min(completed_points[:,1]):np.max(completed_points[:,1]):1000j]
 
-    grid_z0 = griddata(completed_points, annotated_values, (grid_x, grid_y), method=interpolation)
+        grid_z0 = griddata(completed_points, annotated_values, (grid_x, grid_y), method=interpolation)
 
 
-    extent = (np.min(completed_points[:,0]), np.max(completed_points[:,0]),
+        extent = (np.min(completed_points[:,0]), np.max(completed_points[:,0]),
                 np.min(completed_points[:,1]), np.max(completed_points[:,1]))
+
+
+    all_grid_x, all_grid_y = np.mgrid[np.min(all_points[:,0]):np.max(all_points[:,0]):1000j, 
+                              np.min(all_points[:,1]):np.max(all_points[:,1]):1000j]                        
+
 
     if pred_path is not None:
 
@@ -182,12 +200,10 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
             pred_extent = (np.min(completed_points[:,0]), np.max(completed_points[:,0]),
                         np.min(completed_points[:,1]), np.max(completed_points[:,1]))
         else:
-            pred_grid_z0 = griddata(all_points, predicted_values, (grid_x, grid_y), method=interpolation)
+            pred_grid_z0 = griddata(all_points, predicted_values, (all_grid_x, all_grid_y), method=interpolation)
 
             pred_extent = (np.min(all_points[:,0]), np.max(all_points[:,0]),
                            np.min(all_points[:,1]), np.max(all_points[:,1]))
-
-
 
 
     if comparison_type == "side_by_side":
@@ -200,7 +216,6 @@ def create_interpolation_map(dataset, out_dir, interpolation="linear", completed
             vmax = m.ceil(max(np.max(predicted_values), np.max(annotated_values)))
 
         vmin = 0
-
 
         colors = ["wheat", "forestgreen"]
         cmap = LinearSegmentedColormap.from_list("mycmap", colors)
@@ -274,8 +289,10 @@ if __name__ == "__main__":
     parser.add_argument("farm_name", type=str)
     parser.add_argument("field_name", type=str)
     parser.add_argument("mission_date", type=str)
+    parser.add_argument("annotations_path", type=str)
     parser.add_argument("out_dir", type=str)
     #parser.add_argument('-density', action='store_true')
+
     parser.add_argument('-nearest', action='store_true')
     parser.add_argument('-completed_only', action='store_true')
     parser.add_argument('-pred_path', type=str)
@@ -305,6 +322,7 @@ if __name__ == "__main__":
 
 
     create_interpolation_map(dataset, 
+                            args.annotations_path,
                             args.out_dir, 
                             interpolation=interpolation, 
                             completed_only=args.completed_only,
