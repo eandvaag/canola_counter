@@ -9,6 +9,8 @@ import pandas as pd
 import pandas.io.formats.excel
 from natsort import index_natsorted
 
+#from styleframe import StyleFrame
+
 
 import models.common.box_utils as box_utils
 
@@ -346,6 +348,8 @@ def collect_image_set_metrics(image_predictions, annotations, config):
 
 
 
+
+
 def prepare_report(out_path, farm_name, field_name, mission_date, 
                    image_predictions, annotations, excess_green_record):
 
@@ -375,7 +379,6 @@ def prepare_report(out_path, farm_name, field_name, mission_date,
     for image_name in tqdm.tqdm(image_predictions.keys(), desc="Collecting metrics"):
 
         image_abs_boxes =annotations[image_name]["boxes"]
-        #image_classes = annotations[image_name]["classes"]
         image_status = annotations[image_name]["status"]
 
 
@@ -385,7 +388,10 @@ def prepare_report(out_path, farm_name, field_name, mission_date,
         d["image_status"].append(image_status)
         d["image_name"].append(image_name)
 
-
+        if image_status == "unannotated":
+            annotated_count = "NA"
+        else:
+            annotated_count = image_abs_boxes.shape[0]
         pred_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
         #pred_classes = np.array(image_predictions[image_name]["pred_classes"])
         pred_scores = np.array(image_predictions[image_name]["pred_scores"])
@@ -396,28 +402,35 @@ def prepare_report(out_path, farm_name, field_name, mission_date,
         #sel_pred_classes = pred_classes[mask]
         sel_pred_scores = pred_scores[mask]
 
-        d["annotated_" + "plant" + "_count"].append(image_abs_boxes.shape[0])
-        d["predicted_" + "plant" + "_count"].append(sel_pred_abs_boxes.shape[0])
+        d["annotated_" + "plant" + "_count"].append(str(annotated_count))
+        d["predicted_" + "plant" + "_count"].append(str(sel_pred_abs_boxes.shape[0]))
 
-        d["ground_cover_percentage"].append(excess_green_record[image_name]["ground_cover_percentage"])
+        d["ground_cover_percentage"].append("%.2f" % (excess_green_record[image_name]["ground_cover_percentage"]))
 
 
     pandas.io.formats.excel.ExcelFormatter.header_style = None
     df = pd.DataFrame(data=d)
     df.sort_values(by="image_name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_name"])))
-    writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
-    #df.to_excel(writer, index=False, sheet_name="Sheet1")
-    #for sheetname, df in dfs.items():  # loop through `dict` of dataframes
-    df.to_excel(writer, index=False, sheet_name="Sheet1", na_rep='NA')  # send df to writer
-    worksheet = writer.sheets["Sheet1"]  # pull worksheet object
-    for idx, col in enumerate(df):  # loop through all columns
-        series = df[col]
-        max_len = max((
-            series.astype(str).map(len).max(),  # len of largest item
-            len(str(series.name))  # len of column name/header
-            )) + 1  # adding a little extra space
-        worksheet.set_column(idx, idx, max_len)  # set column width
-    writer.save()            
+    df.to_csv(out_path, index=False)
+    
+    # writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
+
+    # df.to_excel(writer, index=False, sheet_name="Sheet1", na_rep='NA')  # send df to writer
+    # worksheet = writer.sheets["Sheet1"]  # pull worksheet object
+
+
+    # # for i, width in enumerate(get_col_widths(df)):
+    # #     worksheet.set_column(i, i, width)
+    # # for column in df:
+    # #     worksheet.column_dimensions[column].bestFit = True
+    # for idx, col in enumerate(df):  # loop through all columns
+    #     series = df[col]
+    #     max_len = max((
+    #         series.astype(str).map(len).max(),  # len of largest item
+    #         len(str(series.name))  # len of column name/header
+    #         )) # + 1  # adding a little extra space
+    #     worksheet.set_column(idx, idx, 0.9 * max_len)  # set column width
+    # writer.save()
 
 
 

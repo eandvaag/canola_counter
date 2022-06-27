@@ -85,6 +85,7 @@ class InferenceDataLoader(DataLoader):
 
     def _preprocess(self, sample):
         image_path = bytes.decode((sample["patch_path"]).numpy())
+
         #print("loading image from path", image_path)
         image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
 

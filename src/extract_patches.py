@@ -1,9 +1,11 @@
-
+import logging
 import os
 import tqdm
+import random
 import math as m
 import numpy as np
 import cv2
+import uuid
 
 
 from models.common import box_utils
@@ -36,6 +38,84 @@ def add_annotations_to_patch_records(patch_records, image_annotations):
 
 
 
+def get_patch_coords_surrounding_box(box, patch_size, img_h, img_w):
+
+    logger = logging.getLogger(__name__)
+
+    box_y_min, box_x_min, box_y_max, box_x_max = box
+
+    box_h = box_y_max - box_y_min
+    box_w = box_x_max - box_x_min
+
+    if box_h > patch_size or box_w > patch_size:
+        logger.warning("Box exceeds size of patch. (box_w, box_h): ({}, {}). patch_size: {}.".format(
+            box_w, box_h, patch_size
+        ))
+
+    patch_y_min = random.randrange((box_y_min + box_h) - max(box_h, patch_size), box_y_min + 1)
+    patch_y_min = min(img_h - patch_size, max(0, patch_y_min))
+    patch_x_min = random.randrange((box_x_min + box_w) - max(box_w, patch_size), box_x_min + 1)
+    patch_x_min = min(img_w - patch_size, max(0, patch_x_min))
+    patch_y_max = patch_y_min + patch_size
+    patch_x_max = patch_x_min + patch_size
+
+    patch_coords = [patch_y_min, patch_x_min, patch_y_max, patch_x_max]
+
+    if patch_y_min < 0 or patch_x_min < 0 or patch_y_max > img_h or patch_x_max > img_w:
+        raise RuntimeError("Patch exceeds boundaries of the image.")
+
+    return patch_coords
+
+
+def extract_patch_records_surrounding_annotations(image, patch_size, image_annotations, include_patch_arrays=True):
+
+    annotation_boxes = image_annotations["boxes"]
+    annotation_classes = image_annotations["classes"]
+    image_patches = []
+
+    if include_patch_arrays:
+        image_array = image.load_image_array()
+        image_h, image_w = image_array.shape[:2]
+    else:
+        image_w, image_h = image.get_wh()
+
+    patch_num = 0
+
+    image_path_pieces = image.image_path.split("/")
+    farm_name = image_path_pieces[-5]
+    field_name = image_path_pieces[-4]
+    mission_date = image_path_pieces[-3]
+
+    for box in annotation_boxes:
+
+        patch_coords = get_patch_coords_surrounding_box(box, patch_size, image_h, image_w)
+        
+        #patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+        patch_data = {}
+        if include_patch_arrays:
+            #patch_array = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
+            patch_array = image_array[patch_coords[0]: patch_coords[2],
+                                        patch_coords[1]: patch_coords[3]]
+            patch_data["patch"] = patch_array
+        patch_data["image_name"] = image.image_name
+        patch_data["image_path"] = image.image_path
+        patch_data["patch_name"] = farm_name + "-" + field_name + "-" + mission_date + "-" + \
+                                    image.image_name + "-" + str(patch_num).zfill(7) + ".png"
+        patch_data["patch_coords"] = patch_coords
+        
+        #if image_annotations is not None and \
+        #    (annotation_status == "completed_for_training" or annotation_status == "completed_for_testing"):
+        annotate_patch(patch_data, annotation_boxes, annotation_classes)
+        image_patches.append(patch_data)
+        patch_num += 1
+
+
+    return image_patches
+
+
+
+
 def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=None, 
                                            patch_overlap_percent=50, include_patch_arrays=True):
 
@@ -58,6 +138,10 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=
     
     patch_num = 0
 
+    image_path_pieces = image.image_path.split("/")
+    farm_name = image_path_pieces[-5]
+    field_name = image_path_pieces[-4]
+    mission_date = image_path_pieces[-3]
 
     col_covered = False
     patch_min_y = 0
@@ -87,10 +171,12 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=
                 patch_data["patch"] = patch_array
             patch_data["image_name"] = image.image_name
             patch_data["image_path"] = image.image_path
-            patch_data["patch_name"] = image.image_name + "-" + str(patch_num).zfill(7) + ".png"
+            patch_data["patch_name"] = farm_name + "-" + field_name + "-" + mission_date + "-" + \
+                                       image.image_name + "-" + str(patch_num).zfill(7) + ".png"
             patch_data["patch_coords"] = patch_coords
             
-            if image_annotations is not None and annotation_status == "completed":
+            if image_annotations is not None and \
+                (annotation_status == "completed_for_training" or annotation_status == "completed_for_testing"):
                 annotate_patch(patch_data, annotation_boxes, annotation_classes)
             image_patches.append(patch_data)
             patch_num += 1

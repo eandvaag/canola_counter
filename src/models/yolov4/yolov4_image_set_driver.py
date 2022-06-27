@@ -2,6 +2,8 @@
 import os
 import shutil
 import glob
+
+from pyrsistent import m
 import tqdm
 import logging
 import time
@@ -17,7 +19,7 @@ from models.common import box_utils, \
                           driver_utils, \
                           model_keys
 
-from image_set_actions import check_restart
+# from image_set_actions import check_restart
 
 from models.yolov4.loss import YOLOv4Loss
 from models.yolov4.yolov4 import YOLOv4, YOLOv4Tiny
@@ -100,14 +102,14 @@ def create_default_config():
                 "monitor": "validation_loss",
                 "num_epochs_tolerance": 30
             },
-            "batch_size": 16,
+            "batch_size": 16, #64, #64, #1024, #32, # 16,
 
             #"save_method": "best_validation_loss",
             "percent_of_training_set_used": 100,
             "percent_of_validation_set_used": 100
         },
         "inference": {
-            "batch_size": 16,
+            "batch_size": 64, #256, #32, #16,
             "patch_nms_iou_thresh": 0.4,
             "image_nms_iou_thresh": 0.4,
             "score_thresh": 0.25,
@@ -136,7 +138,119 @@ def update_loss_record(loss_record, key, cur_loss):
 
 
 
+def select_baseline(farm_name, field_name, mission_date):
 
+
+    logger = logging.getLogger(__name__)
+
+    image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
+    model_dir = os.path.join(image_set_dir, "model")
+    images_dir = os.path.join(image_set_dir, "images")
+    weights_dir = os.path.join(model_dir, "weights")
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations_json = json_io.load_json(annotations_path)
+    annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
+
+
+    baseline_weights_dir = os.path.join("usr", "data", "baselines")
+    
+    config = create_default_config()
+    model_keys.add_general_keys(config)
+    model_keys.add_specialized_keys(config)
+
+    weight_paths = glob.glob(os.path.join(baseline_weights_dir, "*"))
+    weight_paths.append("random")
+
+
+    decoder = Decoder(config)
+
+    tf_record_path = os.path.join(image_set_dir, "model", "init", "patches-record.tfrec")
+    data_loader = data_load.InferenceDataLoader(tf_record_path, config)
+    tf_dataset, tf_dataset_size = data_loader.create_dataset()
+    
+    scores = {}
+    for weight_path in weight_paths:
+        print("weight_path", weight_path)
+        yolov4 = YOLOv4Tiny(config)
+        input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
+        yolov4.build(input_shape=input_shape)
+
+        if weight_path != "random":
+            yolov4.load_weights(weight_path, by_name=False)
+
+        weight_name = os.path.basename(weight_path)
+        scores[weight_name] = 0
+
+        steps = np.sum([1 for _ in tf_dataset])
+
+        logger.info("{} ('{}'): Running inference on {} images.".format(config["arch"]["model_type"], 
+                                                                        config["model_name"], 
+                                                                        tf_dataset_size))
+
+
+        for step, batch_data in enumerate(tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
+
+            batch_images, batch_ratios, batch_info = data_loader.read_batch_data(batch_data, True) #False) #is_annotated)
+            batch_size = batch_images.shape[0]
+
+            pred = yolov4(batch_images, training=False)
+            detections = decoder(pred)
+
+            batch_pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+
+            batch_pred_bbox = tf.concat(batch_pred_bbox, axis=1)
+
+            for i in range(batch_size):
+
+                pred_bbox = batch_pred_bbox[i]
+                ratio = batch_ratios[i]
+
+                patch_info = batch_info[i]
+
+                image_path = bytes.decode((patch_info["image_path"]).numpy())
+                #patch_path = bytes.decode((patch_info["patch_path"]).numpy())
+                image_name = os.path.basename(image_path)[:-4]
+                #patch_name = os.path.basename(patch_path)[:-4]
+                patch_coords = tf.sparse.to_dense(patch_info["patch_coords"]).numpy().astype(np.int32)
+
+                #if is_annotated:
+                patch_boxes = tf.reshape(tf.sparse.to_dense(patch_info["patch_abs_boxes"]), shape=(-1, 4)).numpy()
+                patch_classes = tf.sparse.to_dense(patch_info["patch_classes"]).numpy()
+
+
+                pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = \
+                        post_process_sample(pred_bbox, ratio, patch_coords, config, score_threshold=config["inference"]["score_thresh"])
+
+
+                if pred_patch_abs_boxes.size > 0:
+                    iou = box_utils.compute_iou_np(patch_boxes, pred_patch_abs_boxes)
+
+                    for i in range(iou.shape[0]):
+                        max_iou_ind = np.argmax(iou[i, :])
+                        max_iou = iou[i, max_iou_ind]
+                        max_iou_score = pred_patch_scores[max_iou_ind]
+
+                        scores[weight_name] += (max_iou * max_iou_score)
+
+        
+    print("scores:")
+    json_io.print_json(scores)
+
+    best_score_weight_path = max(scores, key=scores.get)
+
+    cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
+    best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+
+    if best_score_weight_path == "random":
+        yolov4 = YOLOv4Tiny(config)
+        yolov4.save_weights(filepath=best_weights_path, save_format="h5")
+
+    else:
+        shutil.copyfile(os.path.join(baseline_weights_dir, best_score_weight_path),
+                        cur_weights_path)
+        shutil.copyfile(os.path.join(baseline_weights_dir, best_score_weight_path),
+                        best_weights_path)
 
 
 
@@ -180,13 +294,11 @@ def predict(farm_name, field_name, mission_date, image_names, save_result):
         tf_dataset, tf_dataset_size = data_loader.create_dataset()
 
         input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
-        print("input_shape", input_shape)
+        #print("input_shape", input_shape)
         yolov4.build(input_shape=input_shape)
 
         best_weights_path = os.path.join(weights_dir, "best_weights.h5")
         yolov4.load_weights(best_weights_path, by_name=False)
-
-
 
         steps = np.sum([1 for _ in tf_dataset])
 
@@ -205,8 +317,8 @@ def predict(farm_name, field_name, mission_date, image_names, save_result):
 
         for step, batch_data in enumerate(tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
 
-            if check_restart(farm_name, field_name, mission_date):
-                return
+            # if check_restart():
+            #     return False
 
             batch_images, batch_ratios, batch_info = data_loader.read_batch_data(batch_data, False) #is_annotated)
             batch_size = batch_images.shape[0]
@@ -302,21 +414,42 @@ def predict(farm_name, field_name, mission_date, image_names, save_result):
         w3c_io.save_annotations(image_predictions_path, image_predictions, config)
         metrics_path = os.path.join(image_set_results_dir, "metrics.json")
         json_io.save_json(metrics_path, metrics)
-        report_path = os.path.join(image_set_results_dir, "results.xlsx")
+        report_path = os.path.join(image_set_results_dir, "results.csv") #xlsx")
         inference_metrics.prepare_report(report_path, farm_name, field_name, mission_date, 
                                          image_predictions, annotations, excess_green_record)
         
         
 
 
-def train(farm_name, field_name, mission_date):
+
+# def train_baseline(request):
+
+#     logger = logging.getLogger(__name__)
+
+#     tf.keras.backend.clear_session()
+
+#     baseline_name = request["baseline_name"]
+
+#     #os.makedirs(baseline_name)
+
+#     patch_records = ep.extract_patch_records_from_image_tiled(
+#         image, 
+#         updated_patch_size,
+#         image_annotations=None,
+#         patch_overlap_percent=50, 
+#         include_patch_arrays=False)
+
+
+
+
+def train(root_dir): #farm_name, field_name, mission_date):
     
     logger = logging.getLogger(__name__)
 
     tf.keras.backend.clear_session()
 
-    image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
-    model_dir = os.path.join(image_set_dir, "model")
+    #image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
+    model_dir = os.path.join(root_dir, "model")
     weights_dir = os.path.join(model_dir, "weights")
     training_dir = os.path.join(model_dir, "training")
 
@@ -346,8 +479,8 @@ def train(farm_name, field_name, mission_date):
 
     train_dataset, num_train_images = train_data_loader.create_batched_dataset(
                                       take_percent=config["training"]["active"]["percent_of_training_set_used"])
-    if check_restart(farm_name, field_name, mission_date):
-        return
+    # if check_restart():
+    #     return False
     val_dataset, num_val_images = val_data_loader.create_batched_dataset(
                                   take_percent=config["training"]["active"]["percent_of_validation_set_used"])
 
@@ -371,7 +504,12 @@ def train(farm_name, field_name, mission_date):
 
     cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
     best_weights_path = os.path.join(weights_dir, "best_weights.h5")
-    yolov4.load_weights(cur_weights_path, by_name=False)
+    if os.path.exists(cur_weights_path):
+        logger.info("Loading weights...")
+        yolov4.load_weights(cur_weights_path, by_name=False)
+        logger.info("Weights loaded.")
+    else:
+        logger.info("No initial weights found.")
 
 
     optimizer = tf.optimizers.Adam()
@@ -426,8 +564,8 @@ def train(farm_name, field_name, mission_date):
             steps_taken += 1
 
 
-            if check_restart(farm_name, field_name, mission_date):
-                return False
+            # if check_restart():
+            #     return False
 
         cur_training_loss = float(train_loss_metric.result())
 
@@ -478,6 +616,8 @@ def train(farm_name, field_name, mission_date):
 
         if len(prediction_request_paths) > 0:
             return False
+
+
 
 
 

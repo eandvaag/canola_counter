@@ -3,13 +3,12 @@ import os
 import glob
 import cv2
 import numpy as np
+from skimage.filters import threshold_otsu
 
 from image_set import Image
 import image_utils
 from io_utils import json_io
 import lock
-
-
 
 
 
@@ -36,6 +35,7 @@ def create_excess_green_for_image_set(image_set_dir, image_name):
     
     min_val = round(float(np.min(exg_array)), 2)
     max_val = round(float(np.max(exg_array)), 2)
+    #sel_val = round(float(threshold_otsu(exg_array)), 2)
     sel_val = round((min_val + max_val) / 2, 2)
     percent_vegetation = round(float((np.sum(exg_array > sel_val) / exg_array.size) * 100), 2)
 

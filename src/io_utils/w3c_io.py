@@ -197,10 +197,10 @@ def get_completed_images(annotations, allow_empty=True):
 
 
 
-def get_num_annotations(annotations, require_completed=True):
+def get_num_annotations(annotations, require_completed_for_training=True):
     num_annotations = 0
     for image_name in annotations.keys():
-        if annotations[image_name]["status"] == "completed" or not require_completed:
+        if annotations[image_name]["status"] == "completed_for_training" or not require_completed_for_training:
             boxes = annotations[image_name]["boxes"]
             num_annotations += np.shape(boxes)[0]
     return num_annotations
