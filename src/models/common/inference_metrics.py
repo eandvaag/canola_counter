@@ -706,7 +706,8 @@ def get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
     if pred_abs_boxes.size > 0:
         pred_abs_boxes = box_utils.swap_xy_np(pred_abs_boxes)
     else:
-        pred_abs_boxes = np.expand_dims(pred_abs_boxes, axis=-1)
+        pred_abs_boxes = np.reshape(pred_abs_boxes, (0, 4)) #np.expand_dims(pred_abs_boxes, axis=-1)
+        
     pred_classes = np.expand_dims(pred_classes, axis=-1)
     pred_scores = np.expand_dims(pred_scores, axis=-1)
     pred = np.hstack([pred_abs_boxes, pred_classes, pred_scores])
@@ -714,7 +715,8 @@ def get_pred_and_true_for_mAP(pred_abs_boxes, pred_classes, pred_scores,
     if true_abs_boxes.size > 0:
         true_abs_boxes = box_utils.swap_xy_np(true_abs_boxes)
     else:
-        true_abs_boxes = np.expand_dims(true_abs_boxes, axis=-1)
+        #true_abs_boxes = np.expand_dims(true_abs_boxes, axis=-1)
+        true_abs_boxes = np.reshape(true_abs_boxes, (0, 4)) 
     #true_abs_boxes = box_utils.swap_xy_np(true_abs_boxes)
     true_classes = np.expand_dims(true_classes, axis=-1)
     difficult = np.expand_dims(np.zeros(true_classes.size), axis=-1)

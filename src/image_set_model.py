@@ -16,7 +16,7 @@ import extract_patches as ep
 from image_set import Image
 
 from models.yolov4 import yolov4_image_set_driver
-from image_set_actions import notify, IDLE, PREDICTING, TRAINING
+from image_set_actions import notify, INITIALIZING, IDLE, PREDICTING, TRAINING
 #import image_set_actions as isa
 
 
@@ -94,7 +94,7 @@ def create_patches_if_needed(farm_name, field_name, mission_date, image_names):
 
 
 
-def handle_baseline_request(request):
+def handle_direct_baseline_request(request):
 
     baseline_name = request["baseline_name"]
 
@@ -199,120 +199,120 @@ def handle_prediction_request(request):
     field_name = request["field_name"]
     mission_date = request["mission_date"]
 
-    if check_baseline(farm_name, field_name, mission_date):
+    #if check_baseline(farm_name, field_name, mission_date):
 
-        status_path = os.path.join("usr", "data", "image_sets",
-                                    farm_name, field_name, mission_date, 
-                                    "model", "status.json")
-        status = json_io.load_json(status_path)
+    status_path = os.path.join("usr", "data", "image_sets",
+                                farm_name, field_name, mission_date, 
+                                "model", "status.json")
+    status = json_io.load_json(status_path)
 
-        status["status"] = PREDICTING
-        status["update_num"] = status["update_num"] + 1
-        json_io.save_json(status_path, status)
-        notify(farm_name, field_name, mission_date)
-
-
-        save_result = request["save_result"]
-
-        predict_on_images(
-            farm_name,
-            field_name,
-            mission_date,
-            request["image_names"],
-            save_result
-        )
+    status["status"] = PREDICTING
+    status["update_num"] = status["update_num"] + 1
+    json_io.save_json(status_path, status)
+    notify(farm_name, field_name, mission_date)
 
 
-        status = json_io.load_json(status_path)
-        status["status"] = IDLE
-        status["update_num"] = status["update_num"] + 1
-        json_io.save_json(status_path, status)
-        notify(farm_name, field_name, mission_date, extra_items={"prediction_image_names": ",".join(request["image_names"])})
+    save_result = request["save_result"]
+
+    predict_on_images(
+        farm_name,
+        field_name,
+        mission_date,
+        request["image_names"],
+        save_result
+    )
+
+
+    status = json_io.load_json(status_path)
+    status["status"] = IDLE
+    status["update_num"] = status["update_num"] + 1
+    json_io.save_json(status_path, status)
+    notify(farm_name, field_name, mission_date, extra_items={"prediction_image_names": ",".join(request["image_names"])})
 
 
 
 
 def check_train(farm_name, field_name, mission_date):
 
-    baseline_exists = check_baseline(farm_name, field_name, mission_date)
-    if baseline_exists:
-        
-        image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
-        model_dir = os.path.join(image_set_dir, "model")
-        training_dir = os.path.join(model_dir, "training")
-        weights_dir = os.path.join(model_dir, "weights")
+    #baseline_exists = check_baseline(farm_name, field_name, mission_date)
+    #if baseline_exists:
+    
+    image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
+    model_dir = os.path.join(image_set_dir, "model")
+    training_dir = os.path.join(model_dir, "training")
+    weights_dir = os.path.join(model_dir, "weights")
 
-        loss_record_path = os.path.join(training_dir, "loss_record.json")
-
-
-        loss_record = json_io.load_json(loss_record_path)
-        needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
+    loss_record_path = os.path.join(training_dir, "loss_record.json")
 
 
-        status_path = os.path.join(model_dir, "status.json")
+    loss_record = json_io.load_json(loss_record_path)
+    needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
+
+
+    status_path = os.path.join(model_dir, "status.json")
+
+    status = json_io.load_json(status_path)
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+    num_training_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=True)
+
+    #num_available = 0
+    training_image_names = []
+    for image_name in annotations.keys():
+        if annotations[image_name]["status"] == "completed_for_training":
+            training_image_names.append(image_name)
+            #num_available += 1
+
+    needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
+
+    if needs_training_with_cur_set or needs_training_with_new_set:
+
+        status_path = os.path.join("usr", "data", "image_sets",
+                                farm_name, field_name, mission_date, 
+                                "model", "status.json")
+        status = json_io.load_json(status_path)
+        status["status"] = TRAINING
+        status["update_num"] = status["update_num"] + 1
+
+        json_io.save_json(status_path, status)
+
+        notify(farm_name, field_name, mission_date)
+
+        create_patches_if_needed(farm_name, field_name, mission_date, training_image_names)
+
+        if needs_training_with_new_set:
+            update_training_tf_record(farm_name, field_name, mission_date, training_image_names)
+
+            loss_record = {
+                "training_loss": { "values": [],
+                                "best": 100000000,
+                                "epochs_since_improvement": 0}, 
+                "validation_loss": {"values": [],
+                                    "best": 100000000,
+                                    "epochs_since_improvement": 0},
+                "num_training_images": len(training_image_names)
+            }
+
+            json_io.save_json(loss_record_path, loss_record)
+
+        training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
 
         status = json_io.load_json(status_path)
-
-        annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-        num_training_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=True)
-
-        #num_available = 0
-        training_image_names = []
-        for image_name in annotations.keys():
-            if annotations[image_name]["status"] == "completed_for_training":
-                training_image_names.append(image_name)
-                #num_available += 1
-
-        needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
-
-        if needs_training_with_cur_set or needs_training_with_new_set:
-
-            status_path = os.path.join("usr", "data", "image_sets",
-                                    farm_name, field_name, mission_date, 
-                                    "model", "status.json")
-            status = json_io.load_json(status_path)
-            status["status"] = TRAINING
-            status["update_num"] = status["update_num"] + 1
-
-            json_io.save_json(status_path, status)
-
-            notify(farm_name, field_name, mission_date)
-
-            create_patches_if_needed(farm_name, field_name, mission_date, training_image_names)
-
-            if needs_training_with_new_set:
-                update_training_tf_record(farm_name, field_name, mission_date, training_image_names)
-
-                loss_record = {
-                    "training_loss": { "values": [],
-                                    "best": 100000000,
-                                    "epochs_since_improvement": 0}, 
-                    "validation_loss": {"values": [],
-                                        "best": 100000000,
-                                        "epochs_since_improvement": 0},
-                    "num_training_images": len(training_image_names)
-                }
-
-                json_io.save_json(loss_record_path, loss_record)
-
-            training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
-
-            status = json_io.load_json(status_path)
-            status["status"] = IDLE
-            status["update_num"] = status["update_num"] + 1
-            if training_finished:
-                status["num_images_fully_trained_on"] = loss_record["num_training_images"]
+        status["status"] = IDLE
+        status["update_num"] = status["update_num"] + 1
+        if training_finished:
+            status["num_images_fully_trained_on"] = loss_record["num_training_images"]
 
 
-                if num_training_annotations >= MIN_NUM_ANNOTATIONS_BASELINE_CREATE:
-                    baseline_name = farm_name + "::" + field_name + "::" + mission_date
-                    shutil.copyfile(os.path.join(weights_dir, "best_weights.h5"),
-                                os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
+            if num_training_annotations >= MIN_NUM_ANNOTATIONS_BASELINE_CREATE:
+                baseline_name = farm_name + "::" + field_name + "::" + mission_date
+                shutil.copyfile(os.path.join(weights_dir, "best_weights.h5"),
+                            os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
 
-            json_io.save_json(status_path, status)
+        json_io.save_json(status_path, status)
 
-            notify(farm_name, field_name, mission_date)
+        notify(farm_name, field_name, mission_date)
 
 
 
@@ -418,9 +418,27 @@ def update_prediction_tf_records(farm_name, field_name, mission_date, image_name
 
 
 #def determine_best_baseline(farm_name, field_name, mission_date):
-def check_baseline(farm_name, field_name, mission_date):
+def handle_baseline_request(request): #farm_name, field_name, mission_date):
 
     logger = logging.getLogger(__name__)
+
+
+    farm_name = request["farm_name"]
+    field_name = request["field_name"]
+    mission_date = request["mission_date"]
+    annotation_guides = request["annotation_guides"]
+
+
+    status_path = os.path.join("usr", "data", "image_sets",
+                                farm_name, field_name, mission_date, 
+                                "model", "status.json")
+    status = json_io.load_json(status_path)
+
+    status["status"] = INITIALIZING
+    status["update_num"] = status["update_num"] + 1
+    json_io.save_json(status_path, status)
+    notify(farm_name, field_name, mission_date)
+
 
     image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
     model_dir = os.path.join(image_set_dir, "model")
@@ -433,11 +451,11 @@ def check_baseline(farm_name, field_name, mission_date):
     annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
     num_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=False)
 
-    if num_annotations < MIN_NUM_ANNOTATIONS_BASELINE_EVAL:
-        return False
+    # if num_annotations < MIN_NUM_ANNOTATIONS_BASELINE_EVAL:
+    #     return False
 
-    if os.path.exists(best_weights_path):
-        return True
+    # if os.path.exists(best_weights_path):
+    #     return True
     
     logger.info("No weights found. Selecting initial weights...")
 
@@ -454,11 +472,64 @@ def check_baseline(farm_name, field_name, mission_date):
     patch_size = w3c_io.get_patch_size(annotations)
     patch_records = []
     for image_name in annotations.keys():
+        if len(annotation_guides[image_name]) > 0:
+            image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+            image = Image(image_path)
+            patch_records.extend(ep.extract_patches_from_annotation_guides(image, patch_size, annotations[image_name], annotation_guides[image_name]))
 
-        image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
-        image = Image(image_path)
+            # image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+            # image = Image(image_path)
 
-        patch_records.extend(ep.extract_patch_records_surrounding_annotations(image, patch_size, annotations[image_name]))
+            # patch_records.extend(ep.extract_patch_records_surrounding_annotations(image, patch_size, annotations[image_name]))
+        
+    # augmentations = [
+    #     {
+    #         "type": "flip_vertical", 
+    #         "parameters": {
+    #             "probability": 0.5
+    #         }
+    #     },
+    #     {
+    #         "type": "flip_horizontal", 
+    #         "parameters": {
+    #             "probability": 0.5
+    #         }
+    #     },
+    #     {
+    #         "type": "rotate_90", 
+    #         "parameters": {
+    #             "probability": 0.5
+    #         }
+    #     }
+    # ]
+
+    # from models.common import data_augment
+    # aug_patch_records = []
+    # for patch_record in patch_records:
+    #     for augmentation in augmentations:
+    #         patch, boxes, classes = data_augment.apply_augmentations([augmentation], 
+    #         patch_record["patch"], patch_record["patch_normalized_boxes"], patch_record["patch_classes"])
+    #         aug_patch_records.append({
+
+    #             "patch": patch,
+    #             "patch_name": augmentation["type"] + "_" + patch_record["patch_name"],
+    #             "image_path": patch_record["image_path"],
+    #             "image_name": patch_record["image_name"],
+    #             "patch_coords": patch_record["patch_coords"],
+    #             "image_abs_boxes": patch_record["image_abs_boxes"], # FAKE
+    #             "patch_normalized_boxes": boxes.tolist(),
+    #             "patch_abs_boxes": np.rint(
+    #                     np.stack([
+    #                         boxes[..., 0] * patch.shape[1],
+    #                         boxes[..., 1] * patch.shape[0],
+    #                         boxes[..., 2] * patch.shape[1],
+    #                         boxes[..., 3] * patch.shape[0],
+
+    #                     ], axis=-1)
+    #             ).tolist(),
+    #             "patch_classes": classes.tolist()
+    #         })
+    # patch_records.extend(aug_patch_records)
     
     logger.info("Writing initial patches")
     ep.write_patches(init_patches_dir, patch_records)
@@ -474,4 +545,4 @@ def check_baseline(farm_name, field_name, mission_date):
 
     logger.info("Initial weights have been chosen.")
 
-    return True
+    # return True

@@ -60,19 +60,35 @@ def check_predict():
 
 
 def check_baseline():
-    baseline_requests_dir = os.path.join("usr", "requests", "prediction")
+    for farm_path in glob.glob(os.path.join("usr", "data", "image_sets", "*")):
+        farm_name = os.path.basename(farm_path)
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            field_name = os.path.basename(field_path)
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                mission_date = os.path.basename(mission_path)
 
-    baseline_request_paths = glob.glob(os.path.join(baseline_requests_dir, "*.json"))
+                model_dir = os.path.join(mission_path, "model")
+                initialize_request_path = os.path.join(model_dir, "initialize.json")
+                if os.path.exists(initialize_request_path):
+                    initialize_request = json_io.load_json(initialize_request_path)
+                    ism.handle_baseline_request(initialize_request)
+                    #os.remove(initialize_request_path)
+                    shutil.move(initialize_request_path, os.path.join(model_dir, "tmp_initialize.json"))
+                    #exit()
 
-    while len(baseline_request_paths) > 0:
+    # baseline_requests_dir = os.path.join("usr", "requests", "baseline")
 
-        baseline_request_path = baseline_request_paths[0]
-        baseline_request = json_io.load_json(baseline_request_path)
+    # baseline_request_paths = glob.glob(os.path.join(baseline_requests_dir, "*.json"))
 
-        ism.handle_baseline_request(baseline_request)
+    # while len(baseline_request_paths) > 0:
 
-        os.remove(baseline_request_path)
-        baseline_request_paths = glob.glob(os.path.join(baseline_requests_dir, "*.json"))
+    #     baseline_request_path = baseline_request_paths[0]
+    #     baseline_request = json_io.load_json(baseline_request_path)
+
+    #     ism.handle_baseline_request(baseline_request)
+
+    #     os.remove(baseline_request_path)
+    #     baseline_request_paths = glob.glob(os.path.join(baseline_requests_dir, "*.json"))
 
 
 def loop():
@@ -94,6 +110,8 @@ def loop():
 
     while True:
         # isa.check_restart()
+
+        check_baseline()
 
         check_predict()
 

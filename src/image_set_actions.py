@@ -12,7 +12,7 @@ from io_utils import json_io
 
 notification_url = "http://172.16.1.71:8110/plant_detection/notification"
 
-
+INITIALIZING = "initializing"
 IDLE = "idle"
 TRAINING = "training"
 PREDICTING = "predicting"

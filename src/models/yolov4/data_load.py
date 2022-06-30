@@ -51,6 +51,7 @@ class DataLoader(ABC):
 
     def get_model_input_shape(self):
         return self.input_image_shape
+    
 
 
 class InferenceDataLoader(DataLoader):
