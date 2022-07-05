@@ -94,6 +94,22 @@ def create_patches_if_needed(farm_name, field_name, mission_date, image_names):
 
 
 
+def handle_resume_direct_baseline_request(baseline_name):
+    logger = logging.getLogger(__name__)
+    logger.info("Resuming baseline model '{}'".format(baseline_name))
+
+    baseline_dir = os.path.join("usr", "data", "baselines", baseline_name)
+    model_dir = os.path.join(baseline_dir, "model")
+    weights_dir = os.path.join(model_dir, "weights")
+    assert os.path.exists(baseline_dir)
+
+    yolov4_image_set_driver.train(baseline_dir)
+
+    shutil.move(os.path.join(weights_dir, "best_weights.h5"),
+                os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
+    shutil.rmtree(baseline_dir)
+
+
 def handle_direct_baseline_request(request):
 
     baseline_name = request["baseline_name"]
@@ -544,5 +560,13 @@ def handle_baseline_request(request): #farm_name, field_name, mission_date):
 
 
     logger.info("Initial weights have been chosen.")
+
+
+    status = json_io.load_json(status_path)
+
+    status["status"] = IDLE
+    status["update_num"] = status["update_num"] + 1
+    json_io.save_json(status_path, status)
+    notify(farm_name, field_name, mission_date)
 
     # return True

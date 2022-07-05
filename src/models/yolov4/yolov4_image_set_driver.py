@@ -103,7 +103,7 @@ def create_default_config():
                 "monitor": "validation_loss",
                 "num_epochs_tolerance": 30
             },
-            "batch_size": 16, #64, #64, #1024, #32, # 16,
+            "batch_size": 16, #256, #128, #16, #64, #64, #1024, #32, # 16,
 
             #"save_method": "best_validation_loss",
             "percent_of_training_set_used": 100,
@@ -294,12 +294,41 @@ def select_baseline(farm_name, field_name, mission_date):
                 # scores[weight_name] += coco_mAP
                 # #scores[weight_name] += relative_detection_accuracy
 
+                # patch_height = patch_coords[2] - patch_coords[0]
+                # patch_width = patch_coords[3] - patch_coords[1]
+
+                # accept_bottom = round(patch_height / 4)
+                # accept_left = round(patch_width / 4)
+                # accept_top = patch_height - round(patch_height / 4)
+                # accept_right = patch_width - round(patch_width / 4)
+
+
+                # box_centres = (patch_abs_boxes[..., :2] + patch_abs_boxes[..., 2:]) / 2.0
+                # mask = np.logical_and(
+                #     np.logical_and(box_centres[:,0] >= accept_bottom, box_centres[:,0] < accept_top),
+                #     np.logical_and(box_centres[:,1] >= accept_left, box_centres[:,1] < accept_right)
+                # )
+
+                # #patch_abs_boxes = patch_abs_boxes[mask]
+
+                # pred_box_centres = (pred_patch_abs_boxes[..., :2] + pred_patch_abs_boxes[..., 2:]) / 2.0
+                # pred_mask = np.logical_and(
+                #     np.logical_and(pred_box_centres[:,0] >= accept_bottom, pred_box_centres[:,0] < accept_top),
+                #     np.logical_and(pred_box_centres[:,1] >= accept_left, pred_box_centres[:,1] < accept_right)
+                # )
+
+                # #pred_box_centres = pred_box_centres[mask]                
+
+
+                # num_actual = int(np.sum(mask))
+                # num_pred = int(np.sum(pred_mask))               
 
                 # patch = (cv2.cvtColor(cv2.imread(patch_path), cv2.COLOR_BGR2RGB)).astype(np.uint8)
                 # output_patch(patch, patch_abs_boxes, pred_boxes=pred_patch_abs_boxes, 
                 # pred_classes=pred_patch_classes, pred_scores=pred_patch_scores, 
                 #             out_path=os.path.join(debug_out_dir, patch_name + ".png"))
-
+                
+                #scores[weight_name] += abs(num_pred - num_actual)
                 scores[weight_name] += abs(pred_patch_classes.size - patch_classes.size)
 
                 # if pred_patch_abs_boxes.size > 0:

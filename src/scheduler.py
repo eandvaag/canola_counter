@@ -115,7 +115,7 @@ def loop():
 
         check_predict()
 
-        check_train()
+        # check_train()
 
         # check_baseline()
 
