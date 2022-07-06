@@ -2,6 +2,7 @@ import logging
 import os
 import glob
 import shutil
+import time
 import argparse
 import imagesize
 import requests
@@ -123,6 +124,9 @@ def handle_direct_baseline_request(request):
     if os.path.exists(baseline_dir):
         raise RuntimeError("Baseline directory already exists!")
 
+    baseline_log = {}
+    baseline_log["start_time"] = time.time()
+
     # if not os.path.exists(baseline_dir):
     os.makedirs(baseline_dir)
     # if not os.path.exists(patches_dir):
@@ -196,8 +200,6 @@ def handle_direct_baseline_request(request):
 
     json_io.save_json(loss_record_path, loss_record)
 
-
-
     yolov4_image_set_driver.train(baseline_dir)
 
     shutil.move(os.path.join(weights_dir, "best_weights.h5"),
@@ -207,7 +209,13 @@ def handle_direct_baseline_request(request):
     #     shutil.move("usr/data/baselines/training/" + baseline_name,
     #                 "usr/data/baselines/completed/" + baseline_name)
 
+    baseline_log["end_time"] = time.time()
 
+    log_dir = os.path.join("usr", "data", "baseline_logs")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    baseline_log_path = os.path.join(log_dir, baseline_name + ".json")
+    json_io.save_json(baseline_log_path, baseline_log)
 
 def handle_prediction_request(request):
 
@@ -560,6 +568,12 @@ def handle_baseline_request(request): #farm_name, field_name, mission_date):
 
 
     logger.info("Initial weights have been chosen.")
+
+
+    fine_tune = False #True
+    if fine_tune:
+        yolov4_image_set_driver.baseline_fine_tune(farm_name, field_name, mission_date)
+
 
 
     status = json_io.load_json(status_path)

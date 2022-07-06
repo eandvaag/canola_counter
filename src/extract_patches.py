@@ -141,10 +141,14 @@ def extract_patches_from_annotation_guides(image, patch_size, image_annotations,
 
                 patch_data["patch"] = patch_array
             
-                annotate_patch(patch_data, annotation_boxes, annotation_classes, clip_coords=guide_coords) #, clip_coords=guide_coords)
+                clip_coords = np.array([patch_min_y,
+                                        patch_min_x, 
+                                        min(patch_max_y, guide_coords[2]),
+                                        min(patch_max_x, guide_coords[3])])
+                annotate_patch(patch_data, annotation_boxes, annotation_classes, clip_coords=clip_coords) #guide_coords) #, clip_coords=guide_coords)
 
-                # output_patch(patch_data["patch"], patch_data["patch_abs_boxes"], pred_boxes=[], pred_classes=[], pred_scores=[], 
-                #             out_path=os.path.join("usr", "data", "tmp_patch_data_ex", patch_data["patch_name"]))
+                output_patch(patch_data["patch"], patch_data["patch_abs_boxes"], pred_boxes=[], pred_classes=[], pred_scores=[], 
+                            out_path=os.path.join("usr", "data", "tmp_patch_data_ex", patch_data["patch_name"]))
 
                 image_patches.append(patch_data)
                 patch_num += 1
@@ -389,8 +393,7 @@ def annotate_patch(patch_data, gt_boxes, gt_classes, clip_coords=None):
 
         centres = np.rint((gt_boxes[..., :2] + gt_boxes[..., 2:]) / 2.0).astype(np.int64)
 
-        # WHY ARE WE USING CENTRES OF BOXES ????
-
+        # print("now processing", patch_data["patch_name"])
 
         if clip_coords is None:
             contained_inds = get_contained_inds_2(gt_boxes, patch_data["patch_coords"])
@@ -398,6 +401,8 @@ def annotate_patch(patch_data, gt_boxes, gt_classes, clip_coords=None):
         else:
             contained_inds = get_contained_inds_2(gt_boxes, clip_coords)
             #contained_inds = get_contained_inds(centres, clip_coords)
+
+        # print("num_contained_boxes", contained_inds.size)
         contained_boxes = gt_boxes[contained_inds]
         contained_classes = gt_classes[contained_inds]
 

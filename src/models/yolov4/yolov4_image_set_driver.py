@@ -138,6 +138,140 @@ def update_loss_record(loss_record, key, cur_loss):
         return False
 
 
+def baseline_fine_tune(farm_name, field_name, mission_date):
+    
+    logger = logging.getLogger(__name__)
+
+    image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
+    model_dir = os.path.join(image_set_dir, "model")
+    images_dir = os.path.join(image_set_dir, "images")
+    weights_dir = os.path.join(model_dir, "weights")
+
+    cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
+    best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+
+    config = create_default_config()
+    model_keys.add_general_keys(config)
+    model_keys.add_specialized_keys(config)
+
+    config["training"]["active"] = {}
+    for k in config["training"]:
+        config["training"]["active"][k] = config["training"][k]
+
+
+    tf_record_path = os.path.join(image_set_dir, "model", "init", "patches-record.tfrec")
+
+    train_loader_is_preloaded, train_data_loader = data_load.get_data_loader([tf_record_path], config, shuffle=True, augment=True)
+
+    logger.info("Data loaders created. Train loader is preloaded?: {}.".format(
+        train_loader_is_preloaded
+    ))
+
+    train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+                                      take_percent=config["training"]["active"]["percent_of_training_set_used"])
+
+    logger.info("Building model...")
+
+
+    if config["arch"]["model_type"] == "yolov4":
+        yolov4 = YOLOv4(config)
+    elif config["arch"]["model_type"] == "yolov4_tiny":
+        yolov4 = YOLOv4Tiny(config)
+
+    loss_fn = YOLOv4Loss(config)
+
+
+    input_shape = (config["training"]["active"]["batch_size"], *(train_data_loader.get_model_input_shape()))
+    yolov4.build(input_shape=input_shape)
+
+    logger.info("Model built.")
+
+
+    cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
+    best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+    if os.path.exists(cur_weights_path):
+        logger.info("Loading weights...")
+        yolov4.load_weights(cur_weights_path, by_name=False)
+        logger.info("Weights loaded.")
+    else:
+        raise RuntimeError("No initial weights found.")
+
+
+    optimizer = tf.optimizers.Adam()
+
+
+    train_loss_metric = tf.metrics.Mean()
+    #val_loss_metric = tf.metrics.Mean()
+
+    @tf.function
+    def train_step(batch_images, batch_labels):
+        with tf.GradientTape() as tape:
+            conv = yolov4(batch_images, training=True)
+            loss_value = loss_fn(batch_labels, conv)
+            loss_value += sum(yolov4.losses)
+
+        #if np.isnan(loss_value):
+        #    raise RuntimeError("NaN loss has occurred.")
+        gradients = tape.gradient(target=loss_value, sources=yolov4.trainable_variables)
+        optimizer.apply_gradients(grads_and_vars=zip(gradients, yolov4.trainable_variables))
+        train_loss_metric.update_state(values=loss_value)
+
+
+
+    train_steps_per_epoch = np.sum([1 for _ in train_dataset])
+    #val_steps_per_epoch = np.sum([1 for _ in val_dataset])
+
+    logger.info("{} ('{}'): Starting to fine-tune on {} images.".format(
+                    config["arch"]["model_type"], config["model_name"], num_train_images))
+
+
+    # loss_record_path = os.path.join(training_dir, "loss_record.json")
+    # loss_record = json_io.load_json(loss_record_path)
+
+
+    steps_taken = 0
+    epochs = 0
+    while epochs < 30: #True:
+        # logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
+
+        train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
+        for batch_data in train_bar:
+
+            optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
+
+            batch_images, batch_labels = train_data_loader.read_batch_data(batch_data)
+
+            train_step(batch_images, batch_labels)
+            if np.isnan(train_loss_metric.result()):
+                raise RuntimeError("NaN loss has occurred.")
+            train_bar.set_description("t. loss: {:.4f}".format(
+                                        train_loss_metric.result()))
+                                        #, 
+                                        #loss_record["training_loss"]["best"]))
+            steps_taken += 1
+
+
+            # if check_restart():
+            #     return False
+
+        #cur_training_loss = float(train_loss_metric.result())
+
+        #update_loss_record(loss_record, "training_loss", cur_training_loss)
+
+        #json_io.save_json(loss_record_path, loss_record)
+
+        train_loss_metric.reset_states()
+
+        epochs += 1
+
+
+    logger.info("Saving fine-tuned weights.")
+    yolov4.save_weights(filepath=best_weights_path, save_format="h5")
+    yolov4.save_weights(filepath=cur_weights_path, save_format="h5")
+
+
+
+
 
 def select_baseline(farm_name, field_name, mission_date):
 

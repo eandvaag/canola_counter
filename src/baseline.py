@@ -15,7 +15,7 @@ def run_baseline_request():
     logging.basicConfig(level=logging.INFO)
 
     request = {
-        # "baseline_name": "UNI::LowN1::2021-06-07::" +
+        "baseline_name": "UNI::LowN1::2021-06-07",
         #                  "BlaineLake::River::2021-06-09::" +
         #                  "BlaineLake::HornerWest::2021-06-09::" +
         #                  "Saskatoon::Norheim1::2021-05-26::" +
@@ -25,7 +25,7 @@ def run_baseline_request():
         #                  "row_spacing::nasser_low_res::2020-06-08::" +
         #                  "Saskatoon::Norheim2::2021-05-26::" +
         #                  "Saskatoon::Norheim4::2022-05-24",
-        "baseline_name": "all_test",
+        #"baseline_name": "all_test",
         #"baseline_name": "UNI::Sutherland::2021-06-05",
         
         "image_sets": [
@@ -34,51 +34,51 @@ def run_baseline_request():
             "field_name": "LowN1",
             "mission_date": "2021-06-07"
         },
-        {
-            "farm_name": "BlaineLake",
-            "field_name": "River",
-            "mission_date": "2021-06-09"
-        },
-        {
-            "farm_name": "BlaineLake",
-            "field_name": "HornerWest",
-            "mission_date": "2021-06-09"
-        },
-        {
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim1",
-            "mission_date": "2021-05-26"
-        },
-        {
-            "farm_name": "UNI",
-            "field_name": "Sutherland",
-            "mission_date": "2021-06-05"
-        },
-        {
-            "farm_name": "UNI",
-            "field_name": "Brown",
-            "mission_date": "2021-06-05"
-        },
-        {
-            "farm_name": "row_spacing",
-            "field_name": "brown_low_res",
-            "mission_date": "2021-06-01"
-        },
-        {
-            "farm_name": "row_spacing",
-            "field_name": "nasser_low_res",
-            "mission_date": "2020-06-08"
-        },
-        {
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim2",
-            "mission_date": "2021-05-26"
-        },
-        {
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim4",
-            "mission_date": "2022-05-24"
-        },
+        # {
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "River",
+        #     "mission_date": "2021-06-09"
+        # },
+        # {
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "HornerWest",
+        #     "mission_date": "2021-06-09"
+        # },
+        # {
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim1",
+        #     "mission_date": "2021-05-26"
+        # },
+        # {
+        #     "farm_name": "UNI",
+        #     "field_name": "Sutherland",
+        #     "mission_date": "2021-06-05"
+        # },
+        # {
+        #     "farm_name": "UNI",
+        #     "field_name": "Brown",
+        #     "mission_date": "2021-06-05"
+        # },
+        # {
+        #     "farm_name": "row_spacing",
+        #     "field_name": "brown_low_res",
+        #     "mission_date": "2021-06-01"
+        # },
+        # {
+        #     "farm_name": "row_spacing",
+        #     "field_name": "nasser_low_res",
+        #     "mission_date": "2020-06-08"
+        # },
+        # {
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim2",
+        #     "mission_date": "2021-05-26"
+        # },
+        # {
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim4",
+        #     "mission_date": "2022-05-24"
+        # },
         ]
     }
 
