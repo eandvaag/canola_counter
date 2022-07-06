@@ -126,7 +126,8 @@ def handle_direct_baseline_request(request):
 
     baseline_log = {}
     baseline_log["start_time"] = time.time()
-
+    baseline_log["baseline_name"] = baseline_name
+    baseline_log["image_sets"] = request["image_sets"]
     # if not os.path.exists(baseline_dir):
     os.makedirs(baseline_dir)
     # if not os.path.exists(patches_dir):
