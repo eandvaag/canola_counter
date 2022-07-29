@@ -351,7 +351,7 @@ def collect_image_set_metrics(image_predictions, annotations, config):
 
 
 def prepare_report(out_path, farm_name, field_name, mission_date, 
-                   image_predictions, annotations, excess_green_record):
+                   image_predictions, annotations, excess_green_record, metrics):
 
     logger = logging.getLogger(__name__)
     logger.info("Preparing report")
@@ -366,8 +366,8 @@ def prepare_report(out_path, farm_name, field_name, mission_date,
         "image_name": [],
         "annotated_plant_count": [],
         "predicted_plant_count": [],
-        "ground_cover_percentage": [] 
-        #"COCO_mAP": [],
+        "ground_cover_percentage": [],
+        "MS_COCO_mAP": [],
         #"PASCAL_VOC_mAP": []
     }
 
@@ -406,6 +406,11 @@ def prepare_report(out_path, farm_name, field_name, mission_date,
         d["predicted_" + "plant" + "_count"].append(str(sel_pred_abs_boxes.shape[0]))
 
         d["ground_cover_percentage"].append("%.2f" % (excess_green_record[image_name]["ground_cover_percentage"]))
+
+        if image_name in metrics:
+            d["MS_COCO_mAP"].append(metrics[image_name]["Image MS COCO mAP"])
+        else:
+            d["MS_COCO_mAP"].append("NA")
 
 
     pandas.io.formats.excel.ExcelFormatter.header_style = None

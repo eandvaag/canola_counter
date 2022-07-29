@@ -292,6 +292,7 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
         #     image_abs_boxes = image_abs_boxes[mask]
         #     image_scores = patch_scores[mask]
         #     image_classes = patch_classes[mask]
+        
 
 
         if trim:
@@ -303,10 +304,17 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
 
 
             box_centres = (image_abs_boxes[..., :2] + image_abs_boxes[..., 2:]) / 2.0
+
+            # print("box_centres", box_centres)
+            # print("accept_bottom: {}, accept_left: {}, accept_top: {}, accept_right: {}".format(
+            #     accept_bottom, accept_left, accept_top, accept_right
+            # ))
             mask = np.logical_and(
                 np.logical_and(box_centres[:,0] >= accept_bottom, box_centres[:,0] < accept_top),
                 np.logical_and(box_centres[:,1] >= accept_left, box_centres[:,1] < accept_right)
             )
+
+            # print("mask", mask)
 
             image_abs_boxes = image_abs_boxes[mask]
             image_scores = patch_scores[mask]
@@ -354,87 +362,46 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
 
 
 def clip_image_boxes(image_predictions):
-
     for image_name in image_predictions.keys():
-
-        if len(image_predictions[image_name]["pred_image_abs_boxes"]) > 0:
-            pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
-            image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
-            pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-            image_predictions[image_name]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
-
-
-        # if len(image_predictions[image_name]["nt_pred_image_abs_boxes"]) > 0:
-        #     pred_image_abs_boxes = np.array(image_predictions[image_name]["nt_pred_image_abs_boxes"])
-        #     image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
-        #     pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-        #     image_predictions[image_name]["nt_pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+        for transform_type in image_predictions[image_name].keys():
+            if len(image_predictions[image_name][transform_type]["pred_image_abs_boxes"]) > 0:
+                pred_image_abs_boxes = np.array(image_predictions[image_name][transform_type]["pred_image_abs_boxes"])
+                image_width, image_height = Image(image_predictions[image_name][transform_type]["image_path"]).get_wh()
+                pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+                image_predictions[image_name][transform_type]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
 
 
-def apply_careful_nms_to_image_boxes(image_predictions, iou_thresh):
-
-    for image_name in image_predictions.keys():
-
-        taken_boxes = []
-        taken_scores = []
-        taken_classes = []
-
-        pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
-        scores = np.array(image_predictions[image_name]["pred_scores"])
-        classes = np.array(image_predictions[image_name]["pred_classes"])
-        iou_mat = box_utils.compute_iou_np(pred_image_abs_boxes, pred_image_abs_boxes)
-        
-
-        i = 0
-        starting_ind = 0
-        for patch_num_boxes in image_predictions[image_name]["boxes_added_per_patch"]:
-            
-            for _ in range(patch_num_boxes):
-                iou_mat[i, starting_ind:starting_ind+patch_num_boxes] = 0
-
-                sel_mask = iou_mat[i, :] > iou_thresh
-                sel_scores = scores[sel_mask]
-                box_score = scores[i]
-
-                if np.all(box_score > sel_scores):
-                    # take box
-                    taken_boxes.append(pred_image_abs_boxes[i].tolist())
-                    taken_scores.append(float(scores[i]))
-                    taken_classes.append(int(classes[i]))
-
-                i += 1
-            starting_ind += patch_num_boxes
-
-        image_predictions[image_name]["pred_image_abs_boxes"] = taken_boxes
-        image_predictions[image_name]["pred_classes"] = taken_classes
-        image_predictions[image_name]["pred_scores"] = taken_scores
-        
-
+            # if len(image_predictions[image_name]["nt_pred_image_abs_boxes"]) > 0:
+            #     pred_image_abs_boxes = np.array(image_predictions[image_name]["nt_pred_image_abs_boxes"])
+            #     image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
+            #     pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+            #     image_predictions[image_name]["nt_pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
 
 
 
 
 def apply_nms_to_image_boxes(image_predictions, iou_thresh):
 
-    for image_name in image_predictions.keys():
-        if len(image_predictions[image_name]["pred_image_abs_boxes"]) > 0:
-            pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
-            pred_classes = np.array(image_predictions[image_name]["pred_classes"])
-            pred_scores = np.array(image_predictions[image_name]["pred_scores"])
+        for image_name in image_predictions.keys():
+            for transform_type in image_predictions[image_name].keys():
+                if len(image_predictions[image_name][transform_type]["pred_image_abs_boxes"]) > 0:
+                    pred_image_abs_boxes = np.array(image_predictions[image_name][transform_type]["pred_image_abs_boxes"])
+                    pred_classes = np.array(image_predictions[image_name][transform_type]["pred_classes"])
+                    pred_scores = np.array(image_predictions[image_name][transform_type]["pred_scores"])
 
-            nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression_with_classes(
-                                                    pred_image_abs_boxes,
-                                                    pred_classes,
-                                                    pred_scores,
-                                                    iou_thresh=iou_thresh)
-        else:
-            nms_boxes = np.array([])
-            nms_classes = np.array([])
-            nms_scores = np.array([])
+                    nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression_with_classes(
+                                                            pred_image_abs_boxes,
+                                                            pred_classes,
+                                                            pred_scores,
+                                                            iou_thresh=iou_thresh)
+                else:
+                    nms_boxes = np.array([])
+                    nms_classes = np.array([])
+                    nms_scores = np.array([])
 
-        image_predictions[image_name]["pred_image_abs_boxes"] = nms_boxes.tolist()
-        image_predictions[image_name]["pred_classes"] = nms_classes.tolist()
-        image_predictions[image_name]["pred_scores"] = nms_scores.tolist()
+                image_predictions[image_name][transform_type]["pred_image_abs_boxes"] = nms_boxes.tolist()
+                image_predictions[image_name][transform_type]["pred_classes"] = nms_classes.tolist()
+                image_predictions[image_name][transform_type]["pred_scores"] = nms_scores.tolist()
 
 
 def add_class_detections(image_predictions, config): #, opt_thresh_val):
@@ -483,45 +450,45 @@ def add_class_detections(image_predictions, config): #, opt_thresh_val):
 
 
 
-def create_metrics_skeleton(dataset):
-    metrics = {
-        "point": {},
-        "boxplot": {},
-        "image": {}
-    }
-    for image in dataset.images:
-        metrics["image"][image.image_name] = {}
-    return metrics
+# def create_metrics_skeleton(dataset):
+#     metrics = {
+#         "point": {},
+#         "boxplot": {},
+#         "image": {}
+#     }
+#     for image in dataset.images:
+#         metrics["image"][image.image_name] = {}
+#     return metrics
 
 
-def create_predictions_skeleton(dataset):
+# def create_predictions_skeleton(dataset):
 
-    return {"farm_name": dataset.farm_name, #config["target_farm_name"],
-            "field_name": dataset.field_name, #config["target_field_name"],
-            "mission_date": dataset.mission_date, #config["target_mission_date"],
-            "image_predictions": {}, 
-            "patch_predictions": {}
-            # "metrics": 
-            #     {
-            #         # "training": 
-            #         # {
-            #         #     "point": {},
-            #         #     "boxplot": {}
-            #         # },
-            #         # "validation":
-            #         # {
-            #         #     "point": {},
-            #         #     "boxplot": {}
-            #         # },
-            #         # "test":
-            #         # {
-            #         #     "point": {},
-            #         #     "boxplot": {}
-            #         # },
-            #         "all":
-            #         {
-            #             "point": {},
-            #             "boxplot": {}
-            #         },                    
-            #     }
-            }
+#     return {"farm_name": dataset.farm_name, #config["target_farm_name"],
+#             "field_name": dataset.field_name, #config["target_field_name"],
+#             "mission_date": dataset.mission_date, #config["target_mission_date"],
+#             "image_predictions": {}, 
+#             "patch_predictions": {}
+#             # "metrics": 
+#             #     {
+#             #         # "training": 
+#             #         # {
+#             #         #     "point": {},
+#             #         #     "boxplot": {}
+#             #         # },
+#             #         # "validation":
+#             #         # {
+#             #         #     "point": {},
+#             #         #     "boxplot": {}
+#             #         # },
+#             #         # "test":
+#             #         # {
+#             #         #     "point": {},
+#             #         #     "boxplot": {}
+#             #         # },
+#             #         "all":
+#             #         {
+#             #             "point": {},
+#             #             "boxplot": {}
+#             #         },                    
+#             #     }
+#             }

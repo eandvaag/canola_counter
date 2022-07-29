@@ -17,45 +17,66 @@ import image_set_model as ism
 
 def check_train():
 
-    for farm_path in glob.glob(os.path.join("usr", "data", "image_sets", "*")):
-        farm_name = os.path.basename(farm_path)
-        for field_path in glob.glob(os.path.join(farm_path, "*")):
-            field_name = os.path.basename(field_path)
-            for mission_path in glob.glob(os.path.join(field_path, "*")):
-                mission_date = os.path.basename(mission_path)
+    for username_path in glob.glob(os.path.join("usr", "data", "*")):
+        username = os.path.basename(username_path)
+        for user_dir in glob.glob(os.path.join(username_path, "*")):
+            if os.path.basename(user_dir) == "image_sets":
+                for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
+                    farm_name = os.path.basename(farm_path)
+                    for field_path in glob.glob(os.path.join(farm_path, "*")):
+                        field_name = os.path.basename(field_path)
+                        for mission_path in glob.glob(os.path.join(field_path, "*")):
+                            mission_date = os.path.basename(mission_path)
 
-                try:
-                    ism.check_train(farm_name, field_name, mission_date)
-                except FileNotFoundError:
-                    pass
+                            try:
+                                ism.check_train(username, farm_name, field_name, mission_date)
+                            except FileNotFoundError:
+                                pass
 
 
 
 
 def check_predict():
+    for username_path in glob.glob(os.path.join("usr", "data", "*")):
+        username = os.path.basename(username_path)
+        for user_dir in glob.glob(os.path.join(username_path, "*")):
+            if os.path.basename(user_dir) == "image_sets":
+                for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
+                    farm_name = os.path.basename(farm_path)
+                    for field_path in glob.glob(os.path.join(farm_path, "*")):
+                        field_name = os.path.basename(field_path)
+                        for mission_path in glob.glob(os.path.join(field_path, "*")):
+                            mission_date = os.path.basename(mission_path)
 
-    prediction_requests_dir = os.path.join("usr", "requests", "prediction")
-
-    prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
-
-    while len(prediction_request_paths) > 0:
-        # print("there is a prediction to process", prediction_request_paths)
-
-        prediction_request_path = prediction_request_paths[0]
-        # print("prediction_request_path", prediction_request_path)
-        prediction_request = json_io.load_json(prediction_request_path)
-
-        # farm_name = prediction_request["farm_name"]
-        # field_name = prediction_request["field_name"]
-        # mission_date = prediction_request["mission_date"]
-
-
-        ism.handle_prediction_request(prediction_request)
+                            
+                            ism.check_predict(username, farm_name, field_name, mission_date)
 
 
 
-        os.remove(prediction_request_path)
-        prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
+# def check_predict():
+
+#     prediction_requests_dir = os.path.join("usr", "requests", "prediction")
+
+#     prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
+
+#     while len(prediction_request_paths) > 0:
+#         # print("there is a prediction to process", prediction_request_paths)
+
+#         prediction_request_path = prediction_request_paths[0]
+#         # print("prediction_request_path", prediction_request_path)
+        
+
+#         # farm_name = prediction_request["farm_name"]
+#         # field_name = prediction_request["field_name"]
+#         # mission_date = prediction_request["mission_date"]
+
+
+#         ism.handle_prediction_request(prediction_request_path)
+
+
+
+        
+#         prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
 
 
 
@@ -111,11 +132,11 @@ def loop():
     while True:
         # isa.check_restart()
 
-        check_baseline()
+        # check_baseline()
 
         check_predict()
 
-        # check_train()
+        check_train()
 
         # check_baseline()
 
@@ -149,5 +170,6 @@ if __name__ == "__main__":
     #     except RuntimeError as e:
     #         # Virtual devices must be set before GPUs have been initialized
     #         print(e)
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
     logging.basicConfig(level=logging.INFO)
     loop()

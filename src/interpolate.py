@@ -11,7 +11,7 @@ import argparse
 from sklearn.metrics import pairwise_distances
 
 
-from image_set import DataSet
+# from image_set import DataSet
 from io_utils import json_io, exif_io
 
 def range_map(old_val, old_min, old_max, new_min, new_max):
@@ -19,14 +19,14 @@ def range_map(old_val, old_min, old_max, new_min, new_max):
     return new_val
 
 
-def similarity_map(dataset):
+def similarity_map(username, farm_name, field_name, mission_date):
 
-    farm_name = dataset.farm_name
-    field_name = dataset.field_name
-    mission_date = dataset.mission_date
+    # farm_name = dataset.farm_name
+    # field_name = dataset.field_name
+    # mission_date = dataset.mission_date
 
     
-    image_set_dir =  os.path.join("usr", "data", "image_sets",
+    image_set_dir =  os.path.join("usr", "data", username, "image_sets",
                         farm_name, field_name, mission_date)
 
     annotations_path = os.path.join(image_set_dir,
@@ -88,11 +88,11 @@ def create_plot(grid_z0, extent, vmin, vmax, cmap, out_path):
     plt.savefig(out_path, bbox_inches='tight', transparent=True, pad_inches=0)
 
 
-def create_interpolation_map(dataset, annotations_path, out_dir, interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
+def create_interpolation_map(username, farm_name, field_name, mission_date, annotations_path, out_dir, interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
 
-    farm_name = dataset.farm_name
-    field_name = dataset.field_name
-    mission_date = dataset.mission_date
+    # farm_name = dataset.farm_name
+    # field_name = dataset.field_name
+    # mission_date = dataset.mission_date
 
     #annotations_path = os.path.join("usr", "data", "image_sets",
     #                    farm_name, field_name, mission_date,
@@ -102,7 +102,7 @@ def create_interpolation_map(dataset, annotations_path, out_dir, interpolation="
     #images_root = os.path.join("usr", "data", "image_sets",
     #                    farm_name, field_name, mission_date, "images")
 
-    metadata_path = os.path.join("usr", "data", "image_sets",
+    metadata_path = os.path.join("usr", "data", username, "image_sets",
                         farm_name, field_name, mission_date,
                         "metadata", "metadata.json")
     metadata = json_io.load_json(metadata_path)
@@ -276,16 +276,17 @@ def remove_all_maps():
                     shutil.rmtree(maps_path)
 
 
-def test():
-    ds = DataSet({"farm_name": "UNI", "field_name": "LowN1", "mission_date": "2021-06-07"})
-    predictions_path = os.path.join("usr", "data", "results", "UNI", "LowN1", "2021-06-07", 
-    "7a404942-dcd6-414c-a4aa-fcc39db4425b", "b4a13b7f-5e4d-4818-8c14-ea4095900fb3", "predictions.json")
-    predictions = json_io.load_json(predictions_path)
-    create_interpolation_map(ds, predictions)
+# def test():
+#     ds = DataSet({"farm_name": "UNI", "field_name": "LowN1", "mission_date": "2021-06-07"})
+#     predictions_path = os.path.join("usr", "data", "results", "UNI", "LowN1", "2021-06-07", 
+#     "7a404942-dcd6-414c-a4aa-fcc39db4425b", "b4a13b7f-5e4d-4818-8c14-ea4095900fb3", "predictions.json")
+#     predictions = json_io.load_json(predictions_path)
+#     create_interpolation_map(ds, predictions)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("username", type=str)
     parser.add_argument("farm_name", type=str)
     parser.add_argument("field_name", type=str)
     parser.add_argument("mission_date", type=str)
@@ -299,11 +300,11 @@ if __name__ == "__main__":
     parser.add_argument('-diff', action='store_true')
     args = parser.parse_args()
     
-    dataset = DataSet({
-        "farm_name": args.farm_name,
-        "field_name": args.field_name,
-        "mission_date": args.mission_date
-    })
+    # dataset = DataSet({
+    #     "farm_name": args.farm_name,
+    #     "field_name": args.field_name,
+    #     "mission_date": args.mission_date
+    # })
 
     # if args.density:
     #     metric = "density"
@@ -321,7 +322,10 @@ if __name__ == "__main__":
         comparison_type = "side_by_side"
 
 
-    create_interpolation_map(dataset, 
+    create_interpolation_map(args.username,
+                            args.farm_name,
+                            args.field_name,
+                            args.mission_date,
                             args.annotations_path,
                             args.out_dir, 
                             interpolation=interpolation, 

@@ -169,20 +169,23 @@ def get_annotation_stats():
     num_annotations = 0
     num_completed_images = 0
     num_image_sets = 0
-    image_set_root = os.path.join("usr", "data", "image_sets")
-    for farm_path in glob.glob(os.path.join(image_set_root, "*")):
-        farm_name = os.path.basename(farm_path)
-        for field_path in glob.glob(os.path.join(farm_path, "*")):
-            field_name = os.path.basename(field_path)
-            for mission_path in glob.glob(os.path.join(field_path, "*")):
-                num_image_sets += 1
-                mission_date = os.path.basename(mission_path)
-                annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
-                annotations = load_annotations(annotations_path, {"plant": 0})
-                completed_images = get_completed_images(annotations)
-                num_completed_images += len(completed_images)
-                for image_name in completed_images:
-                    num_annotations += annotations[image_name]["boxes"].shape[0]
+    #image_set_root = os.path.join("usr", "data", "image_sets")
+    for username_path in glob.glob(os.path.join("usr", "data", "*")):
+        for user_dir in glob.glob(os.path.join(username_path, "*")):
+            if os.basename(user_dir) == "image_sets":
+                for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
+                    farm_name = os.path.basename(farm_path)
+                    for field_path in glob.glob(os.path.join(farm_path, "*")):
+                        field_name = os.path.basename(field_path)
+                        for mission_path in glob.glob(os.path.join(field_path, "*")):
+                            num_image_sets += 1
+                            mission_date = os.path.basename(mission_path)
+                            annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
+                            annotations = load_annotations(annotations_path, {"plant": 0})
+                            completed_images = get_completed_images(annotations)
+                            num_completed_images += len(completed_images)
+                            for image_name in annotations.keys(): #completed_images:
+                                num_annotations += annotations[image_name]["boxes"].shape[0]
 
     return {
         "num_image_sets": num_image_sets,
@@ -193,7 +196,7 @@ def get_annotation_stats():
 
 def get_completed_images(annotations, allow_empty=True):
     return [image_name for image_name in annotations.keys() \
-            if annotations[image_name]["status"] == "completed" and (allow_empty or annotations[image_name]["boxes"].size > 0)]
+            if annotations[image_name]["status"] == "completed_for_training" or annotations[image_name]["status"] == "completed_for_testing" and (allow_empty or annotations[image_name]["boxes"].size > 0)]
 
 
 

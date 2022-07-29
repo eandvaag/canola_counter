@@ -31,11 +31,15 @@ def extract_metadata(image_set_dir, flight_height=None):
 
     image_set_metadata = {}
 
+
+    image_set_path_pieces = image_set_dir.split("/")
+    username = image_set_path_pieces[2]
+
     images_dir = os.path.join(image_set_dir, "images")
     metadata_dir = os.path.join(image_set_dir, "metadata")
 
     if flight_height is None:
-        flight_height = "unknown"
+        flight_height = "???"
     image_set_metadata = {
         "flight_height": flight_height,
         "images": {},
@@ -59,7 +63,7 @@ def extract_metadata(image_set_dir, flight_height=None):
             image_set_metadata["missing"]["area_m2"] = True
         else:
             try:
-                area_m2 = image.get_area_m2(md, flight_height)
+                area_m2 = image.get_area_m2(md, username, flight_height)
             except:
                 area_m2 = "unknown"
                 image_set_metadata["missing"]["area_m2"] = True
@@ -105,11 +109,11 @@ def extract_metadata(image_set_dir, flight_height=None):
     if "EXIF:Make" in md:
         make = md["EXIF:Make"]
     else:
-        make = "unknown"
+        make = "???"
     if "EXIF:Model" in md:
         model = md["EXIF:Model"]
     else:
-        model = "unknown"
+        model = "???"
     camera_info = {
         "make": make,
         "model": model

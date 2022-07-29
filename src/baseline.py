@@ -15,8 +15,8 @@ def run_baseline_request():
     logging.basicConfig(level=logging.INFO)
 
     request = {
-        "baseline_name": "UNI::LowN1::2021-06-07",
-        #                  "BlaineLake::River::2021-06-09::" +
+        "baseline_name": "full_yolov4_8_sets_0",
+        #                  "UNI::LowN1::2021-06-07::"
         #                  "BlaineLake::HornerWest::2021-06-09::" +
         #                  "Saskatoon::Norheim1::2021-05-26::" +
         #                  "UNI::Sutherland::2021-06-05::" +
@@ -34,31 +34,31 @@ def run_baseline_request():
             "field_name": "LowN1",
             "mission_date": "2021-06-07"
         },
-        # {
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "River",
-        #     "mission_date": "2021-06-09"
-        # },
-        # {
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "HornerWest",
-        #     "mission_date": "2021-06-09"
-        # },
-        # {
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim1",
-        #     "mission_date": "2021-05-26"
-        # },
-        # {
-        #     "farm_name": "UNI",
-        #     "field_name": "Sutherland",
-        #     "mission_date": "2021-06-05"
-        # },
-        # {
-        #     "farm_name": "UNI",
-        #     "field_name": "Brown",
-        #     "mission_date": "2021-06-05"
-        # },
+        {
+            "farm_name": "BlaineLake",
+            "field_name": "River",
+            "mission_date": "2021-06-09"
+        },
+        {
+            "farm_name": "BlaineLake",
+            "field_name": "HornerWest",
+            "mission_date": "2021-06-09"
+        },
+        {
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim1",
+            "mission_date": "2021-05-26"
+        },
+        {
+            "farm_name": "UNI",
+            "field_name": "Sutherland",
+            "mission_date": "2021-06-05"
+        },
+        {
+            "farm_name": "UNI",
+            "field_name": "Brown",
+            "mission_date": "2021-06-05"
+        },
         # {
         #     "farm_name": "row_spacing",
         #     "field_name": "brown_low_res",
@@ -69,11 +69,16 @@ def run_baseline_request():
         #     "field_name": "nasser_low_res",
         #     "mission_date": "2020-06-08"
         # },
-        # {
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim2",
-        #     "mission_date": "2021-05-26"
-        # },
+        {
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim2",
+            "mission_date": "2021-05-26"
+        },
+        {
+            "farm_name": "UNI",
+            "field_name": "LowN2",
+            "mission_date": "2021-06-07"
+        },
         # {
         #     "farm_name": "Saskatoon",
         #     "field_name": "Norheim4",

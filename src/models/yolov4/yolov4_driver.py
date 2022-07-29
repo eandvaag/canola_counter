@@ -61,9 +61,17 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nm
     if round_scores:
         pred_scores = np.round(pred_scores, 2)
     score_mask = pred_scores > score_threshold
+
+    # in_bounds_mask = np.logical_and(
+    #     np.logical_and(pred_boxes[:, 0] > 0, pred_boxes[:, 1] > 0),
+    #     np.logical_and(pred_boxes[:, 2] < patch_coords[2], pred_boxes[:, 3] < patch_coords[3])
+    # )
+
     #mask = np.logical_and(scale_mask, score_mask)
-    mask = score_mask
+    mask = score_mask #np.logical_and(score_mask, in_bounds_mask)
     pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
+
+    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
 
     pred_boxes = np.rint(pred_boxes).astype(np.int32)
     pred_scores = pred_scores.astype(np.float32)

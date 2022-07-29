@@ -91,6 +91,9 @@ if __name__ == "__main__":
 
     tf_record_path = "/home/eaa299/workspace/plant_detection/plant_detection/src/usr/data/models/" + \
                     "6dbabda4-6756-4fb1-aa0b-e94b06754635/source_patches/0/training/annotated-patches-record.tfrec"
+
+    tf_record_path = "/home/eaa299/workspace/plant_detection/plant_detection/src/usr/data/kaylie/" + \
+                    "image_sets/MORSE/Dugout/2022-05-27/model/prediction/images/UNI_MORSEfung_D_May26_101a/patches-record.tfrec"
     out_dir = "/home/eaa299/workspace/augmentation/" #Documents/work/2021/augmentation_test"
     
     data_loader = DataLoader([tf_record_path])
@@ -155,18 +158,18 @@ if __name__ == "__main__":
         #    [{"type": "brightness",
         #      "parameters": {"probability": 1.0, "limit": [0, 0]}}],
         #      img, boxes, classes)
-        aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
-           [{"type": "brightness_contrast",
-             "parameters": {"probability": 1.0, "brightness_limit": [-0.2, 0.2], "contrast_limit": [-0.2, 0.2]}}],
-             img, boxes, classes)
+        # aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
+        #    [{"type": "brightness_contrast",
+        #      "parameters": {"probability": 1.0, "brightness_limit": [-0.2, 0.2], "contrast_limit": [-0.2, 0.2]}}],
+        #      img, boxes, classes)
         #print(aug_img)
 
-        # aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
-        #     [{"type": "rgb_shift",
-        #       "parameters": {"probability": 1.0, "r_shift_limit": [-20, 20], "g_shift_limit": [-20, 20], "b_shift_limit": [-20, 20]}}],
-        #       img, boxes, classes)
+        aug_img, aug_boxes, aug_classes = data_augment.apply_augmentations(
+            [{"type": "rgb_shift",
+              "parameters": {"probability": 1.0, "r_shift_limit": [-30, 30], "g_shift_limit": [-30, 30], "b_shift_limit": [-30, 30]}}],
+              img, boxes, classes)
         # shear: -40, 40, rotate: -360, 360
-        # output_result(aug_img, aug_boxes, aug_classes, os.path.join(out_dir, img_id + "_affine.png"))        
+        output_result(aug_img, aug_boxes, aug_classes, os.path.join(out_dir, img_id + "_rgb_shift.png"))        
 
         output_result(aug_img, aug_boxes, aug_classes, os.path.join(out_dir, img_id + "_augmented.png"))        
 

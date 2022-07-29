@@ -239,7 +239,7 @@ class Image(object):
 
         return height_m
 
-    def get_gsd(self, metadata, flight_height):
+    def get_gsd(self, metadata, username, flight_height):
         # try:
             
             # print(json.dumps(metadata, indent=4, sort_keys=True))
@@ -247,7 +247,7 @@ class Image(object):
         make = metadata["EXIF:Make"]
         model = metadata["EXIF:Model"]
 
-        cameras = json_io.load_json(os.path.join("usr", "data", "cameras", "cameras.json"))
+        cameras = json_io.load_json(os.path.join("usr", "data", username, "cameras", "cameras.json"))
 
         specs = cameras[make][model]
         sensor_width = float(specs["sensor_width"][:-2])
@@ -283,9 +283,9 @@ class Image(object):
         #     raise RuntimeError("Missing EXIF data needed to determine GSD.")
 
 
-    def get_area_m2(self, metadata, flight_height):
+    def get_area_m2(self, metadata, username, flight_height):
         # try:
-        gsd = self.get_gsd(metadata, flight_height)
+        gsd = self.get_gsd(metadata, username, flight_height)
         image_width, image_height = self.get_wh()
         image_width_m = image_width * gsd
         image_height_m = image_height * gsd
