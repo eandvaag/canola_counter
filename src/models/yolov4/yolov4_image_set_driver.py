@@ -406,7 +406,7 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
 
     image_predictions = {}
 
-    transform_types = ["nop"] #, "flip_horizontal", "flip_vertical"]
+    transform_types = ["nop"] #"nop"] #, "flip_horizontal", "flip_vertical"]
 
     for image_name in image_names:
 
@@ -527,10 +527,10 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
                                             iou_thresh=config["inference"]["image_nms_iou_thresh"])
 
 
-    if transform_types == ["nop"]:
+    if len(transform_types) == 1:
 
         for image_name in image_predictions.keys():
-            image_predictions[image_name] = image_predictions[image_name]["nop"]
+            image_predictions[image_name] = image_predictions[image_name][transform_types[0]]
     else:
         for image_name in image_predictions.keys():
             all_boxes = []

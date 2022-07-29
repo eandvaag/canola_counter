@@ -4,6 +4,8 @@ import glob
 import shutil
 import numpy as np
 import pandas as pd
+import uuid
+import time
 
 import matplotlib.pyplot as plt
 from pyrsistent import field
@@ -537,7 +539,7 @@ def generate_plots():
 
     #baseline_names = ["full_yolov4_11_sets_0"] #"UNI::LowN1::2021-06-07", "3_sets_0", "5_sets_0", "8_sets_0"]
     #baseline_names = ["full_yolov4_UNI::LowN1::2021-06-07", "full_yolov4_3_sets_0", "full_yolov4_5_sets_0", "full_yolov4_8_sets_0"]
-    baseline_names = ["11_sets_0_no_overlap", "11_sets_0_no_overlap_augmented"]
+    baseline_names = ["11_sets_0_no_overlap"] #_CLAHE"] #, "11_sets_0_no_overlap_augmented"]
     
     #tick_labels = ["1", "3", "5", "8"]
     tick_labels = ["11_sets_0_no_overlap", "11_sets_0_no_overlap_augmented"]
@@ -592,20 +594,33 @@ def generate_plots():
                     #     "image_names": [image_name for image_name in annotations.keys() if annotations[image_name]["status"] == "completed_for_testing"],
                     #     "save_result": True
                     # }
+                    request_uuid = str(uuid.uuid4())
+                    request = {
+                        "request_uuid": request_uuid,
+                        "start_time": int(time.time()),
+                        "image_names": image_names,
+                        "save_result": True
+                    }
+
+                    request_path = os.path.join("usr", "data", "kaylie", "image_sets",
+                                                farm_name, field_name, mission_date, "model", 
+                                                "prediction", "image_set_requests", "pending", request_uuid + ".json")
 
                     # request_uuid = str(uuid.uuid4())
                     # request_path = os.path.join("usr", "requests", "prediction", request_uuid + ".json")
 
                     # json_io.save_json(request_path, request)
+                    json_io.save_json(request_path, request)
+                    ism.check_predict("kaylie", farm_name, field_name, mission_date)
 
-                    ism.predict_on_images(
-                        "kaylie",
-                        farm_name,
-                        field_name,
-                        mission_date,
-                        image_names,
-                        True
-                    )
+                    # ism.predict_on_images(
+                    #     "kaylie",
+                    #     farm_name,
+                    #     field_name,
+                    #     mission_date,
+                    #     image_names,
+                    #     True
+                    # )
 
                     os.remove(baseline_dst_path)
 
@@ -629,9 +644,9 @@ def generate_plots():
 
 
     # print("chart_data", chart_data)
-    # json_io.save_json("yolov4_11_chart_data.json", chart_data)
+    # json_io.save_json("yolov4_tiny_11_CLAHE_chart_data.json", chart_data)
 
-    # exit()
+    exit()
 
     for metric in metrics:
         fig, ax = plt.subplots()

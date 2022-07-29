@@ -90,6 +90,8 @@ class InferenceDataLoader(DataLoader):
         #print("loading image from path", image_path)
         image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
 
+        # image = data_augment.apply_inference_transform([image], "CLAHE")[0]
+
         #image = tf.io.read_file(filename=image_path)
         #image = tf.io.decode_image(contents=image, channels=3, dtype=tf.dtypes.float32)
         

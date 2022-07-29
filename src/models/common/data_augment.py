@@ -146,6 +146,8 @@ def apply_inference_transform(batch_images, aug_type):
         return batch_images
 
     augmentations = []
+    if aug_type == "CLAHE":
+        augmentations.append(A.CLAHE(always_apply=True))
     if aug_type == "flip_horizontal":
         augmentations.append(A.HorizontalFlip(always_apply=True))
     elif aug_type == "flip_vertical":
@@ -160,15 +162,14 @@ def apply_inference_transform(batch_images, aug_type):
     transform = A.Compose(augmentations)
 
     transformed_images = []
-    batch_images = batch_images.numpy()
+    # batch_images = batch_images.numpy()
     for image in batch_images:
-        # print("type(image)", type(image), image.dtype)
         transformed = transform(image=image) #, bboxes=boxes, class_labels=classes)
         transformed_image = transformed["image"]
-        transformed_image = tf.convert_to_tensor(transformed_image)
+        # transformed_image = tf.convert_to_tensor(transformed_image)
         transformed_images.append(transformed_image)
     
-    transformed_images = tf.stack(transformed_images, axis=0)
+    # transformed_images = tf.stack(transformed_images, axis=0)
     return transformed_images
 
 
@@ -176,7 +177,7 @@ def undo_inference_transform(image_path, pred_boxes, pred_classes, pred_scores, 
 
     # print("pred_boxes", pred_boxes)
 
-    if aug_type == "nop":
+    if aug_type == "nop" or aug_type == "CLAHE":
         return pred_boxes, pred_classes, pred_scores
 
     augmentations = []
