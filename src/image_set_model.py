@@ -316,8 +316,9 @@ def check_train(username, farm_name, field_name, mission_date):
     training_dir = os.path.join(model_dir, "training")
     status_path = os.path.join(model_dir, "status.json")
 
-    block_file_path = os.path.join(training_dir, "block_training.json")
-    if os.path.exists(block_file_path):
+    usr_block_path = os.path.join(training_dir, "usr_block.json")
+    sys_block_path = os.path.join(training_dir, "sys_block.json")
+    if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
         return
 
     # weights_dir = os.path.join(model_dir, "weights")
@@ -390,10 +391,11 @@ def check_train(username, farm_name, field_name, mission_date):
             isa.notify(username, farm_name, field_name, mission_date)
 
     except Exception as e:
-        json_io.save_json(block_file_path, {})
+        json_io.save_json(sys_block_path, {"error_message": str(e)})
         status = json_io.load_json(status_path)
         status["status"] = isa.IDLE
         status["update_num"] = status["update_num"] + 1
+        json_io.save_json(status_path, status)
 
         isa.notify(username, farm_name, field_name, mission_date,
                error=True, extra_items={"error_setting": "training", "error_message": str(e)})

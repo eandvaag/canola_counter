@@ -642,11 +642,14 @@ def train(root_dir): #farm_name, field_name, mission_date):
     logger = logging.getLogger(__name__)
 
     tf.keras.backend.clear_session()
-
+    
     #image_set_dir = os.path.join("usr", "data", "image_sets", farm_name, field_name, mission_date)
     model_dir = os.path.join(root_dir, "model")
     weights_dir = os.path.join(model_dir, "weights")
     training_dir = os.path.join(model_dir, "training")
+
+    usr_block_path = os.path.join(training_dir, "usr_block.json")
+    sys_block_path = os.path.join(training_dir, "sys_block.json")
 
 
     #training_patch_dir = os.path.join(training_patches_dir, str(seq_num), "training")
@@ -810,6 +813,10 @@ def train(root_dir): #farm_name, field_name, mission_date):
 
         if isa.check_for_predictions():
             return False
+
+        if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+            return False
+
 
 
 
