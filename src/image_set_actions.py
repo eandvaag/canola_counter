@@ -10,7 +10,8 @@ from io_utils import json_io
 
 
 
-notification_url = "http://172.16.1.71:8110/plant_detection/notification"
+status_notification_url = "http://172.16.1.71:8110/plant_detection/status_notification"
+results_notification_url = "http://172.16.1.71:8110/plant_detection/results_notification"
 
 INITIALIZING = "initializing"
 IDLE = "idle"
@@ -19,7 +20,7 @@ PREDICTING = "predicting"
 
 
 
-def notify(username, farm_name, field_name, mission_date, error=False, extra_items={}):
+def notify(username, farm_name, field_name, mission_date, error=False, extra_items={}, results_notification=False):
     #print("sending data", data)
 
 
@@ -42,7 +43,11 @@ def notify(username, farm_name, field_name, mission_date, error=False, extra_ite
 
     print(data)
 
-    response = requests.post(notification_url, data=data)
+    if results_notification:
+        url = results_notification_url
+    else:
+        url = status_notification_url
+    response = requests.post(url, data=data)
     response.raise_for_status()  # raises exception when not a 2xx response
     if response.status_code != 200:
         print("Response status code is not 200. Status code: {}".format(response.status_code))
@@ -71,19 +76,25 @@ def check_for_predictions():
                         for mission_path in glob.glob(os.path.join(field_path, "*")):
                             mission_date = os.path.basename(mission_path)
 
-                            model_dir = os.path.join("usr", "data", username, "image_sets",
-                                                    farm_name, field_name, mission_date, 
-                                                    "model")
-                            prediction_dir = os.path.join(model_dir, "prediction")
-                            prediction_requests_dirs = [
-                                os.path.join(prediction_dir, "image_requests"),
-                                os.path.join(prediction_dir, "image_set_requests", "pending")
-                            ]
+                            upload_status_path = os.path.join(mission_path, "upload_status.json")
 
-                            for prediction_requests_dir in prediction_requests_dirs:
-                                prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
-                                if len(prediction_request_paths) > 0:
-                                    return True
+                            if os.path.exists(upload_status_path):
+                                upload_status = json_io.load_json(upload_status_path)
+                                if upload_status["status"] == "uploaded":
+
+                                    model_dir = os.path.join("usr", "data", username, "image_sets",
+                                                            farm_name, field_name, mission_date, 
+                                                            "model")
+                                    prediction_dir = os.path.join(model_dir, "prediction")
+                                    prediction_requests_dirs = [
+                                        os.path.join(prediction_dir, "image_requests"),
+                                        os.path.join(prediction_dir, "image_set_requests", "pending")
+                                    ]
+
+                                    for prediction_requests_dir in prediction_requests_dirs:
+                                        prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
+                                        if len(prediction_request_paths) > 0:
+                                            return True
 
     return False
 

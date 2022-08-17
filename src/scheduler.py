@@ -4,6 +4,7 @@ import shutil
 #import requests
 import time
 import logging
+import traceback
 #import psycopg2
 
 import tensorflow as tf
@@ -133,10 +134,21 @@ def loop():
         # isa.check_restart()
 
         # check_baseline()
+        try:
+            check_predict()
 
-        check_predict()
+        except Exception as e:
+            t = traceback.format_exc()
+            print("Exception in main scheduler loop (check_predict)")
+            print(t)
 
-        check_train()
+        try:
+            check_train()
+        except Exception as e:
+            t = traceback.format_exc()
+            print("Exception in main scheduler loop (check_train)")
+            print(t)
+
 
         # check_baseline()
 

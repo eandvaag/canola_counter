@@ -250,9 +250,9 @@ class Image(object):
         cameras = json_io.load_json(os.path.join("usr", "data", username, "cameras", "cameras.json"))
 
         specs = cameras[make][model]
-        sensor_width = float(specs["sensor_width"][:-2])
-        sensor_height = float(specs["sensor_height"][:-2])
-        focal_length = float(specs["focal_length"][:-2])
+        sensor_width = float(specs["sensor_width"]) #[:-2])
+        sensor_height = float(specs["sensor_height"]) #[:-2])
+        focal_length = float(specs["focal_length"]) #[:-2])
 
         #flight_height = self.get_height_m(metadata)
 

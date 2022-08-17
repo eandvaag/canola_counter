@@ -667,13 +667,16 @@ def train(root_dir): #farm_name, field_name, mission_date):
         config["training"]["active"][k] = config["training"][k]
 
 
-    train_loader_is_preloaded, train_data_loader = data_load.get_data_loader(training_tf_record_paths, config, shuffle=True, augment=True)
-    val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
+    # train_loader_is_preloaded, train_data_loader = data_load.get_data_loader(training_tf_record_paths, config, shuffle=True, augment=True)
+    # val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
     
 
-    logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}.".format(
-        train_loader_is_preloaded, val_loader_is_preloaded
-    ))
+    # logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}.".format(
+    #     train_loader_is_preloaded, val_loader_is_preloaded
+    # ))
+
+    train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+    val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
 
     train_dataset, num_train_images = train_data_loader.create_batched_dataset(
                                       take_percent=config["training"]["active"]["percent_of_training_set_used"])

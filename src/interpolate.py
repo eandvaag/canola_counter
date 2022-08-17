@@ -112,9 +112,28 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
         predictions = json_io.load_json(pred_path)
 
 
-    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["missing"]["area_m2"]:
+    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["flight_height"] == "???": # or metadata["missing"]["area_m2"]:
         raise RuntimeError("Cannot compute map due to missing metadata.")
 
+    camera_specs_path = os.path.join("usr", "data", username, "cameras", "cameras.json")
+    camera_specs = json_io.load_json(camera_specs_path)
+
+
+    make = metadata["camera_info"]["make"]
+    model = metadata["camera_info"]["model"]
+
+    if make not in camera_specs:
+        raise RuntimeError("Cannot compute map due to missing metadata.")
+
+    if model not in camera_specs[make]:
+        raise RuntimeError("Cannot compute map due to missing metadata.")
+
+    camera_entry = camera_specs[make][model]
+    sensor_height = camera_entry["sensor_height"]
+    sensor_width = camera_entry["sensor_width"]
+    focal_length = camera_entry["focal_length"]
+
+    flight_height = metadata["flight_height"]
 
     all_points = []
     predicted_values = []
@@ -127,9 +146,21 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
         all_points.append([lon, lat])
 
         status = annotations[image_name]["status"]
+
+        gsd_h = (flight_height * sensor_height) / (focal_length * metadata["images"][image_name]["height_px"])
+        gsd_w = (flight_height * sensor_width) / (focal_length * metadata["images"][image_name]["width_px"])
+
+        gsd = min(gsd_h, gsd_w)
+
+        image_height_m = metadata["images"][image_name]["height_px"] * gsd
+        image_width_m = metadata["images"][image_name]["width_px"] * gsd
+
+        area_m2 = image_width_m * image_height_m
+
         if status == "completed_for_training" or status == "completed_for_testing":
+
             #print("image_name", image_name)
-            annotated_value = len(annotations[image_name]["annotations"]) / metadata["images"][image_name]["area_m2"]
+            annotated_value = len(annotations[image_name]["annotations"]) / area_m2
             completed_points.append([lon, lat])
             annotated_values.append(annotated_value)
 
@@ -143,7 +174,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
                             v += 1
                 
                 #predicted_value = len(predictions[image_name]["annotations"]) 
-                predicted_value = v / metadata["images"][image_name]["area_m2"]
+                predicted_value = v / area_m2
                 predicted_values.append(predicted_value)
 
     # print("predicted_values", predicted_values)

@@ -1,5 +1,6 @@
 import os
 import glob
+from re import L
 import tqdm
 import argparse
 # import time
@@ -29,28 +30,45 @@ from io_utils import json_io
 
 def extract_metadata(image_set_dir, flight_height=None):
 
-    image_set_metadata = {}
-
-
-    image_set_path_pieces = image_set_dir.split("/")
-    username = image_set_path_pieces[2]
-
     images_dir = os.path.join(image_set_dir, "images")
     metadata_dir = os.path.join(image_set_dir, "metadata")
 
+    if not os.path.exists(metadata_dir):
+        os.makedirs(metadata_dir)
+
+    metadata_path = os.path.join(metadata_dir, "metadata.json")
+
+    if os.path.exists(metadata_path):
+        raise RuntimeError("Existing metadata file found.")
+
     if flight_height is None:
         flight_height = "???"
+
     image_set_metadata = {
         "flight_height": flight_height,
         "images": {},
         "missing": {
-            "area_m2": False,
+            # "area_m2": False,
             # "height_m": False,
             "latitude": False,
             "longitude": False
         }
     }
 
+    # image_path = glob.glob(os.path.join(images_dir, "*"))[0]
+
+    # image = Image(image_path)
+    # md = image.get_metadata()
+
+
+    
+
+    image_set_path_pieces = image_set_dir.split("/")
+    username = image_set_path_pieces[2]
+
+
+
+    image_num = 0
     for image_path in tqdm.tqdm(glob.glob(os.path.join(images_dir, "*")), desc="Extracting metadata"):
 
         image_name = os.path.basename(image_path)[:-4]
@@ -58,15 +76,42 @@ def extract_metadata(image_set_dir, flight_height=None):
         image = Image(image_path)
 
         md = image.get_metadata()
-        if flight_height is None:
-            area_m2 = "unknown"
-            image_set_metadata["missing"]["area_m2"] = True
+
+        image_width, image_height = image.get_wh()
+
+        if "EXIF:Make" in md:
+            make = md["EXIF:Make"]
         else:
-            try:
-                area_m2 = image.get_area_m2(md, username, flight_height)
-            except:
-                area_m2 = "unknown"
-                image_set_metadata["missing"]["area_m2"] = True
+            make = "???"
+        if "EXIF:Model" in md:
+            model = md["EXIF:Model"]
+        else:
+            model = "???"
+
+        if image_num == 0:
+            camera_info = {
+                "make": make,
+                "model": model
+            }
+            image_set_metadata["camera_info"] = camera_info
+
+        else:
+
+            if make != image_set_metadata["camera_info"]["make"] or model != image_set_metadata["camera_info"]["model"]:
+                raise RuntimeError("Image set contains multiple camera types.")
+
+
+
+
+        # if flight_height is None:
+        #     area_m2 = "unknown"
+        #     image_set_metadata["missing"]["area_m2"] = True
+        # else:
+        #     try:
+        #         area_m2 = image.get_area_m2(md, username, flight_height)
+        #     except:
+        #         area_m2 = "unknown"
+        #         image_set_metadata["missing"]["area_m2"] = True
 
         # try:
         #     height_m = image.get_height_m(md)
@@ -98,35 +143,18 @@ def extract_metadata(image_set_dir, flight_height=None):
             "latitude": gps_latitude,
             "longitude": gps_longitude,
             #"height_m": height_m,
-            "area_m2": area_m2
+            # "area_m2": area_m2,
+            "width_px": image_width,
+            "height_px": image_height
         }
 
+        image_num += 1
 
-    image_path = glob.glob(os.path.join(images_dir, "*"))[0]
 
-    image = Image(image_path)
-    md = image.get_metadata()
-    if "EXIF:Make" in md:
-        make = md["EXIF:Make"]
-    else:
-        make = "???"
-    if "EXIF:Model" in md:
-        model = md["EXIF:Model"]
-    else:
-        model = "???"
-    camera_info = {
-        "make": make,
-        "model": model
-    }
-
-    image_set_metadata["camera_info"] = camera_info
 
 
     
-    if not os.path.exists(metadata_dir):
-        os.makedirs(metadata_dir)
 
-    metadata_path = os.path.join(metadata_dir, "metadata.json")
     #print("writing metadata for {}. metadata_missing? {}".format(image_set_dir, image_set_metadata["missing"]))
     #json_io.print_json(image_set_metadata)
     json_io.save_json(metadata_path, image_set_metadata)

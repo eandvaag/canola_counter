@@ -6,6 +6,7 @@ import time
 import argparse
 import imagesize
 import requests
+import traceback
 
 import random
 import numpy as np
@@ -39,12 +40,16 @@ def create_patches_if_needed(username, farm_name, field_name, mission_date, imag
     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
     # updated_patch_size = 300
+    num_annotations = w3c_io.get_num_annotations(annotations)
 
-    try:
-        updated_patch_size = w3c_io.get_patch_size(annotations)
-    except RuntimeError:
+    if num_annotations < 50:
         updated_patch_size = 300
-    logger.info("Updated patch size: {}".format(updated_patch_size))
+    else:
+        try:
+            updated_patch_size = w3c_io.get_patch_size(annotations)
+        except RuntimeError:
+            updated_patch_size = 300
+        logger.info("Updated patch size: {}".format(updated_patch_size))
 
 
     # if os.path.exists(patch_data_path):
@@ -224,9 +229,12 @@ def handle_direct_baseline_request(request):
 
 def check_predict(username, farm_name, field_name, mission_date):
 
-    model_dir = os.path.join("usr", "data", username, "image_sets",
-                             farm_name, field_name, mission_date, 
-                             "model")
+    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+
+
+    model_dir = os.path.join(image_set_dir, "model")
+
+
     prediction_dir = os.path.join(model_dir, "prediction")
     prediction_requests_dirs = [
         os.path.join(prediction_dir, "image_requests"),
@@ -281,24 +289,39 @@ def check_predict(username, farm_name, field_name, mission_date):
                 status["update_num"] = status["update_num"] + 1
                 json_io.save_json(status_path, status)
                 isa.notify(username, farm_name, field_name, mission_date, extra_items={"prediction_image_names": ",".join(request["image_names"])})
-            
+                if save_result:
+                    isa.notify(username, farm_name, field_name, mission_date, results_notification=True)
 
             except Exception as e:
+
+                trace = traceback.format_exc()
+                print("Exception in check_predict")
                 print(e)
-                #if os.path.basename(prediction_requests_dir) == "image_requests":
-                os.remove(prediction_request_path)
-                if os.path.basename(prediction_requests_dir) == "pending":
-                    request["aborted_time"] = int(time.time())
-                    request["error_message"] = str(e)
-                    json_io.save_json(
-                        os.path.join(prediction_dir, "image_set_requests", "aborted", os.path.basename(prediction_request_path)),
-                        request)
-                status = json_io.load_json(status_path)
-                status["status"] = isa.IDLE
-                status["update_num"] = status["update_num"] + 1
-                json_io.save_json(status_path, status)
-                isa.notify(username, farm_name, field_name, mission_date, error=True, 
-                       extra_items={"error_setting": "prediction", "error_message": str(e)})
+                print(trace)
+                try:
+                    os.remove(prediction_request_path)
+                    if os.path.basename(prediction_requests_dir) == "pending":
+                        request["aborted_time"] = int(time.time())
+                        request["error_message"] = str(e)
+                        request["error_info"] = str(trace)
+                        json_io.save_json(
+                            os.path.join(prediction_dir, "image_set_requests", "aborted", os.path.basename(prediction_request_path)),
+                            request)
+                    status = json_io.load_json(status_path)
+                    status["status"] = isa.IDLE
+                    status["update_num"] = status["update_num"] + 1
+                    json_io.save_json(status_path, status)
+                    isa.notify(username, farm_name, field_name, mission_date, error=True, 
+                        extra_items={"error_setting": "prediction", "error_message": str(e)})
+                    if save_result:
+                        isa.notify(username, farm_name, field_name, mission_date, results_notification=True)
+
+
+                except Exception as e:
+                    trace = traceback.format_exc()
+                    print("Exception while while handling original exception")
+                    print(e)
+                    print(trace)
 
             
             prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
@@ -312,95 +335,112 @@ def check_train(username, farm_name, field_name, mission_date):
         return
     
     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-    model_dir = os.path.join(image_set_dir, "model")
-    training_dir = os.path.join(model_dir, "training")
-    status_path = os.path.join(model_dir, "status.json")
 
-    usr_block_path = os.path.join(training_dir, "usr_block.json")
-    sys_block_path = os.path.join(training_dir, "sys_block.json")
-    if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
-        return
+    upload_status_path = os.path.join(image_set_dir, "upload_status.json")
 
-    # weights_dir = os.path.join(model_dir, "weights")
-    try:
-        loss_record_path = os.path.join(training_dir, "loss_record.json")
+    if os.path.exists(upload_status_path):
+        upload_status = json_io.load_json(upload_status_path)
+        if upload_status["status"] == "uploaded":
 
+                    
+            model_dir = os.path.join(image_set_dir, "model")
+            training_dir = os.path.join(model_dir, "training")
+            status_path = os.path.join(model_dir, "status.json")
 
-        loss_record = json_io.load_json(loss_record_path)
-        needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
+            usr_block_path = os.path.join(training_dir, "usr_block.json")
+            sys_block_path = os.path.join(training_dir, "sys_block.json")
+            if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+                return
 
-        status = json_io.load_json(status_path)
-
-        annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-        num_training_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=True)
-
-        #num_available = 0
-        training_image_names = []
-        for image_name in annotations.keys():
-            if annotations[image_name]["status"] == "completed_for_training":
-                training_image_names.append(image_name)
-                #num_available += 1
-
-        needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
-
-        if needs_training_with_cur_set or needs_training_with_new_set:
-
-            status_path = os.path.join(image_set_dir, "model", "status.json")
-            status = json_io.load_json(status_path)
-            status["status"] = isa.TRAINING
-            status["update_num"] = status["update_num"] + 1
-
-            json_io.save_json(status_path, status)
-
-            isa.notify(username, farm_name, field_name, mission_date)
-
-            create_patches_if_needed(username, farm_name, field_name, mission_date, training_image_names)
-
-            if needs_training_with_new_set:
-                update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names)
-
-                loss_record = {
-                    "training_loss": { "values": [],
-                                    "best": 100000000,
-                                    "epochs_since_improvement": 0}, 
-                    "validation_loss": {"values": [],
-                                        "best": 100000000,
-                                        "epochs_since_improvement": 0},
-                    "num_training_images": len(training_image_names)
-                }
-
-                json_io.save_json(loss_record_path, loss_record)
-
-            training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
-
-            status = json_io.load_json(status_path)
-            status["status"] = isa.IDLE
-            status["update_num"] = status["update_num"] + 1
-            if training_finished:
-                status["num_images_fully_trained_on"] = loss_record["num_training_images"]
+            # weights_dir = os.path.join(model_dir, "weights")
+            try:
+                loss_record_path = os.path.join(training_dir, "loss_record.json")
 
 
-                # if num_training_annotations >= MIN_NUM_ANNOTATIONS_BASELINE_CREATE:
-                #     baseline_name = farm_name + "::" + field_name + "::" + mission_date
-                #     shutil.copyfile(os.path.join(weights_dir, "best_weights.h5"),
-                #                 os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
+                loss_record = json_io.load_json(loss_record_path)
+                needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
 
-            json_io.save_json(status_path, status)
+                status = json_io.load_json(status_path)
 
-            isa.notify(username, farm_name, field_name, mission_date)
+                annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+                num_training_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=True)
 
-    except Exception as e:
-        json_io.save_json(sys_block_path, {"error_message": str(e)})
-        status = json_io.load_json(status_path)
-        status["status"] = isa.IDLE
-        status["update_num"] = status["update_num"] + 1
-        json_io.save_json(status_path, status)
+                #num_available = 0
+                training_image_names = []
+                for image_name in annotations.keys():
+                    if annotations[image_name]["status"] == "completed_for_training":
+                        training_image_names.append(image_name)
+                        #num_available += 1
 
-        isa.notify(username, farm_name, field_name, mission_date,
-               error=True, extra_items={"error_setting": "training", "error_message": str(e)})
+                needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
+
+                if needs_training_with_cur_set or needs_training_with_new_set:
+
+                    status_path = os.path.join(image_set_dir, "model", "status.json")
+                    status = json_io.load_json(status_path)
+                    status["status"] = isa.TRAINING
+                    status["update_num"] = status["update_num"] + 1
+
+                    json_io.save_json(status_path, status)
+
+                    isa.notify(username, farm_name, field_name, mission_date)
+
+                    create_patches_if_needed(username, farm_name, field_name, mission_date, training_image_names)
+
+                    if needs_training_with_new_set:
+                        update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names)
+
+                        loss_record = {
+                            "training_loss": { "values": [],
+                                            "best": 100000000,
+                                            "epochs_since_improvement": 0}, 
+                            "validation_loss": {"values": [],
+                                                "best": 100000000,
+                                                "epochs_since_improvement": 0},
+                            "num_training_images": len(training_image_names)
+                        }
+
+                        json_io.save_json(loss_record_path, loss_record)
+
+                    training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
+
+                    status = json_io.load_json(status_path)
+                    status["status"] = isa.IDLE
+                    status["update_num"] = status["update_num"] + 1
+                    if training_finished:
+                        status["num_images_fully_trained_on"] = loss_record["num_training_images"]
 
 
+                        # if num_training_annotations >= MIN_NUM_ANNOTATIONS_BASELINE_CREATE:
+                        #     baseline_name = farm_name + "::" + field_name + "::" + mission_date
+                        #     shutil.copyfile(os.path.join(weights_dir, "best_weights.h5"),
+                        #                 os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
+
+                    json_io.save_json(status_path, status)
+
+                    isa.notify(username, farm_name, field_name, mission_date)
+
+            except Exception as e:
+                trace = traceback.format_exc()
+                print("Exception in check_train")
+                print(e)
+                print(trace)
+
+                try:
+                    json_io.save_json(sys_block_path, {"error_message": str(e)})
+                    status = json_io.load_json(status_path)
+                    status["status"] = isa.IDLE
+                    status["update_num"] = status["update_num"] + 1
+                    json_io.save_json(status_path, status)
+
+                    isa.notify(username, farm_name, field_name, mission_date,
+                        error=True, extra_items={"error_setting": "training", "error_message": str(e)})
+                except Exception as e:
+                    trace = traceback.format_exc()
+                    print("Exception while handling original exception")
+                    print(e)
+                    print(trace)
 
 
 def predict_on_images(username, farm_name, field_name, mission_date, image_names, save_result):
