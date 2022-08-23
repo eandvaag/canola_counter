@@ -112,7 +112,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
         predictions = json_io.load_json(pred_path)
 
 
-    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["flight_height"] == "???": # or metadata["missing"]["area_m2"]:
+    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["camera_height"] == ""# or metadata["missing"]["area_m2"]:
         raise RuntimeError("Cannot compute map due to missing metadata.")
 
     camera_specs_path = os.path.join("usr", "data", username, "cameras", "cameras.json")
@@ -133,7 +133,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
     sensor_width = camera_entry["sensor_width"]
     focal_length = camera_entry["focal_length"]
 
-    flight_height = metadata["flight_height"]
+    camera_height = metadata["camera_height"]
 
     all_points = []
     predicted_values = []
@@ -147,8 +147,8 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
 
         status = annotations[image_name]["status"]
 
-        gsd_h = (flight_height * sensor_height) / (focal_length * metadata["images"][image_name]["height_px"])
-        gsd_w = (flight_height * sensor_width) / (focal_length * metadata["images"][image_name]["width_px"])
+        gsd_h = (camera_height * sensor_height) / (focal_length * metadata["images"][image_name]["height_px"])
+        gsd_w = (camera_height * sensor_width) / (focal_length * metadata["images"][image_name]["width_px"])
 
         gsd = min(gsd_h, gsd_w)
 

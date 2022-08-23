@@ -44,34 +44,34 @@ from models.common import box_utils
 
 
 
-def get_learning_rate(steps_taken, training_steps_per_epoch, config):
+# def get_learning_rate(steps_taken, training_steps_per_epoch, config):
 
-    schedule = config["training"]["active"]["learning_rate_schedule"]
-    schedule_type = schedule["schedule_type"]
+#     schedule = config["training"]["active"]["learning_rate_schedule"]
+#     schedule_type = schedule["schedule_type"]
 
 
-    if schedule_type == "constant":
-        cur_lr = schedule["learning_rate"]
+#     if schedule_type == "constant":
+#         cur_lr = schedule["learning_rate"]
 
-    elif schedule_type == "cosine_annealing":
-        lr_init = schedule["learning_rate_init"]
-        lr_end = schedule["learning_rate_end"]
-        warm_up_epochs = schedule["warm_up_epochs"]
-        num_epochs = config["training"]["active"]["num_epochs"]
-        warm_up_steps = warm_up_epochs * training_steps_per_epoch
-        total_steps = num_epochs * training_steps_per_epoch
+#     elif schedule_type == "cosine_annealing":
+#         lr_init = schedule["learning_rate_init"]
+#         lr_end = schedule["learning_rate_end"]
+#         warm_up_epochs = schedule["warm_up_epochs"]
+#         num_epochs = config["training"]["active"]["num_epochs"]
+#         warm_up_steps = warm_up_epochs * training_steps_per_epoch
+#         total_steps = num_epochs * training_steps_per_epoch
 
-        if steps_taken < warm_up_steps:
-            cur_lr = (steps_taken / warm_up_steps) * lr_init
-        else:
-            cur_lr = lr_end + 0.5 * (lr_init - lr_end) * (
-                  (1 + np.cos(((steps_taken - warm_up_steps) / (total_steps - warm_up_steps)) * np.pi)))
+#         if steps_taken < warm_up_steps:
+#             cur_lr = (steps_taken / warm_up_steps) * lr_init
+#         else:
+#             cur_lr = lr_end + 0.5 * (lr_init - lr_end) * (
+#                   (1 + np.cos(((steps_taken - warm_up_steps) / (total_steps - warm_up_steps)) * np.pi)))
 
-    #elif schedule_type == "piecewise_constant_decay"
-    else:
-        raise RuntimeError("Unknown schedule type: '{}'.".format(schedule_type))
+#     #elif schedule_type == "piecewise_constant_decay"
+#     else:
+#         raise RuntimeError("Unknown schedule type: '{}'.".format(schedule_type))
 
-    return cur_lr
+#     return cur_lr
 
 
 

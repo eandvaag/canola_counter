@@ -1,5 +1,6 @@
 import logging
 import os
+import glob
 import tqdm
 import random
 import math as m
@@ -9,7 +10,122 @@ import uuid
 
 
 from models.common import box_utils
-from io_utils import tf_record_io
+from io_utils import tf_record_io, json_io, w3c_io
+from image_set import Image
+
+
+
+
+
+def update_patches(image_set_dir, annotations, annotations_read_time=None, image_names=None, image_status=None):
+    
+    logger = logging.getLogger(__name__)
+
+    if (image_names is None and image_status is None) or (image_names is not None and image_status is not None):
+        raise RuntimeError("Only one of 'image_names' and 'image_status' should be None")
+
+    changed = False
+
+    images_dir = os.path.join(image_set_dir, "images")
+    patches_dir = os.path.join(image_set_dir, "patches")
+    patch_data_path = os.path.join(patches_dir, "patch_data.json")
+
+    # read_time = int(time.time())
+
+    # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+    if image_status is not None:
+        image_names = []
+        for image_name in annotations.keys():
+            if annotations[image_name]["status"] == image_status:
+                image_names.append(image_name)
+
+
+    num_annotations = w3c_io.get_num_annotations(annotations)
+
+    if num_annotations < 50:
+        updated_patch_size = 300
+    else:
+        try:
+            updated_patch_size = w3c_io.get_patch_size(annotations)
+        except RuntimeError:
+            updated_patch_size = 300
+        logger.info("Updated patch size: {}".format(updated_patch_size))
+
+    update_thresh = 10
+
+    if os.path.exists(patch_data_path):
+        patch_data = json_io.load_json(patch_data_path)
+    else:
+        patch_data = {}
+
+    
+    update_thresh = 10
+
+    if os.path.exists(patch_data_path):
+        patch_data = json_io.load_json(patch_data_path)
+    else:
+        patch_data = {}
+
+
+    for image_name in image_names:
+        update_image = False
+
+        if image_name not in patch_data:
+            update_image = True
+            patch_data[image_name] = {}
+
+        else:
+            if "update_time" not in patch_data[image_name] or "patches" not in patch_data[image_name]:
+                update_image = True
+            else:
+                update_time = patch_data[image_name]["update_time"]
+                # print(annotations[image_name])
+                if update_time < annotations[image_name]["update_time"]:
+                    update_image = True
+                else:
+                    if len(patch_data[image_name]["patches"]) == 0:
+                        update_image = True
+                    else:
+                        sample_patch_coords = patch_data[image_name]["patches"][0]["patch_coords"]
+                        existing_patch_size = sample_patch_coords[2] - sample_patch_coords[0]
+                        abs_patch_size_diff = abs(existing_patch_size - updated_patch_size)
+                        if abs_patch_size_diff >= update_thresh:
+                            update_image = True
+
+
+        if update_image:
+            print("updating", image_name)
+            image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+            image = Image(image_path)
+            patch_records = extract_patch_records_from_image_tiled(
+                image, 
+                updated_patch_size,
+                image_annotations=None,
+                patch_overlap_percent=50, 
+                include_patch_arrays=True)
+
+            write_patches(patches_dir, patch_records)
+
+            patch_records = extract_patch_records_from_image_tiled(
+                image, 
+                updated_patch_size,
+                image_annotations=None,
+                patch_overlap_percent=50, 
+                include_patch_arrays=False)
+
+            # annotations[]
+            patch_data[image_name]["patches"] = patch_records
+            if annotations_read_time is not None:
+                patch_data[image_name]["update_time"] = annotations_read_time
+            changed = True
+            
+    json_io.save_json(patch_data_path, patch_data)
+
+    if changed:
+        logger.info("Patches were changed!")
+    return changed
 
 
 

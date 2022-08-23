@@ -24,6 +24,9 @@ from models.common import box_utils, \
 from image_set import Image
 
 import image_set_actions as isa
+import image_set_aux
+
+import extract_patches as ep
 
 # from image_set_actions import check_restart
 
@@ -34,6 +37,7 @@ from models.yolov4.encode import Decoder
 from models.yolov4.yolov4_driver import post_process_sample
 
 VALIDATION_IMPROVEMENT_TOLERANCE = 10
+TRAINING_TIME_SESSION_CEILING = 5000            # number of seconds before current session is stopped in order to give others a chance
 
 def create_default_config():
 
@@ -116,7 +120,7 @@ def create_default_config():
                 "monitor": "validation_loss",
                 "num_epochs_tolerance": 30
             },
-            "batch_size": 8, #16, #256, #128, #16, #64, #64, #1024, #32, # 16,
+            "batch_size": 16, #8, #16, #256, #128, #16, #64, #64, #1024, #32, # 16,
 
             #"save_method": "best_validation_loss",
             "percent_of_training_set_used": 100,
@@ -587,16 +591,21 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
         #all_image_names = predictions["image_predictions"].keys()
         #inference_metrics.collect_statistics(all_image_names, metrics, predictions, config, inference_times=inference_times)
         #inference_metrics.collect_metrics(all_image_names, metrics, predictions, dataset, config)
+    
+
 
     for image_name in image_names:
         image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
         predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
+        # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
         w3c_io.save_annotations(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
+        # if image_name in metrics:
+        #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
 
 
-    metrics = inference_metrics.collect_image_set_metrics(image_predictions, annotations, config)
     end_time = int(time.time())
     if save_result:
+        metrics = inference_metrics.collect_image_set_metrics(image_predictions, annotations, config)
         
         image_set_results_dir = os.path.join(results_dir, str(end_time))
         os.makedirs(image_set_results_dir)
@@ -636,10 +645,180 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
 
 
 
+def train_baseline(root_dir):
+    
+    logger = logging.getLogger(__name__)
+
+    tf.keras.backend.clear_session()
+
+    model_dir = os.path.join(root_dir, "model")
+    weights_dir = os.path.join(model_dir, "weights")
+    training_dir = os.path.join(model_dir, "training")
+
+    training_tf_record_paths = [os.path.join(training_dir, "training-patches-record.tfrec")]
+    validation_tf_record_paths = [os.path.join(training_dir, "validation-patches-record.tfrec")]
+
+    config = create_default_config()
+    model_keys.add_general_keys(config)
+    model_keys.add_specialized_keys(config)
+
+    config["training"]["active"] = {}
+    for k in config["training"]:
+        config["training"]["active"][k] = config["training"][k]
+
+    train_loader_is_preloaded, train_data_loader = data_load.get_data_loader(training_tf_record_paths, config, shuffle=True, augment=True)
+    val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
+    
+
+    logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}.".format(
+        train_loader_is_preloaded, val_loader_is_preloaded
+    ))
+
+
+    train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+                                      take_percent=config["training"]["active"]["percent_of_training_set_used"])
+    # if check_restart():
+    #     return False
+    val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+                                  take_percent=config["training"]["active"]["percent_of_validation_set_used"])
+
+
+    logger.info("Building model...")
+
+
+    if config["arch"]["model_type"] == "yolov4":
+        yolov4 = YOLOv4(config)
+    elif config["arch"]["model_type"] == "yolov4_tiny":
+        yolov4 = YOLOv4Tiny(config)
+
+    loss_fn = YOLOv4Loss(config)
+
+
+    input_shape = (config["training"]["active"]["batch_size"], *(train_data_loader.get_model_input_shape()))
+    yolov4.build(input_shape=input_shape)
+
+    logger.info("Model built.")
+
+
+    cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
+    best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+    if os.path.exists(cur_weights_path):
+        logger.info("Loading weights...")
+        yolov4.load_weights(cur_weights_path, by_name=False)
+        logger.info("Weights loaded.")
+    else:
+        logger.info("No initial weights found.")
+
+
+    optimizer = tf.optimizers.Adam()
+
+
+    train_loss_metric = tf.metrics.Mean()
+    val_loss_metric = tf.metrics.Mean()
+
+    @tf.function
+    def train_step(batch_images, batch_labels):
+        with tf.GradientTape() as tape:
+            conv = yolov4(batch_images, training=True)
+            loss_value = loss_fn(batch_labels, conv)
+            loss_value += sum(yolov4.losses)
+
+        #if np.isnan(loss_value):
+        #    raise RuntimeError("NaN loss has occurred.")
+        gradients = tape.gradient(target=loss_value, sources=yolov4.trainable_variables)
+        optimizer.apply_gradients(grads_and_vars=zip(gradients, yolov4.trainable_variables))
+        train_loss_metric.update_state(values=loss_value)
+
+    train_steps_per_epoch = np.sum([1 for _ in train_dataset])
+    val_steps_per_epoch = np.sum([1 for _ in val_dataset])
+
+    logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
+                    config["arch"]["model_type"], config["model_name"], num_train_images, num_val_images))
+
+
+
+    while True:
+
+
+        loss_record_path = os.path.join(training_dir, "loss_record.json")
+        loss_record = json_io.load_json(loss_record_path)
+
+        logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
+
+        train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
+        for batch_data in train_bar:
+
+            # optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
+            optimizer.lr.assign(config["training"]["active"]["learning_rate_schedule"]["learning_rate"])
+
+            batch_images, batch_labels = train_data_loader.read_batch_data(batch_data)
+
+            train_step(batch_images, batch_labels)
+            if np.isnan(train_loss_metric.result()):
+                raise RuntimeError("NaN loss has occurred (training dataset).")
+            train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
+                                        train_loss_metric.result(), 
+                                        loss_record["training_loss"]["best"]))
+            # steps_taken += 1
+
+
+            # if check_restart():
+            #     return False
+
+        cur_training_loss = float(train_loss_metric.result())
+
+        update_loss_record(loss_record, "training_loss", cur_training_loss)
+
+        #json_io.save_json(loss_record_path, loss_record)
+
+        train_loss_metric.reset_states()
+
+
+        val_bar = tqdm.tqdm(val_dataset, total=val_steps_per_epoch)
+        
+        for batch_data in val_bar:
+            batch_images, batch_labels = val_data_loader.read_batch_data(batch_data)
+            conv = yolov4(batch_images, training=False)
+            loss_value = loss_fn(batch_labels, conv)
+            loss_value += sum(yolov4.losses)
+
+            val_loss_metric.update_state(values=loss_value)
+            if np.isnan(val_loss_metric.result()):
+                raise RuntimeError("NaN loss has occurred (validation dataset).")
+
+            val_bar.set_description("v. loss: {:.4f} | best: {:.4f}".format(
+                                    val_loss_metric.result(), 
+                                    loss_record["validation_loss"]["best"]))
+
+        
+        cur_validation_loss = float(val_loss_metric.result())
+
+        cur_validation_loss_is_best = update_loss_record(loss_record, "validation_loss", cur_validation_loss)
+        yolov4.save_weights(filepath=cur_weights_path, save_format="h5")
+        if cur_validation_loss_is_best:
+            yolov4.save_weights(filepath=best_weights_path, save_format="h5")
+
+            #model_io.save_model_weights(yolov4, config, seq_num, epoch)    
+
+
+        json_io.save_json(loss_record_path, loss_record)
+        
+        val_loss_metric.reset_states()
+
+
+        if loss_record["validation_loss"]["epochs_since_improvement"] >= VALIDATION_IMPROVEMENT_TOLERANCE:
+            shutil.copyfile(best_weights_path, cur_weights_path)
+            return True
+
+
+
+
 
 def train(root_dir): #farm_name, field_name, mission_date):
     
     logger = logging.getLogger(__name__)
+
+    start_time = int(time.time())
 
     tf.keras.backend.clear_session()
     
@@ -734,25 +913,26 @@ def train(root_dir): #farm_name, field_name, mission_date):
 
 
 
-    train_steps_per_epoch = np.sum([1 for _ in train_dataset])
-    val_steps_per_epoch = np.sum([1 for _ in val_dataset])
 
-    logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
-                    config["arch"]["model_type"], config["model_name"], num_train_images, num_val_images))
-
-
-    loss_record_path = os.path.join(training_dir, "loss_record.json")
-    loss_record = json_io.load_json(loss_record_path)
-
-
-    steps_taken = 0
+    # steps_taken = 0
     while True:
+        train_steps_per_epoch = np.sum([1 for _ in train_dataset])
+        val_steps_per_epoch = np.sum([1 for _ in val_dataset])
+
+        logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
+                        config["arch"]["model_type"], config["model_name"], num_train_images, num_val_images))
+
+
+        loss_record_path = os.path.join(training_dir, "loss_record.json")
+        loss_record = json_io.load_json(loss_record_path)
+
         logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
 
         train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
         for batch_data in train_bar:
 
-            optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
+            # optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
+            optimizer.lr.assign(config["training"]["active"]["learning_rate_schedule"]["learning_rate"])
 
             batch_images, batch_labels = train_data_loader.read_batch_data(batch_data)
 
@@ -762,7 +942,7 @@ def train(root_dir): #farm_name, field_name, mission_date):
             train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
                                         train_loss_metric.result(), 
                                         loss_record["training_loss"]["best"]))
-            steps_taken += 1
+            # steps_taken += 1
 
 
             # if check_restart():
@@ -808,16 +988,42 @@ def train(root_dir): #farm_name, field_name, mission_date):
         
         val_loss_metric.reset_states()
 
+
+        annotations_read_time = int(time.time())
+
+        annotations_path = os.path.join(root_dir, "annotations", "annotations_w3c.json")
+        annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+        changed = ep.update_patches(root_dir, annotations, annotations_read_time, image_status="completed_for_training")
+        if changed:
+            image_set_aux.update_training_tf_record(root_dir, annotations)
+            image_set_aux.reset_loss_record(root_dir)
+
+
+            train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+            val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
+
+            train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+                                            take_percent=config["training"]["active"]["percent_of_training_set_used"])
+
+            val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+                                        take_percent=config["training"]["active"]["percent_of_validation_set_used"])
+
+
+
+
         if loss_record["validation_loss"]["epochs_since_improvement"] >= VALIDATION_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
             return True
-
-
 
         if isa.check_for_predictions():
             return False
 
         if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+            return False
+
+        cur_time = int(time.time())
+        elapsed_train_time = cur_time - start_time
+        if elapsed_train_time > TRAINING_TIME_SESSION_CEILING:
             return False
 
 

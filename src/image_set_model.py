@@ -19,7 +19,8 @@ from image_set import Image
 
 from models.yolov4 import yolov4_image_set_driver
 import image_set_actions as isa #import notify, check_for_predictions, IDLE, PREDICTING, TRAINING
-#import image_set_actions as isa
+import image_set_aux
+#import image_set_actions as isaflight
 
 
 # MIN_NUM_ANNOTATIONS_BASELINE_EVAL = 20
@@ -27,78 +28,90 @@ import image_set_actions as isa #import notify, check_for_predictions, IDLE, PRE
 
 
 
-def create_patches_if_needed(username, farm_name, field_name, mission_date, image_names):
+# def create_patches_if_needed(username, farm_name, field_name, mission_date, image_names):
     
-    logger = logging.getLogger(__name__)
+#     logger = logging.getLogger(__name__)
 
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-    images_dir = os.path.join(image_set_dir, "images")
-    patches_dir = os.path.join(image_set_dir, "patches")
-    patch_data_path = os.path.join(patches_dir, "patch_data.json")
+#     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+#     images_dir = os.path.join(image_set_dir, "images")
+#     patches_dir = os.path.join(image_set_dir, "patches")
+#     patch_data_path = os.path.join(patches_dir, "patch_data.json")
 
-    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+#     annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+#     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-    # updated_patch_size = 300
-    num_annotations = w3c_io.get_num_annotations(annotations)
+#     # updated_patch_size = 300
+#     num_annotations = w3c_io.get_num_annotations(annotations)
 
-    if num_annotations < 50:
-        updated_patch_size = 300
-    else:
-        try:
-            updated_patch_size = w3c_io.get_patch_size(annotations)
-        except RuntimeError:
-            updated_patch_size = 300
-        logger.info("Updated patch size: {}".format(updated_patch_size))
+#     if num_annotations < 50:
+#         updated_patch_size = 300
+#     else:
+#         try:
+#             updated_patch_size = w3c_io.get_patch_size(annotations)
+#         except RuntimeError:
+#             updated_patch_size = 300
+#         logger.info("Updated patch size: {}".format(updated_patch_size))
 
 
-    # if os.path.exists(patch_data_path):
-    #     existing_patch_size = imagesize.get(glob.glob(os.path.join(patches_dir, "*.png"))[0])[0]
-    #     print("existing patch size", existing_patch_size)
-    #     abs_patch_size_diff = abs(existing_patch_size - patch_size)
+#     # if os.path.exists(patch_data_path):
+#     #     existing_patch_size = imagesize.get(glob.glob(os.path.join(patches_dir, "*.png"))[0])[0]
+#     #     print("existing patch size", existing_patch_size)
+#     #     abs_patch_size_diff = abs(existing_patch_size - patch_size)
 
-    update_thresh = 10
+#     update_thresh = 10
 
-    if os.path.exists(patch_data_path):
-        patch_data = json_io.load_json(patch_data_path)
-    else:
-        patch_data = {}
+#     if os.path.exists(patch_data_path):
+#         patch_data = json_io.load_json(patch_data_path)
+#     else:
+#         patch_data = {}
     
 
-    for image_name in image_names:
+#     # write_time = int(time.time())
 
-        needs_update = True
-        if image_name in patch_data:
-            sample_patch_coords = patch_data[image_name][0]["patch_coords"]
-            existing_patch_size = sample_patch_coords[2] - sample_patch_coords[0]
-            logger.info("Existing patch size: {}".format(existing_patch_size))
-            abs_patch_size_diff = abs(existing_patch_size - updated_patch_size)
-            needs_update = abs_patch_size_diff >= update_thresh
+#     for image_name in image_names:
 
-        if needs_update:
-            image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
-            image = Image(image_path)
-            patch_records = ep.extract_patch_records_from_image_tiled(
-                image, 
-                updated_patch_size,
-                image_annotations=None,
-                patch_overlap_percent=50, 
-                include_patch_arrays=True)
+#         # annotations_changed = annotations[image_name]["update_time"] > annotations[image_name]["write_time"]
 
-            ep.write_patches(patches_dir, patch_records)
+#         needs_update = True
+#         if image_name in patch_data:
+#             sample_patch_coords = patch_data[image_name][0]["patch_coords"]
+#             existing_patch_size = sample_patch_coords[2] - sample_patch_coords[0]
+#             logger.info("Existing patch size: {}".format(existing_patch_size))
+#             abs_patch_size_diff = abs(existing_patch_size - updated_patch_size)
+#             # size_changed = abs_patch_size_diff >= update_thresh
+#             needs_update = abs_patch_size_diff >= update_thresh
+#         # else:
+#         #     size_changed = False
 
-            patch_records = ep.extract_patch_records_from_image_tiled(
-                image, 
-                updated_patch_size,
-                image_annotations=None,
-                patch_overlap_percent=50, 
-                include_patch_arrays=False)
+#         # needs_update = annotations_changed or size_changed
 
-            patch_data[image_name] = patch_records
-            #patch_data[image_name]["records"] = patch_records
-            #patch_data[image_name]["status"] = annotations[image_name]["status"]
+#         if needs_update:
+#             image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+#             image = Image(image_path)
+#             patch_records = ep.extract_patch_records_from_image_tiled(
+#                 image, 
+#                 updated_patch_size,
+#                 image_annotations=None,
+#                 patch_overlap_percent=50, 
+#                 include_patch_arrays=True)
+
+#             ep.write_patches(patches_dir, patch_records)
+
+#             patch_records = ep.extract_patch_records_from_image_tiled(
+#                 image, 
+#                 updated_patch_size,
+#                 image_annotations=None,
+#                 patch_overlap_percent=50, 
+#                 include_patch_arrays=False)
+
+#             # annotations[]
+#             patch_data[image_name] = patch_records
+#             # patch_data[image_name]["patches"] = patch_records
+#             # patch_data[image_name]["write_time"] = write_time
+#             #patch_data[image_name]["records"] = patch_records
+#             #patch_data[image_name]["status"] = annotations[image_name]["status"]
         
-    json_io.save_json(patch_data_path, patch_data)
+#     json_io.save_json(patch_data_path, patch_data)
 
 
 
@@ -122,7 +135,8 @@ def handle_direct_baseline_request(request):
 
     baseline_name = request["baseline_name"]
 
-    baseline_dir = os.path.join("usr", "data", "baselines", baseline_name) #"training", baseline_name)
+    # baseline_dir = os.path.join("usr", "data", "baselines", baseline_name) #"training", baseline_name)
+    baseline_dir = os.path.join("usr", "additional", "baselines", baseline_name)
     patches_dir = os.path.join(baseline_dir, "patches")
     model_dir = os.path.join(baseline_dir, "model")
     training_dir = os.path.join(model_dir, "training")
@@ -149,10 +163,11 @@ def handle_direct_baseline_request(request):
 
     all_records = []
     for image_set in request["image_sets"]:
+        username = image_set["username"]
         farm_name = image_set["farm_name"]
         field_name = image_set["field_name"]
         mission_date = image_set["mission_date"]
-        image_set_dir = os.path.join("usr", "data", "image_sets", 
+        image_set_dir = os.path.join("usr", "data", username, "image_sets", 
                                      farm_name, field_name, mission_date)
         images_dir = os.path.join(image_set_dir, "images")
 
@@ -208,7 +223,7 @@ def handle_direct_baseline_request(request):
 
     json_io.save_json(loss_record_path, loss_record)
 
-    yolov4_image_set_driver.train(baseline_dir)
+    yolov4_image_set_driver.train_baseline(baseline_dir)
 
     shutil.move(os.path.join(weights_dir, "best_weights.h5"),
                 os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
@@ -327,6 +342,7 @@ def check_predict(username, farm_name, field_name, mission_date):
             prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
 
 
+
 def check_train(username, farm_name, field_name, mission_date):
 
     #baseline_exists = check_baseline(farm_name, field_name, mission_date)
@@ -354,31 +370,49 @@ def check_train(username, farm_name, field_name, mission_date):
 
             # weights_dir = os.path.join(model_dir, "weights")
             try:
-                loss_record_path = os.path.join(training_dir, "loss_record.json")
 
-
-                loss_record = json_io.load_json(loss_record_path)
-                needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
-
-                status = json_io.load_json(status_path)
+                annotations_read_time = int(time.time())
 
                 annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
                 annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-                num_training_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=True)
 
-                #num_available = 0
-                training_image_names = []
-                for image_name in annotations.keys():
-                    if annotations[image_name]["status"] == "completed_for_training":
-                        training_image_names.append(image_name)
-                        #num_available += 1
 
-                needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
+                #changed = update_patches(username, farm_name, field_name, mission_date, image_status="completed_for_training")
+                changed = ep.update_patches(image_set_dir, annotations, annotations_read_time, image_status="completed_for_training")
 
-                if needs_training_with_cur_set or needs_training_with_new_set:
+                needs_training_with_cur_set = False
+                if not changed:
+                    loss_record_path = os.path.join(training_dir, "loss_record.json")
+                    loss_record = json_io.load_json(loss_record_path)
+                    needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
+
+                
+                # loss_record_path = os.path.join(training_dir, "loss_record.json")
+
+
+                # loss_record = json_io.load_json(loss_record_path)
+                # needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
+
+                # status = json_io.load_json(status_path)
+
+                # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+                # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+                # num_training_annotations = w3c_io.get_num_annotations(annotations, require_completed_for_training=True)
+
+                # #num_available = 0
+                # training_image_names = []
+                # for image_name in annotations.keys():
+                #     if annotations[image_name]["status"] == "completed_for_training":
+                #         training_image_names.append(image_name)
+                #         #num_available += 1
+
+                # needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
+
+                if needs_training_with_cur_set or changed: #needs_training_with_new_set:
 
                     status_path = os.path.join(image_set_dir, "model", "status.json")
                     status = json_io.load_json(status_path)
+                    status["fully_trained"] = "False"
                     status["status"] = isa.TRAINING
                     status["update_num"] = status["update_num"] + 1
 
@@ -386,22 +420,24 @@ def check_train(username, farm_name, field_name, mission_date):
 
                     isa.notify(username, farm_name, field_name, mission_date)
 
-                    create_patches_if_needed(username, farm_name, field_name, mission_date, training_image_names)
+                    # create_patches_if_needed(username, farm_name, field_name, mission_date, training_image_names)
 
-                    if needs_training_with_new_set:
-                        update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names)
+                    if changed:
+                        image_set_aux.update_training_tf_record(image_set_dir, annotations)
+                        #update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names)
+                        image_set_aux.reset_loss_record(image_set_dir)
 
-                        loss_record = {
-                            "training_loss": { "values": [],
-                                            "best": 100000000,
-                                            "epochs_since_improvement": 0}, 
-                            "validation_loss": {"values": [],
-                                                "best": 100000000,
-                                                "epochs_since_improvement": 0},
-                            "num_training_images": len(training_image_names)
-                        }
+                        # loss_record = {
+                        #     "training_loss": { "values": [],
+                        #                     "best": 100000000,
+                        #                     "epochs_since_improvement": 0}, 
+                        #     "validation_loss": {"values": [],
+                        #                         "best": 100000000,
+                        #                         "epochs_since_improvement": 0},
+                        #     # "num_training_images": len(training_image_names)
+                        # }
 
-                        json_io.save_json(loss_record_path, loss_record)
+                        # json_io.save_json(loss_record_path, loss_record)
 
                     training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
 
@@ -409,7 +445,8 @@ def check_train(username, farm_name, field_name, mission_date):
                     status["status"] = isa.IDLE
                     status["update_num"] = status["update_num"] + 1
                     if training_finished:
-                        status["num_images_fully_trained_on"] = loss_record["num_training_images"]
+                        # status["num_images_fully_trained_on"] = loss_record["num_training_images"]
+                        status["fully_trained"] = "True"
 
 
                         # if num_training_annotations >= MIN_NUM_ANNOTATIONS_BASELINE_CREATE:
@@ -445,101 +482,23 @@ def check_train(username, farm_name, field_name, mission_date):
 
 def predict_on_images(username, farm_name, field_name, mission_date, image_names, save_result):
 
-    create_patches_if_needed(username, farm_name, field_name, mission_date, image_names)
+    #create_patches_if_needed(username, farm_name, field_name, mission_date, image_names)
+    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
-    update_prediction_tf_records(username, farm_name, field_name, mission_date, image_names=image_names)
+    # annotations_read_time = int(time.time())
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+    ep.update_patches(image_set_dir, annotations, annotations_read_time=None, image_names=image_names)
+
+    image_set_aux.update_prediction_tf_records(image_set_dir, image_names=image_names)
     
     return yolov4_image_set_driver.predict(username, farm_name, field_name, mission_date, image_names=image_names, save_result=save_result)
 
 
 
 
-
-def update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names):
-
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-    patches_dir = os.path.join(image_set_dir, "patches")
-
-    patch_data_path = os.path.join(patches_dir, "patch_data.json")
-    patch_data = json_io.load_json(patch_data_path)
-
-    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-
-    # available_for_training = []
-    # for image_name in annotations.keys():
-    #     if annotations[image_name]["available_for_training"]:
-    #         available_for_training.append(image_name)
-
-    training_dir = os.path.join(image_set_dir, "model", "training")
-    #training_images_path = os.path.join(training_dir, "training_images.json")
-    #cur_training_images = json_io.load_json(training_images_path)
-
-    #if len(available_for_training) != len(cur_training_images):
-
-
-
-    patch_records = []
-    # num_available = 0
-    # for image_name in annotations.keys():
-    #     if annotations[image_name]["status"] == "completed_for_training":
-    #         num_available += 1
-
-    for image_name in training_image_names:
-        ep.add_annotations_to_patch_records(patch_data[image_name], annotations[image_name])
-        patch_records.extend(patch_data[image_name])
-
-
-    patch_records = np.array(patch_records)
-
-    training_size = round(patch_records.size * 0.8)
-    training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
-
-    training_patch_records = patch_records[training_subset]
-    validation_patch_records = np.delete(patch_records, training_subset)
-
-
-    training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
-    training_patches_record_path = os.path.join(training_dir, "training-patches-record.tfrec")
-    tf_record_io.output_patch_tf_records(training_patches_record_path, training_tf_records)
-
-    validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
-    validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
-    tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
-
-    # return num_available
-
-
-
-
-def update_prediction_tf_records(username, farm_name, field_name, mission_date, image_names):
-
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-    patches_dir = os.path.join(image_set_dir, "patches")
-
-    patch_data_path = os.path.join(patches_dir, "patch_data.json")
-    patch_data = json_io.load_json(patch_data_path)
-
-    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-
-    for image_name in image_names:
-        #is_annotated = annotations[image_name]["status"] == "completed"
-
-        patch_records = patch_data[image_name]
-        #if is_annotated:
-        #    ep.add_annotations_to_patch_records(patch_data[image_name], annotations[image_name])
-
-
-        print("sample patch record:", patch_records[0])
-
-
-        image_prediction_dir = os.path.join(image_set_dir, "model", "prediction", "images", image_name)
-        os.makedirs(image_prediction_dir, exist_ok=True)
-
-        tf_records = tf_record_io.create_patch_tf_records(patch_records, patches_dir, is_annotated=False) #is_annotated)
-        patches_record_path = os.path.join(image_prediction_dir, "patches-record.tfrec")
-        tf_record_io.output_patch_tf_records(patches_record_path, tf_records)
 
 
 

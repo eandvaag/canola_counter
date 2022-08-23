@@ -28,7 +28,7 @@ from io_utils import json_io
 #     json_io.save_json(camera_path, camera_info)
 
 
-def extract_metadata(image_set_dir, flight_height=None):
+def extract_metadata(image_set_dir, camera_height=None):
 
     images_dir = os.path.join(image_set_dir, "images")
     metadata_dir = os.path.join(image_set_dir, "metadata")
@@ -41,11 +41,11 @@ def extract_metadata(image_set_dir, flight_height=None):
     if os.path.exists(metadata_path):
         raise RuntimeError("Existing metadata file found.")
 
-    if flight_height is None:
-        flight_height = "???"
+    if camera_height is None:
+        camera_height = ""
 
     image_set_metadata = {
-        "flight_height": flight_height,
+        "camera_height": camera_height,
         "images": {},
         "missing": {
             # "area_m2": False,
@@ -82,11 +82,11 @@ def extract_metadata(image_set_dir, flight_height=None):
         if "EXIF:Make" in md:
             make = md["EXIF:Make"]
         else:
-            make = "???"
+            make = ""
         if "EXIF:Model" in md:
             model = md["EXIF:Model"]
         else:
-            model = "???"
+            model = ""
 
         if image_num == 0:
             camera_info = {
@@ -103,12 +103,12 @@ def extract_metadata(image_set_dir, flight_height=None):
 
 
 
-        # if flight_height is None:
+        # if camera_height is None:
         #     area_m2 = "unknown"
         #     image_set_metadata["missing"]["area_m2"] = True
         # else:
         #     try:
-        #         area_m2 = image.get_area_m2(md, username, flight_height)
+        #         area_m2 = image.get_area_m2(md, username, camera_height)
         #     except:
         #         area_m2 = "unknown"
         #         image_set_metadata["missing"]["area_m2"] = True
@@ -174,7 +174,7 @@ def extract_metadata_for_all_image_sets():
                 #if not os.path.exists(metadata_dir):
                 #    print("Missing: {} {} {}".format(farm_name, field_name, mission_date))
 
-                extract_metadata(mission_path, flight_height=2)
+                extract_metadata(mission_path, camera_height=2)
 
 
 
@@ -197,15 +197,15 @@ def tmp_create_lock_files():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("image_set_dir", type=str)
-    parser.add_argument("--flight_height", type=float)
+    parser.add_argument("--camera_height", type=float)
 
     args = parser.parse_args()
     image_set_dir = args.image_set_dir
-    flight_height = args.flight_height
+    camera_height = args.camera_height
 
-    # print("flight_height: {}".format(flight_height))
+    # print("camera_height: {}".format(camera_height))
 
     # add_camera_specs(image_set_dir)
     # add_camera_specs_for_all_image_sets()
 
-    extract_metadata(image_set_dir, flight_height=flight_height)
+    extract_metadata(image_set_dir, camera_height=camera_height)

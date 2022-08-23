@@ -58,7 +58,7 @@ class ImgSet(object):
         #img_width, img_height = imagesize.get(img_set_info["training_image_paths"][0])
         #self.img_width = img_width
         #self.img_height = img_height
-        #self.flight_metadata = img_set_info["flight_metadata"]
+        #self.camera_metadata = img_set_info["camera_metadata"]
 
     # def get_box_counts(self):
 
@@ -186,7 +186,10 @@ class Image(object):
 
 
     def load_image_array(self):
-        return cv2.cvtColor(cv2.imread(self.image_path), cv2.COLOR_BGR2RGB)
+        image_array = cv2.imread(self.image_path, cv2.IMREAD_UNCHANGED)
+        if image_array.ndim == 3:
+            image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+        return image_array #cv2.cvtColor(cv2.imread(self.image_path), cv2.COLOR_BGR2RGB)
 
     def get_wh(self):
         w, h = imagesize.get(self.image_path)
@@ -239,7 +242,7 @@ class Image(object):
 
         return height_m
 
-    def get_gsd(self, metadata, username, flight_height):
+    def get_gsd(self, metadata, username, camera_height):
         # try:
             
             # print(json.dumps(metadata, indent=4, sort_keys=True))
@@ -254,14 +257,14 @@ class Image(object):
         sensor_height = float(specs["sensor_height"]) #[:-2])
         focal_length = float(specs["focal_length"]) #[:-2])
 
-        #flight_height = self.get_height_m(metadata)
+        #camera_height = self.get_height_m(metadata)
 
-        # flight_height = flight_metadata["flight_height_m"]
-        # sensor_height = flight_metadata["sensor_height_mm"] * 1000
-        # sensor_width = flight_metadata["sensor_width_mm"] * 1000
-        # focal_length = flight_metadata["focal_length_mm"] * 1000
-        # print("flight_height: {}, sensor_height: {}, sensor_width: {}, focal_length: {}".format(
-        #     flight_height, sensor_height, sensor_width, focal_length
+        # camera_height = camera_metadata["camera_height_m"]
+        # sensor_height = camera_metadata["sensor_height_mm"] * 1000
+        # sensor_width = camera_metadata["sensor_width_mm"] * 1000
+        # focal_length = camera_metadata["focal_length_mm"] * 1000
+        # print("camera_height: {}, sensor_height: {}, sensor_width: {}, focal_length: {}".format(
+        #     camera_height, sensor_height, sensor_width, focal_length
         # ))
 
 
@@ -271,8 +274,8 @@ class Image(object):
 
 
 
-        gsd_h = (flight_height * sensor_height) / (focal_length * image_height)
-        gsd_w = (flight_height * sensor_width) / (focal_length * image_width)
+        gsd_h = (camera_height * sensor_height) / (focal_length * image_height)
+        gsd_w = (camera_height * sensor_width) / (focal_length * image_width)
 
         # print("gsd_h: {}, gsd_w: {}".format(gsd_h, gsd_w))
         gsd = min(gsd_h, gsd_w)
@@ -283,9 +286,9 @@ class Image(object):
         #     raise RuntimeError("Missing EXIF data needed to determine GSD.")
 
 
-    def get_area_m2(self, metadata, username, flight_height):
+    def get_area_m2(self, metadata, username, camera_height):
         # try:
-        gsd = self.get_gsd(metadata, username, flight_height)
+        gsd = self.get_gsd(metadata, username, camera_height)
         image_width, image_height = self.get_wh()
         image_width_m = image_width * gsd
         image_height_m = image_height * gsd
