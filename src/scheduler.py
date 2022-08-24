@@ -182,6 +182,6 @@ if __name__ == "__main__":
     #     except RuntimeError as e:
     #         # Virtual devices must be set before GPUs have been initialized
     #         print(e)
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
     logging.basicConfig(level=logging.INFO)
     loop()

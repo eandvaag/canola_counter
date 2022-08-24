@@ -235,7 +235,7 @@ def generate_predictions(config):
         json_io.save_json(metrics_path, metrics)
 
         annotations_path = os.path.join(results_dir, "annotations.json")
-        w3c_io.save_annotations(annotations_path, predictions["image_predictions"], config)
+        w3c_io.save_predictions(annotations_path, predictions["image_predictions"], config)
 
         excel_path = os.path.join(results_dir, "results.xlsx")
         driver_utils.output_excel(excel_path, predictions, dataset, config)

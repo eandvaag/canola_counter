@@ -598,7 +598,7 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
         image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
         predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
         # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
-        w3c_io.save_annotations(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
+        w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
         # if image_name in metrics:
         #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
 
@@ -614,7 +614,7 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
         excess_green_record_path = os.path.join(image_set_results_dir, "excess_green_record.json")
         json_io.save_json(excess_green_record_path, excess_green_record)
         image_predictions_path = os.path.join(image_set_results_dir, "predictions_w3c.json")
-        w3c_io.save_annotations(image_predictions_path, image_predictions, config)
+        w3c_io.save_predictions(image_predictions_path, image_predictions, config)
         metrics_path = os.path.join(image_set_results_dir, "metrics.json")
         json_io.save_json(metrics_path, metrics)
         report_path = os.path.join(image_set_results_dir, "results.csv") #xlsx")

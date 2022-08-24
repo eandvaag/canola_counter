@@ -10,8 +10,12 @@ from io_utils import json_io
 
 
 
-status_notification_url = "http://172.16.1.71:8110/plant_detection/status_notification"
-results_notification_url = "http://172.16.1.71:8110/plant_detection/results_notification"
+#status_notification_url = "http://172.16.1.71:8110/plant_detection/status_notification"
+#results_notification_url = "http://172.16.1.71:8110/plant_detection/results_notification"
+
+status_notification_url = "http://172.16.1.75:8110/plant_detection/status_notification"
+results_notification_url = "http://172.16.1.75:8110/plant_detection/results_notification"
+
 
 INITIALIZING = "initializing"
 IDLE = "idle"

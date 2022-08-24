@@ -176,21 +176,24 @@ def handle_direct_baseline_request(request):
 
         patch_size = w3c_io.get_patch_size(annotations)
 
+        patch_sizes = [patch_size - 50, patch_size, patch_size + 50]
+
         #for image_name in request["image_sets"][image_set]["images"]:
         for image_name in image_set["images"]:
 
+            for patch_size in patch_sizes:
 
-            image_path = glob.glob(os.path.join(images_dir, (image_name) + ".*"))[0]
-            image = Image(image_path)
-            patch_records = ep.extract_patch_records_from_image_tiled(
-                image, 
-                patch_size,
-                image_annotations=annotations[image_name],
-                patch_overlap_percent=50, 
-                include_patch_arrays=True)
+                image_path = glob.glob(os.path.join(images_dir, (image_name) + ".*"))[0]
+                image = Image(image_path)
+                patch_records = ep.extract_patch_records_from_image_tiled(
+                    image, 
+                    patch_size,
+                    image_annotations=annotations[image_name],
+                    patch_overlap_percent=50, 
+                    include_patch_arrays=True)
 
-            ep.write_patches(patches_dir, patch_records)
-            all_records.extend(patch_records)
+                ep.write_patches(patches_dir, patch_records)
+                all_records.extend(patch_records)
 
     patch_records = np.array(all_records)
 

@@ -45,12 +45,12 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
     num_annotations = w3c_io.get_num_annotations(annotations)
 
     if num_annotations < 50:
-        updated_patch_size = 300
+        updated_patch_size = 300 #100 #400 #500 #300
     else:
         try:
             updated_patch_size = w3c_io.get_patch_size(annotations)
         except RuntimeError:
-            updated_patch_size = 300
+            updated_patch_size = 300 #100 #400 #500 #300
         logger.info("Updated patch size: {}".format(updated_patch_size))
 
     update_thresh = 10

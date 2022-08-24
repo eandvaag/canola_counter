@@ -48,13 +48,51 @@ def convert_json_annotations(annotations, class_map):
     return ret_annotations #boxes, classes
 
 
-def load_annotations(w3c_path, class_map):
+def load_annotations(annotations_path, class_map):
 
-    annotations = json_io.load_json(w3c_path)
+    annotations = json_io.load_json(annotations_path)
     return convert_json_annotations(annotations, class_map)
 
+
+def load_predictions(predictions_path, class_map):
+
+    prefix_len = len("xywh=pixel:")
+
+    ret_predictions = {}
+
+    predictions = json_io.load_json(predictions_path)
+    for image_name in predictions.keys():
+        ret_predictions[image_name] = {
+            "boxes": [],
+            "classes": [],
+            "scores": []
+        }
+
+        for annotation in predictions[image_name]["annotations"]:
+
+            pred_class = class_map[annotation["body"][0]["value"]]
+            pred_score = float(annotation["body"][1]["value"])
+
+            px_str = annotation["target"]["selector"]["value"]
+            xywh = [int(round(float(x))) for x in px_str[prefix_len:].split(",")]
+
+            min_y = xywh[1]
+            min_x = xywh[0]
+            max_y = min_y + xywh[3]
+            max_x = min_x + xywh[2]
+            ret_predictions[image_name]["boxes"].append([min_y, min_x, max_y, max_x])
+            ret_predictions[image_name]["classes"].append(pred_class)
+            ret_predictions[image_name]["scores"].append(pred_score)
+
+
+
+        ret_predictions[image_name]["boxes"] = np.array(ret_predictions[image_name]["boxes"])
+        ret_predictions[image_name]["classes"] = np.array(ret_predictions[image_name]["classes"])
+        ret_predictions[image_name]["scores"] = np.array(ret_predictions[image_name]["scores"])
+
+    return ret_predictions
             
-def save_annotations(annotations_path, image_predictions, config):
+def save_predictions(predictions_path, image_predictions, config):
 
     annotations = {}
     reverse_class_map = {v: k for k, v in config["arch"]["class_map"].items()}
@@ -109,7 +147,7 @@ def save_annotations(annotations_path, image_predictions, config):
             annotations[image_name]["annotations"].append(w3c_annotation)
 
 
-    json_io.save_json(annotations_path, annotations)
+    json_io.save_json(predictions_path, annotations)
 
 
 
