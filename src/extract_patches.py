@@ -45,23 +45,23 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
     num_annotations = w3c_io.get_num_annotations(annotations)
 
     if num_annotations < 50:
-        updated_patch_size = 300 #100 #400 #500 #300
+        updated_patch_size = 300 #100 #300 #100 #400 #500 #300
     else:
         try:
             updated_patch_size = w3c_io.get_patch_size(annotations)
         except RuntimeError:
-            updated_patch_size = 300 #100 #400 #500 #300
+            updated_patch_size = 300 #100 #300 #100 #400 #500 #300
         logger.info("Updated patch size: {}".format(updated_patch_size))
 
     update_thresh = 10
 
-    if os.path.exists(patch_data_path):
-        patch_data = json_io.load_json(patch_data_path)
-    else:
-        patch_data = {}
+    # if os.path.exists(patch_data_path):
+    #     patch_data = json_io.load_json(patch_data_path)
+    # else:
+    #     patch_data = {}
 
     
-    update_thresh = 10
+    # update_thresh = 10
 
     if os.path.exists(patch_data_path):
         patch_data = json_io.load_json(patch_data_path)
@@ -423,6 +423,7 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=
     patch_num = 0
 
     image_path_pieces = image.image_path.split("/")
+    username = image_path_pieces[-7]
     farm_name = image_path_pieces[-5]
     field_name = image_path_pieces[-4]
     mission_date = image_path_pieces[-3]
@@ -455,7 +456,7 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=
                 patch_data["patch"] = patch_array
             patch_data["image_name"] = image.image_name
             patch_data["image_path"] = image.image_path
-            patch_data["patch_name"] = farm_name + "-" + field_name + "-" + mission_date + "-" + \
+            patch_data["patch_name"] = username + "-" + farm_name + "-" + field_name + "-" + mission_date + "-" + \
                                        image.image_name + "-" + str(patch_num).zfill(7) + ".png"
             patch_data["patch_coords"] = patch_coords
             

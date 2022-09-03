@@ -516,7 +516,7 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
                                                         pred_patch_classes, 
                                                         patch_coords, 
                                                         image_path, 
-                                                        trim=True)
+                                                        trim=True) #False) #True)
                                                         
                     # print("pred_image_abs_boxes", pred_image_abs_boxes)
                     image_predictions[image_name][transform_type]["pred_image_abs_boxes"].extend(pred_image_abs_boxes.tolist())

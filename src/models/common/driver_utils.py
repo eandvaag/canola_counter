@@ -297,10 +297,12 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
 
         if trim:
 
-            accept_bottom = 0 if patch_coords[0] == 0 else patch_coords[0] + round(patch_height / 4)
-            accept_left = 0 if patch_coords[1] == 0 else patch_coords[1] + round(patch_width / 4)
-            accept_top = image_height if patch_coords[2] == image_height else patch_coords[2] - round(patch_height / 4)
-            accept_right = image_width if patch_coords[3] == image_width else patch_coords[3] - round(patch_width / 4)
+            wiggle_room = 3
+
+            accept_bottom = 0 if patch_coords[0] == 0 else patch_coords[0] + round(patch_height / 4) - wiggle_room
+            accept_left = 0 if patch_coords[1] == 0 else patch_coords[1] + round(patch_width / 4) - wiggle_room
+            accept_top = image_height if patch_coords[2] == image_height else patch_coords[2] - round(patch_height / 4) + wiggle_room
+            accept_right = image_width if patch_coords[3] == image_width else patch_coords[3] - round(patch_width / 4) + wiggle_room
 
 
             box_centres = (image_abs_boxes[..., :2] + image_abs_boxes[..., 2:]) / 2.0

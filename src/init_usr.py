@@ -1,4 +1,5 @@
 import os
+import shutil
 import glob
 
 from io_utils import json_io
@@ -32,6 +33,36 @@ init_cameras = {
         }
     }
 }
+
+def clear_usr_requests_and_results(username):
+
+    usr_dir = os.path.join("usr", "data", username)
+    for farm_path in glob.glob(os.path.join(usr_dir, "image_sets", "*")):
+        for field_path in glob.glob(os.path.join(farm_path, "*")):
+            for mission_path in glob.glob(os.path.join(field_path, "*")):
+                prediction_dir = os.path.join(mission_path, "model", "prediction")
+                image_requests_dir = os.path.join(prediction_dir, "image_requests")
+                shutil.rmtree(image_requests_dir)
+                os.makedirs(image_requests_dir)
+
+                images_dir = os.path.join(prediction_dir, "images")
+                if os.path.exists(images_dir):
+                    shutil.rmtree(images_dir)
+                    os.makedirs(images_dir)
+
+                image_set_requests_dir = os.path.join(prediction_dir, "image_set_requests")
+                aborted_dir = os.path.join(image_set_requests_dir, "aborted")
+                shutil.rmtree(aborted_dir)
+                os.makedirs(aborted_dir)
+
+                pending_dir = os.path.join(image_set_requests_dir, "pending")
+                shutil.rmtree(pending_dir)
+                os.makedirs(pending_dir)                
+
+                results_dir = os.path.join(mission_path, "model", "results")
+                shutil.rmtree(results_dir)
+                os.makedirs(results_dir)
+
 
 
 def init_usr(username):

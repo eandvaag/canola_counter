@@ -131,7 +131,7 @@ def handle_resume_direct_baseline_request(baseline_name):
     shutil.rmtree(baseline_dir)
 
 
-def handle_direct_baseline_request(request):
+def handle_direct_baseline_request(request, extra_records=None):
 
     baseline_name = request["baseline_name"]
 
@@ -176,24 +176,29 @@ def handle_direct_baseline_request(request):
 
         patch_size = w3c_io.get_patch_size(annotations)
 
-        patch_sizes = [patch_size - 50, patch_size, patch_size + 50]
+        #patch_sizes = [patch_size - 50, patch_size, patch_size + 50]
 
         #for image_name in request["image_sets"][image_set]["images"]:
         for image_name in image_set["images"]:
 
-            for patch_size in patch_sizes:
+            #for patch_size in patch_sizes:
 
-                image_path = glob.glob(os.path.join(images_dir, (image_name) + ".*"))[0]
-                image = Image(image_path)
-                patch_records = ep.extract_patch_records_from_image_tiled(
-                    image, 
-                    patch_size,
-                    image_annotations=annotations[image_name],
-                    patch_overlap_percent=50, 
-                    include_patch_arrays=True)
+            image_path = glob.glob(os.path.join(images_dir, (image_name) + ".*"))[0]
+            image = Image(image_path)
+            patch_records = ep.extract_patch_records_from_image_tiled(
+                image, 
+                patch_size,
+                image_annotations=annotations[image_name],
+                patch_overlap_percent=50, 
+                include_patch_arrays=True)
 
-                ep.write_patches(patches_dir, patch_records)
-                all_records.extend(patch_records)
+            ep.write_patches(patches_dir, patch_records)
+            all_records.extend(patch_records)
+
+    if extra_records is not None:
+        ep.write_patches(patches_dir, extra_records)
+        all_records.extend(extra_records)
+
 
     patch_records = np.array(all_records)
 
@@ -212,24 +217,25 @@ def handle_direct_baseline_request(request):
     validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
     tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
 
-    loss_record_path = os.path.join(training_dir, "loss_record.json")
-    num_images = int(np.sum([len(image_set["images"]) for image_set in request["image_sets"]]))
-    loss_record = {
-        "training_loss": { "values": [],
-                            "best": 100000000,
-                            "epochs_since_improvement": 0}, 
-        "validation_loss": {"values": [],
-                            "best": 100000000,
-                            "epochs_since_improvement": 0},
-        "num_training_images": num_images
-    }
+    # loss_record_path = os.path.join(training_dir, "loss_record.json")
+    #num_images = int(np.sum([len(image_set["images"]) for image_set in request["image_sets"]]))
+    # loss_record = {
+    #     "training_loss": { "values": [],
+    #                         "best": 100000000,
+    #                         "epochs_since_improvement": 0}, 
+    #     "validation_loss": {"values": [],
+    #                         "best": 100000000,
+    #                         "epochs_since_improvement": 0}
+    # }
 
-    json_io.save_json(loss_record_path, loss_record)
+    # json_io.save_json(loss_record_path, loss_record)
+
+    image_set_aux.reset_loss_record(baseline_dir)
 
     yolov4_image_set_driver.train_baseline(baseline_dir)
 
     shutil.move(os.path.join(weights_dir, "best_weights.h5"),
-                os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
+                os.path.join("usr", "additional", "baselines", baseline_name + ".h5"))
     shutil.rmtree(baseline_dir)
     # if completed:
     #     shutil.move("usr/data/baselines/training/" + baseline_name,

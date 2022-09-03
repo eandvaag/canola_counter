@@ -112,7 +112,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
         predictions = json_io.load_json(pred_path)
 
 
-    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["camera_height"] == ""# or metadata["missing"]["area_m2"]:
+    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["camera_height"] == "":# or metadata["missing"]["area_m2"]:
         raise RuntimeError("Cannot compute map due to missing metadata.")
 
     camera_specs_path = os.path.join("usr", "data", username, "cameras", "cameras.json")

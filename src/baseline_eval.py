@@ -41,8 +41,11 @@ def create_bar_chart():
                     predicted_counts.append(chart_data[farm_name][field_name][mission_date][image_name]["predicted_count_minus_annotated_count"][-1] + anno_count)
                     anno_counts.append(anno_count)
 
-                    if mission_date[:4] == "2022" \
+                    if (farm_name == "Saskatoon" and field_name == "Norheim1" and mission_date == "2021-06-02"):
+                        pass
+                    elif mission_date[:4] == "2022" \
                         or (farm_name == "row_spacing" and field_name == "brown" and mission_date == "2021-06-01"):
+                        
                         # print("testing", farm_name, field_name, mission_date)
                         colors.append("orange")
                     elif annotations[image_name]["status"] == "completed_for_testing":
@@ -51,6 +54,7 @@ def create_bar_chart():
                     else:
                         # print("training", farm_name, field_name, mission_date)
                         colors.append("green")
+
 
     count_diffs = np.array(count_diffs)
     predicted_counts = np.array(predicted_counts)
@@ -131,7 +135,7 @@ def eval():
                 image_names = [image_name for image_name in annotations.keys() if annotations[image_name]["status"] == "completed_for_testing" or annotations[image_name]["status"] == "completed_for_training"]
 
 
-                baseline_src_path = os.path.join("usr", "additional", "baselines","11_sets_0.h5") #_no_overlap.h5")
+                baseline_src_path = os.path.join("usr", "additional", "baselines","11_sets_1_one_image_per_set.h5") #_no_overlap.h5")
                 baseline_dst_path = os.path.join(mission_path, "model", "weights", "best_weights.h5")
 
                 shutil.copyfile(baseline_src_path, baseline_dst_path)
@@ -188,5 +192,5 @@ def eval():
 
 
 
-    json_io.save_json("domain_shift_chart_data.json", chart_data)
+    json_io.save_json(os.path.join("usr", "additional", "chart_data", "11_sets_1_one_image_per_set_chart_data.json"), chart_data)
 
