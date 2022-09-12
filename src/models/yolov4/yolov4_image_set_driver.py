@@ -617,9 +617,9 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
         w3c_io.save_predictions(image_predictions_path, image_predictions, config)
         metrics_path = os.path.join(image_set_results_dir, "metrics.json")
         json_io.save_json(metrics_path, metrics)
-        report_path = os.path.join(image_set_results_dir, "results.csv") #xlsx")
-        inference_metrics.prepare_report(report_path, farm_name, field_name, mission_date, 
-                                         image_predictions, annotations, excess_green_record, metrics)
+        # report_path = os.path.join(image_set_results_dir, "results.csv") #xlsx")
+        # inference_metrics.prepare_report(report_path, farm_name, field_name, mission_date, 
+        #                                  image_predictions, annotations, excess_green_record, metrics)
         
         
     return end_time

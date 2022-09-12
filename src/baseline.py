@@ -16,7 +16,7 @@ def run_baseline_request():
     logging.basicConfig(level=logging.INFO)
 
     request = {
-        "baseline_name": "test_limits", #full_yolov4_8_sets_0",
+        "baseline_name": "p2irc_baseline", #full_yolov4_8_sets_0",
         #                  "UNI::LowN1::2021-06-07::"
         #                  "BlaineLake::HornerWest::2021-06-09::" +
         #                  "Saskatoon::Norheim1::2021-05-26::" +
@@ -84,17 +84,59 @@ def run_baseline_request():
             "field_name": "Dennis1",
             "mission_date": "2021-06-04"
         },
-        {
-            "username": "kaylie",
-            "farm_name": "row_spacing",
-            "field_name": "nasser",
-            "mission_date": "2021-06-01"
-        },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "row_spacing",
+        #     "field_name": "nasser",
+        #     "mission_date": "2021-06-01"
+        # },
         {
             "username": "kaylie",
             "farm_name": "BlaineLake",
             "field_name": "Lake",
             "mission_date": "2021-06-09"
+        },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "row_spacing",
+        #     "field_name": "brown",
+        #     "mission_date": "2021-06-01"
+        # },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim1",
+            "mission_date": "2021-06-02"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "MORSE",
+            "field_name": "Dugout",
+            "mission_date": "2022-05-27"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "MORSE",
+            "field_name": "Nasser",
+            "mission_date": "2022-05-27"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Dugout",
+            "mission_date": "2022-05-30"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim4",
+            "mission_date": "2022-05-24"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim5",
+            "mission_date": "2022-05-24"
         }
 
         ]

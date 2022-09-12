@@ -1,3 +1,4 @@
+import logging
 import os
 import glob
 from re import L
@@ -29,6 +30,8 @@ from io_utils import json_io
 
 
 def extract_metadata(image_set_dir, camera_height=None):
+
+    logger = logging.getLogger(__name__)
 
     images_dir = os.path.join(image_set_dir, "images")
     metadata_dir = os.path.join(image_set_dir, "metadata")
@@ -97,8 +100,20 @@ def extract_metadata(image_set_dir, camera_height=None):
 
         else:
 
-            if make != image_set_metadata["camera_info"]["make"] or model != image_set_metadata["camera_info"]["model"]:
-                raise RuntimeError("Image set contains multiple camera types.")
+            if make != image_set_metadata["camera_info"]["make"]:
+                # raise RuntimeError("Image set contains multiple camera makes. Established make: {}. Conflicting make: {}".format(
+                #     image_set_metadata["camera_info"]["make"], make
+                # ))
+                logger.warning("Conflicting camera makes within image set. Established make: {}. Conflicting make: {}".format(
+                    image_set_metadata["camera_info"]["make"], make
+                ))
+            if model != image_set_metadata["camera_info"]["model"]:
+                # raise RuntimeError("Image set contains multiple camera models. Established model: {}. Conflicting model: {}".format(
+                #     image_set_metadata["camera_info"]["model"], model
+                # ))
+                logger.warning("Conflicting camera models within image set. Established model: {}. Conflicting model: {}".format(
+                    image_set_metadata["camera_info"]["model"], model
+                ))
 
 
 

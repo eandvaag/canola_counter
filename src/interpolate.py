@@ -7,6 +7,10 @@ from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import argparse
+import time
+
+
+RESULT_LIFETIME = 2 * 3600
 
 from sklearn.metrics import pairwise_distances
 
@@ -88,7 +92,8 @@ def create_plot(grid_z0, extent, vmin, vmax, cmap, out_path):
     plt.savefig(out_path, bbox_inches='tight', transparent=True, pad_inches=0)
 
 
-def create_interpolation_map(username, farm_name, field_name, mission_date, annotations_path, out_dir, interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
+def create_interpolation_map(username, farm_name, field_name, mission_date, annotations_path, out_dir, map_download_uuid,
+                             interpolation="linear", completed_only=False, pred_path=None, comparison_type="side_by_side"):
 
     # farm_name = dataset.farm_name
     # field_name = dataset.field_name
@@ -257,39 +262,39 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
 
         if num_completed >= 3:
 
-            out_path = os.path.join(out_dir, "annotated_map.svg")
+            out_path = os.path.join(out_dir, map_download_uuid + "_annotated_map.svg")
             create_plot(grid_z0, extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
 
 
         if pred_path is not None:
 
-            out_path = os.path.join(out_dir, "predicted_map.svg")
+            out_path = os.path.join(out_dir, map_download_uuid + "_predicted_map.svg")
             create_plot(pred_grid_z0, pred_extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
     
-    elif comparison_type == "diff":
+    # elif comparison_type == "diff":
 
-        diff_grid_z0 = pred_grid_z0 - grid_z0
+    #     diff_grid_z0 = pred_grid_z0 - grid_z0
 
-        vmin = m.floor(np.nanmin(diff_grid_z0))
-        vmax = m.ceil(np.nanmax(diff_grid_z0))
-        vlim = max(abs(vmin), abs(vmax))
-        vmin = -vlim
-        vmax = vlim
+    #     vmin = m.floor(np.nanmin(diff_grid_z0))
+    #     vmax = m.ceil(np.nanmax(diff_grid_z0))
+    #     vlim = max(abs(vmin), abs(vmax))
+    #     vmin = -vlim
+    #     vmax = vlim
 
 
-        colors = ["royalblue", "oldlace", "tomato"] #"ghostwhite", "tomato"]
-        #colors = ["royalblue", "whitesmoke", "tomato"]  #"tomato"]
-        cmap = LinearSegmentedColormap.from_list("mycmap", colors)
+    #     colors = ["royalblue", "oldlace", "tomato"] #"ghostwhite", "tomato"]
+    #     #colors = ["royalblue", "whitesmoke", "tomato"]  #"tomato"]
+    #     cmap = LinearSegmentedColormap.from_list("mycmap", colors)
 
-        out_path = os.path.join(out_dir, "difference_map.svg")
-        create_plot(diff_grid_z0, pred_extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
+    #     out_path = os.path.join(out_dir, "difference_map.svg")
+    #     create_plot(diff_grid_z0, pred_extent, vmin=vmin, vmax=vmax, cmap=cmap, out_path=out_path)
 
 
     min_max_rec = {
         "vmin": vmin,
         "vmax": vmax
     }
-    min_max_rec_path = os.path.join(out_dir, "min_max_rec.json")
+    min_max_rec_path = os.path.join(out_dir, map_download_uuid + "_min_max_rec.json")
     json_io.save_json(min_max_rec_path, min_max_rec)
 
 
@@ -314,6 +319,13 @@ def remove_all_maps():
 #     predictions = json_io.load_json(predictions_path)
 #     create_interpolation_map(ds, predictions)
 
+def remove_old_maps(out_dir):
+    if os.path.exists(out_dir):
+        for f_path in glob.glob(os.path.join(out_dir, "*")):
+            alive_time = time.time() - os.path.getmtime(f_path)
+            if alive_time > RESULT_LIFETIME:
+                os.remove(f_path)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -323,14 +335,25 @@ if __name__ == "__main__":
     parser.add_argument("mission_date", type=str)
     parser.add_argument("annotations_path", type=str)
     parser.add_argument("out_dir", type=str)
+    parser.add_argument("map_download_uuid", type=str)
     #parser.add_argument('-density', action='store_true')
 
     parser.add_argument('-nearest', action='store_true')
     parser.add_argument('-completed_only', action='store_true')
     parser.add_argument('-pred_path', type=str)
-    parser.add_argument('-diff', action='store_true')
+    # parser.add_argument('-diff', action='store_true')
     args = parser.parse_args()
     
+
+    print("running map builder")
+    print(args.username)
+    print(args.farm_name)
+    print(args.field_name)
+    print(args.mission_date) 
+    print(args.annotations_path) 
+    print(args.out_dir)
+    print(args.map_download_uuid)
+    print(args.pred_path)  
     # dataset = DataSet({
     #     "farm_name": args.farm_name,
     #     "field_name": args.field_name,
@@ -347,10 +370,12 @@ if __name__ == "__main__":
     else:
         interpolation = "linear"
 
-    if args.diff:
-        comparison_type = "diff"
-    else:
-        comparison_type = "side_by_side"
+    # if args.diff:
+    #     comparison_type = "diff"
+    # else:
+    comparison_type = "side_by_side"
+
+    remove_old_maps(args.out_dir)
 
 
     create_interpolation_map(args.username,
@@ -359,6 +384,7 @@ if __name__ == "__main__":
                             args.mission_date,
                             args.annotations_path,
                             args.out_dir, 
+                            args.map_download_uuid,
                             interpolation=interpolation, 
                             completed_only=args.completed_only,
                             pred_path=args.pred_path,

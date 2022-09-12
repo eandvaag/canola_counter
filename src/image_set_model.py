@@ -417,6 +417,8 @@ def check_train(username, farm_name, field_name, mission_date):
 
                 # needs_training_with_new_set = len(training_image_names) > loss_record["num_training_images"]
 
+
+
                 if needs_training_with_cur_set or changed: #needs_training_with_new_set:
 
                     status_path = os.path.join(image_set_dir, "model", "status.json")
@@ -448,7 +450,10 @@ def check_train(username, farm_name, field_name, mission_date):
 
                         # json_io.save_json(loss_record_path, loss_record)
 
-                    training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
+                    if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+                        training_finished = False
+                    else:
+                        training_finished = yolov4_image_set_driver.train(image_set_dir) #farm_name, field_name, mission_date)
 
                     status = json_io.load_json(status_path)
                     status["status"] = isa.IDLE

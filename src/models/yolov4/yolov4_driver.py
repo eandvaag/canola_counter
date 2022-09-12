@@ -60,7 +60,7 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nm
     pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
     if round_scores:
         pred_scores = np.round(pred_scores, 2)
-    score_mask = pred_scores > score_threshold
+    score_mask = pred_scores >= score_threshold
 
     # in_bounds_mask = np.logical_and(
     #     np.logical_and(pred_boxes[:, 0] > 0, pred_boxes[:, 1] > 0),
