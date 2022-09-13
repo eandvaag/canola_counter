@@ -115,7 +115,7 @@ def update_prediction_tf_records(image_set_dir, image_names): #username, farm_na
         #    ep.add_annotations_to_patch_records(patch_data[image_name], annotations[image_name])
 
 
-        print("sample patch record:", patch_records[0])
+        # print("sample patch record:", patch_records[0])
 
 
         image_prediction_dir = os.path.join(image_set_dir, "model", "prediction", "images", image_name)

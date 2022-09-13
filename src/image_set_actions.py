@@ -2,6 +2,7 @@ import os
 import glob
 import shutil
 import requests
+import logging
 
 from io_utils import json_io
 
@@ -27,6 +28,7 @@ PREDICTING = "predicting"
 def notify(username, farm_name, field_name, mission_date, error=False, extra_items={}, results_notification=False):
     #print("sending data", data)
 
+    logger = logging.getLogger(__name__)
 
     status_path = os.path.join("usr", "data", username, "image_sets",
                                 farm_name, field_name, mission_date, 
@@ -45,7 +47,7 @@ def notify(username, farm_name, field_name, mission_date, error=False, extra_ite
     for k, v in extra_items.items():
         data[k] = v
 
-    print(data)
+    # print(data)
 
     if results_notification:
         url = results_notification_url
@@ -54,14 +56,14 @@ def notify(username, farm_name, field_name, mission_date, error=False, extra_ite
     response = requests.post(url, data=data)
     response.raise_for_status()  # raises exception when not a 2xx response
     if response.status_code != 200:
-        print("Response status code is not 200. Status code: {}".format(response.status_code))
+        logger.error("Response status code is not 200. Status code: {}".format(response.status_code))
         response = response.json()
-        print(response)
+        logger.error(response)
 
     response = response.json()
     if response["message"] != "received":
-        print("Response message is not 'received'.")
-        print(response)
+        logger.error("Response message is not 'received'.")
+        logger.error(response)
         #exit()
 
 

@@ -51,7 +51,7 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
             updated_patch_size = w3c_io.get_patch_size(annotations)
         except RuntimeError:
             updated_patch_size = 300 #100 #300 #100 #400 #500 #300
-        logger.info("Updated patch size: {}".format(updated_patch_size))
+        # logger.info("Updated patch size: {}".format(updated_patch_size))
 
     update_thresh = 10
 
@@ -96,7 +96,7 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
 
 
         if update_image:
-            print("updating", image_name)
+            # print("updating", image_name)
             image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
             image = Image(image_path)
             patch_records = extract_patch_records_from_image_tiled(
@@ -215,7 +215,7 @@ def extract_patches_from_annotation_guides(image, patch_size, image_annotations,
             round(annotation_guide["py"]) + round(annotation_guide["height"]),
             round(annotation_guide["px"]) + round(annotation_guide["width"])
         ]
-        print("guide_coords", guide_coords)
+        # print("guide_coords", guide_coords)
 
         #guide_patch_array = image_array[guide_coords[0]: guide_coords[2],
         #                                guide_coords[1]: guide_coords[3]]

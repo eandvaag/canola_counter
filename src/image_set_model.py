@@ -253,8 +253,9 @@ def handle_direct_baseline_request(request, extra_records=None):
 
 def check_predict(username, farm_name, field_name, mission_date):
 
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+    logger = logging.getLogger(__name__)
 
+    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
     model_dir = os.path.join(image_set_dir, "model")
 
@@ -270,7 +271,7 @@ def check_predict(username, farm_name, field_name, mission_date):
         while len(prediction_request_paths) > 0:
             prediction_request_path = prediction_request_paths[0]
             request = json_io.load_json(prediction_request_path)
-            print("request", request)
+            # print("request", request)
 
             # username = request["username"]
             # farm_name = request["farm_name"]
@@ -319,9 +320,10 @@ def check_predict(username, farm_name, field_name, mission_date):
             except Exception as e:
 
                 trace = traceback.format_exc()
-                print("Exception in check_predict")
-                print(e)
-                print(trace)
+                logger.error("Exception in check_predict")
+                logger.error(e)
+                logger.error(trace)
+
                 try:
                     os.remove(prediction_request_path)
                     if os.path.basename(prediction_requests_dir) == "pending":
@@ -343,9 +345,10 @@ def check_predict(username, farm_name, field_name, mission_date):
 
                 except Exception as e:
                     trace = traceback.format_exc()
-                    print("Exception while while handling original exception")
-                    print(e)
-                    print(trace)
+
+                    logger.error("Exception while while handling original exception")
+                    logger.error(e)
+                    logger.error(trace)
 
             
             prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
@@ -356,6 +359,8 @@ def check_train(username, farm_name, field_name, mission_date):
 
     #baseline_exists = check_baseline(farm_name, field_name, mission_date)
     #if baseline_exists:
+    logger = logging.getLogger(__name__)
+
     if isa.check_for_predictions():
         return
     
@@ -474,9 +479,9 @@ def check_train(username, farm_name, field_name, mission_date):
 
             except Exception as e:
                 trace = traceback.format_exc()
-                print("Exception in check_train")
-                print(e)
-                print(trace)
+                logger.error("Exception in check_train")
+                logger.error(e)
+                logger.error(trace)
 
                 try:
                     json_io.save_json(sys_block_path, {"error_message": str(e)})
@@ -489,9 +494,9 @@ def check_train(username, farm_name, field_name, mission_date):
                         error=True, extra_items={"error_setting": "training", "error_message": str(e)})
                 except Exception as e:
                     trace = traceback.format_exc()
-                    print("Exception while handling original exception")
-                    print(e)
-                    print(trace)
+                    logger.error("Exception while handling original exception")
+                    logger.error(e)
+                    logger.error(trace)
 
 
 def predict_on_images(username, farm_name, field_name, mission_date, image_names, save_result):

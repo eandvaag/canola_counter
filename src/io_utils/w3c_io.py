@@ -261,7 +261,7 @@ def get_patch_size(annotations):
 
     patch_area = typical_box_area * (90000 / 2296)
     patch_size = round(m.sqrt(patch_area))
-    print("patch_size", patch_size)
+    # print("patch_size", patch_size)
     return patch_size
     
 

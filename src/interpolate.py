@@ -10,7 +10,7 @@ import argparse
 import time
 
 
-RESULT_LIFETIME = 2 * 3600
+RESULT_LIFETIME = 2 * 60 #2 * 3600
 
 from sklearn.metrics import pairwise_distances
 
@@ -345,15 +345,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
 
-    print("running map builder")
-    print(args.username)
-    print(args.farm_name)
-    print(args.field_name)
-    print(args.mission_date) 
-    print(args.annotations_path) 
-    print(args.out_dir)
-    print(args.map_download_uuid)
-    print(args.pred_path)  
+    # print("running map builder")
+    # print(args.username)
+    # print(args.farm_name)
+    # print(args.field_name)
+    # print(args.mission_date) 
+    # print(args.annotations_path) 
+    # print(args.out_dir)
+    # print(args.map_download_uuid)
+    # print(args.pred_path)  
     # dataset = DataSet({
     #     "farm_name": args.farm_name,
     #     "field_name": args.field_name,

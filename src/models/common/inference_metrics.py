@@ -469,7 +469,7 @@ def create_csv(username, farm_name, field_name, mission_date, results_timestamp,
 
         # pred_image_abs_boxes = predictions[image_name]["boxes"]
         pred_image_scores = predictions[image_name]["scores"]
-        print(pred_image_scores)
+        # print(pred_image_scores)
 
         annotated_count = image_abs_boxes.shape[0]
         predicted_count = np.sum(pred_image_scores >= 0.50)
