@@ -830,6 +830,8 @@ def train(root_dir): #farm_name, field_name, mission_date):
     usr_block_path = os.path.join(training_dir, "usr_block.json")
     sys_block_path = os.path.join(training_dir, "sys_block.json")
 
+    restart_req_path = os.path.join(training_dir, "restart_request.json")
+
 
     #training_patch_dir = os.path.join(training_patches_dir, str(seq_num), "training")
     #validation_patch_dir = os.path.join(training_patches_dir, str(seq_num), "validation")
@@ -1019,6 +1021,9 @@ def train(root_dir): #farm_name, field_name, mission_date):
             return False
 
         if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+            return False
+
+        if os.path.exists(restart_req_path):
             return False
 
         cur_time = int(time.time())

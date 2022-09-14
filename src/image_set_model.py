@@ -325,7 +325,8 @@ def check_predict(username, farm_name, field_name, mission_date):
                 logger.error(trace)
 
                 try:
-                    os.remove(prediction_request_path)
+                    if os.path.exists(prediction_request_path):
+                        os.remove(prediction_request_path)
                     if os.path.basename(prediction_requests_dir) == "pending":
                         request["aborted_time"] = int(time.time())
                         request["error_message"] = str(e)
@@ -346,13 +347,87 @@ def check_predict(username, farm_name, field_name, mission_date):
                 except Exception as e:
                     trace = traceback.format_exc()
 
-                    logger.error("Exception while while handling original exception")
+                    logger.error("Exception occurred while handling original exception")
                     logger.error(e)
                     logger.error(trace)
 
             
             prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
 
+
+def restart_model(username, farm_name, field_name, mission_date):
+
+    logger = logging.getLogger(__name__)
+
+    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+
+    logger.info("Restarting model for image set {}".format(image_set_dir))
+
+    model_dir = os.path.join(image_set_dir, "model")
+    loss_record_path = os.path.join(model_dir, "training", "loss_record.json")
+
+    loss_record = {
+        "training_loss": { "values": [],
+                        "best": 100000000,
+                        "epochs_since_improvement": 100000000}, 
+        "validation_loss": {"values": [],
+                            "best": 100000000,
+                            "epochs_since_improvement": 100000000},
+    }
+    json_io.save_json(loss_record_path, loss_record)
+
+    
+    weights_dir = os.path.join(model_dir, "weights")
+
+    default_weights_path = os.path.join("usr", "shared", "weights", "default_weights.h5")
+
+    shutil.copy(default_weights_path, os.path.join(weights_dir, "cur_weights.h5"))
+    shutil.copy(default_weights_path, os.path.join(weights_dir, "best_weights.h5"))
+
+
+    results_dir = os.path.join(model_dir, "results")
+    results = glob.glob(os.path.join(results_dir, "*"))
+    for result in results:
+        shutil.rmtree(result)
+
+    prediction_dir = os.path.join(model_dir, "prediction")
+    shutil.rmtree(prediction_dir)
+    os.makedirs(prediction_dir)
+
+    os.makedirs(os.path.join(prediction_dir, "image_requests"))
+    os.makedirs(os.path.join(prediction_dir, "images"))
+    image_set_requests = os.path.join(prediction_dir, "image_set_requests")
+    os.makedirs(image_set_requests)
+    os.makedirs(os.path.join(image_set_requests, "aborted"))
+    os.makedirs(os.path.join(image_set_requests, "pending"))
+
+
+
+
+
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations = json_io.load_json(annotations_path)
+    for image_name in annotations.keys():
+        if annotations[image_name]["status"] == "completed_for_training":
+            annotations[image_name]["status"] = "completed_for_testing"
+    json_io.save_json(annotations_path, annotations)
+
+
+    status_path = os.path.join(model_dir, "status.json")
+    status = json_io.load_json(status_path)
+    status["fully_trained"] = "True"
+    status["status"] = isa.IDLE
+    status["update_num"] = status["update_num"] + 1
+
+    json_io.save_json(status_path, status)
+
+    restart_req_path = os.path.join(model_dir, "training", "restart_request.json")
+    os.remove(restart_req_path)
+
+    isa.notify(username, farm_name, field_name, mission_date, results_notification=True)
+
+    return
 
 
 def check_train(username, farm_name, field_name, mission_date):
@@ -371,19 +446,25 @@ def check_train(username, farm_name, field_name, mission_date):
     if os.path.exists(upload_status_path):
         upload_status = json_io.load_json(upload_status_path)
         if upload_status["status"] == "uploaded":
-
-                    
-            model_dir = os.path.join(image_set_dir, "model")
-            training_dir = os.path.join(model_dir, "training")
-            status_path = os.path.join(model_dir, "status.json")
-
-            usr_block_path = os.path.join(training_dir, "usr_block.json")
-            sys_block_path = os.path.join(training_dir, "sys_block.json")
-            if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
-                return
-
+            
             # weights_dir = os.path.join(model_dir, "weights")
             try:
+                    
+                model_dir = os.path.join(image_set_dir, "model")
+                training_dir = os.path.join(model_dir, "training")
+                status_path = os.path.join(model_dir, "status.json")
+
+                usr_block_path = os.path.join(training_dir, "usr_block.json")
+                sys_block_path = os.path.join(training_dir, "sys_block.json")
+                if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+                    return
+                
+                restart_req_path = os.path.join(training_dir, "restart_request.json")
+                if os.path.exists(restart_req_path):
+                    restart_model(username, farm_name, field_name, mission_date)
+                    return
+
+
 
                 annotations_read_time = int(time.time())
 
@@ -494,7 +575,7 @@ def check_train(username, farm_name, field_name, mission_date):
                         error=True, extra_items={"error_setting": "training", "error_message": str(e)})
                 except Exception as e:
                     trace = traceback.format_exc()
-                    logger.error("Exception while handling original exception")
+                    logger.error("Exception occurred while handling original exception")
                     logger.error(e)
                     logger.error(trace)
 
