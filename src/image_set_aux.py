@@ -1,5 +1,5 @@
 import os
-
+import logging
 import random
 import numpy as np
 
@@ -35,6 +35,8 @@ def reset_loss_record(image_set_dir):
 #def update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names):
 
 def update_training_tf_record(image_set_dir, annotations):
+
+    logger = logging.getLogger(__name__)
 
     # image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
@@ -80,6 +82,7 @@ def update_training_tf_record(image_set_dir, annotations):
     training_patch_records = patch_records[training_subset]
     validation_patch_records = np.delete(patch_records, training_subset)
 
+    logger.info("Creating training and validation TF records")
 
     training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
     training_patches_record_path = os.path.join(training_dir, "training-patches-record.tfrec")
@@ -98,6 +101,7 @@ def update_training_tf_record(image_set_dir, annotations):
 
 def update_prediction_tf_records(image_set_dir, image_names): #username, farm_name, field_name, mission_date, image_names):
 
+    logger = logging.getLogger(__name__)
     #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
     patches_dir = os.path.join(image_set_dir, "patches")
 
@@ -106,6 +110,8 @@ def update_prediction_tf_records(image_set_dir, image_names): #username, farm_na
 
     # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
     # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+    logger.info("Creating prediction TF records")
 
     for image_name in image_names:
         #is_annotated = annotations[image_name]["status"] == "completed"

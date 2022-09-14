@@ -106,6 +106,7 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
                 patch_overlap_percent=50, 
                 include_patch_arrays=True)
 
+            logger.info("Writing patches for image {}".format(image_name))
             write_patches(patches_dir, patch_records)
 
             patch_records = extract_patch_records_from_image_tiled(
@@ -123,8 +124,6 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
             
     json_io.save_json(patch_data_path, patch_data)
 
-    if changed:
-        logger.info("Patches were changed!")
     return changed
 
 
@@ -140,7 +139,7 @@ def write_annotated_patch_records(patch_records, patch_dir, includes_patch_array
 
 
 def write_patches(out_dir, patch_records):
-    for patch_record in tqdm.tqdm(patch_records, desc="Writing patches"):
+    for patch_record in patch_records:
         cv2.imwrite(os.path.join(out_dir, patch_record["patch_name"]),
                     cv2.cvtColor(patch_record["patch"], cv2.COLOR_RGB2BGR))
 

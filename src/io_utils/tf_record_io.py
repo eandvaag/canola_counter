@@ -52,7 +52,7 @@ def create_patch_tf_records(patch_data_lst, out_dir, is_annotated):
 
     patch_tf_records = []
 
-    for patch_data in tqdm.tqdm(patch_data_lst, desc="Creating TF records"):
+    for patch_data in patch_data_lst:
 
         patch_tf_record = {
             "image_path": bytes_feature(patch_data["image_path"]),

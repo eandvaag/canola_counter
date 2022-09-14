@@ -503,7 +503,7 @@ def create_csv(username, farm_name, field_name, mission_date, results_timestamp,
                 ms_coco_mAP = round(metrics[image_name]["MS COCO mAP"], 2)
 
                 new_metrics[image_name] = {}
-                new_metrics[image_name]["MS COCO mAP"] = round(metrics[image_name]["Image MS COCO mAP"], 2)
+                new_metrics[image_name]["MS COCO mAP"] = round(metrics[image_name]["MS COCO mAP"], 2)
             else:
                 ms_coco_mAP = "NA"
 
