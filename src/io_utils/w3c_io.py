@@ -24,7 +24,7 @@ def convert_json_annotations(annotations, class_map):
             #"available_for_training": annotations[image_name]["available_for_training"],
             "boxes": [],
             "classes": [],
-            "update_time": annotations[image_name]["update_time"]
+            # "update_time": annotations[image_name]["update_time"]
         }
         #boxes[image_name] = []
         #classes[image_name] = []

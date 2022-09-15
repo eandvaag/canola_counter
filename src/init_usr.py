@@ -119,7 +119,7 @@ def fix_k():
                 annotations = json_io.load_json(annotations_path)
                 fully_trained = "True"
                 for image_name in annotations.keys():
-                    annotations[image_name]["update_time"] = 0 #int(time.time())
+                    # annotations[image_name]["update_time"] = 0 #int(time.time())
                     if annotations[image_name]["status"] == "completed_for_training":
                         fully_trained = "False"
 
@@ -226,7 +226,7 @@ def fix_kaylie_sets():
                         annotations = json_io.load_json(annotations_w3c_path)
                         fully_trained = "True"
                         for image_name in annotations.keys():
-                            annotations[image_name]["update_time"] = 0 #int(time.time())
+                            # annotations[image_name]["update_time"] = 0 #int(time.time())
                             if annotations[image_name]["status"] == "completed":
                                 if mission_dir[:4] == "2022":
                                     annotations[image_name]["status"] = "completed_for_testing"
