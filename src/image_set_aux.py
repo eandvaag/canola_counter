@@ -34,65 +34,114 @@ def reset_loss_record(image_set_dir):
 
 #def update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names):
 
-def update_training_tf_record(image_set_dir, annotations):
+def update_training_tf_records(image_set_dir, changed_image_names, annotations):
 
     logger = logging.getLogger(__name__)
 
-    # image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-
     patches_dir = os.path.join(image_set_dir, "patches")
-
     patch_data_path = os.path.join(patches_dir, "patch_data.json")
     patch_data = json_io.load_json(patch_data_path)
 
-    # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-
-    # available_for_training = []
-    # for image_name in annotations.keys():
-    #     if annotations[image_name]["available_for_training"]:
-    #         available_for_training.append(image_name)
-
     training_dir = os.path.join(image_set_dir, "model", "training")
-    #training_images_path = os.path.join(training_dir, "training_images.json")
-    #cur_training_images = json_io.load_json(training_images_path)
+    training_records_dir = os.path.join(training_dir, "training_tf_records")
+    validation_records_dir = os.path.join(training_dir, "validation_tf_records")
 
-    #if len(available_for_training) != len(cur_training_images):
+    if not os.path.exists(training_records_dir):
+        os.makedirs(training_records_dir)
+    if not os.path.exists(validation_records_dir):
+        os.makedirs(validation_records_dir)
 
-
-
-    patch_records = []
-    # num_available = 0
-    # for image_name in annotations.keys():
-    #     if annotations[image_name]["status"] == "completed_for_training":
-    #         num_available += 1
-
-    #for image_name in training_image_names:
     for image_name in annotations.keys():
-        if annotations[image_name]["status"] == "completed_for_training":
+        training_tf_record_path = os.path.join(training_records_dir, image_name + ".tfrec")
+        validation_tf_record_path = os.path.join(validation_records_dir, image_name + ".tfrec")
+
+        if annotations[image_name]["status"] == "completed_for_training" and image_name in changed_image_names:
+
+            logger.info("Writing training and validation records for image {} (from: {})".format(image_name, image_set_dir))
+
+            if os.path.exists(training_tf_record_path):
+                os.remove(training_tf_record_path)
+            if os.path.exists(validation_tf_record_path):
+                os.remove(validation_tf_record_path)
+
             ep.add_annotations_to_patch_records(patch_data[image_name]["patches"], annotations[image_name])
-            patch_records.extend(patch_data[image_name]["patches"])
+            #patch_records.extend(patch_data[image_name]["patches"])
+
+            patch_records = np.array(patch_data[image_name]["patches"])
+
+            training_size = round(patch_records.size * 0.8)
+            training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
+
+            training_patch_records = patch_records[training_subset]
+            validation_patch_records = np.delete(patch_records, training_subset)
+
+            training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
+            tf_record_io.output_patch_tf_records(training_tf_record_path, training_tf_records)
+
+            validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
+            tf_record_io.output_patch_tf_records(validation_tf_record_path, validation_tf_records)
 
 
-    patch_records = np.array(patch_records)
 
-    training_size = round(patch_records.size * 0.8)
-    training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
 
-    training_patch_records = patch_records[training_subset]
-    validation_patch_records = np.delete(patch_records, training_subset)
+# def update_training_tf_record_dep(image_set_dir, annotations):
 
-    logger.info("Creating training and validation TF records")
+#     logger = logging.getLogger(__name__)
 
-    training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
-    training_patches_record_path = os.path.join(training_dir, "training-patches-record.tfrec")
-    tf_record_io.output_patch_tf_records(training_patches_record_path, training_tf_records)
+#     # image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
-    validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
-    validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
-    tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
+#     patches_dir = os.path.join(image_set_dir, "patches")
 
-    # return num_available
+#     patch_data_path = os.path.join(patches_dir, "patch_data.json")
+#     patch_data = json_io.load_json(patch_data_path)
+
+#     # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+#     # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+#     # available_for_training = []
+#     # for image_name in annotations.keys():
+#     #     if annotations[image_name]["available_for_training"]:
+#     #         available_for_training.append(image_name)
+
+#     training_dir = os.path.join(image_set_dir, "model", "training")
+#     #training_images_path = os.path.join(training_dir, "training_images.json")
+#     #cur_training_images = json_io.load_json(training_images_path)
+
+#     #if len(available_for_training) != len(cur_training_images):
+
+
+
+#     patch_records = []
+#     # num_available = 0
+#     # for image_name in annotations.keys():
+#     #     if annotations[image_name]["status"] == "completed_for_training":
+#     #         num_available += 1
+
+#     #for image_name in training_image_names:
+#     for image_name in annotations.keys():
+#         if annotations[image_name]["status"] == "completed_for_training":
+#             ep.add_annotations_to_patch_records(patch_data[image_name]["patches"], annotations[image_name])
+#             patch_records.extend(patch_data[image_name]["patches"])
+
+#     patch_records = np.array(patch_records)
+
+#     training_size = round(patch_records.size * 0.8)
+#     training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
+
+#     training_patch_records = patch_records[training_subset]
+#     validation_patch_records = np.delete(patch_records, training_subset)
+
+#     logger.info("Creating training and validation TF records")
+
+#     training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
+#     training_patches_record_path = os.path.join(training_dir, "training-patches-record.tfrec")
+#     tf_record_io.output_patch_tf_records(training_patches_record_path, training_tf_records)
+
+#     validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
+#     validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
+#     tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
+
+#     # return num_available
 
 
 
@@ -111,10 +160,10 @@ def update_prediction_tf_records(image_set_dir, image_names): #username, farm_na
     # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
     # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-    logger.info("Creating prediction TF records")
-
     for image_name in image_names:
         #is_annotated = annotations[image_name]["status"] == "completed"
+
+        logger.info("Writing inference records for image {} (from: {})".format(image_name, image_set_dir))
 
         patch_records = patch_data[image_name]["patches"]
         #if is_annotated:

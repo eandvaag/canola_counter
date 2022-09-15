@@ -402,7 +402,19 @@ def restart_model(username, farm_name, field_name, mission_date):
     os.makedirs(os.path.join(image_set_requests, "pending"))
 
 
+    training_dir = os.path.join(model_dir, "training")
+    training_records_dir = os.path.join(training_dir, "training_tf_records")
+    if os.path.exists(training_records_dir):
+        shutil.rmtree(training_records_dir)
+        os.makedirs(training_records_dir)
+    validation_records_dir = os.path.join(training_dir, "validation_tf_records")
+    if os.path.exists(validation_records_dir):
+        shutil.rmtree(validation_records_dir)
+        os.makedirs(validation_records_dir)
 
+    patches_dir = os.path.join(image_set_dir, "patches")
+    shutil.rmtree(patches_dir)
+    os.makedirs(patches_dir)
 
 
 
@@ -466,17 +478,17 @@ def check_train(username, farm_name, field_name, mission_date):
 
 
 
-                annotations_read_time = int(time.time())
+                # annotations_read_time = int(time.time())
 
                 annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
                 annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
 
                 #changed = update_patches(username, farm_name, field_name, mission_date, image_status="completed_for_training")
-                changed = ep.update_patches(image_set_dir, annotations, annotations_read_time, image_status="completed_for_training")
+                changed_image_names = ep.update_patches(image_set_dir, annotations, image_status="completed_for_training")
 
                 needs_training_with_cur_set = False
-                if not changed:
+                if len(changed_image_names) == 0:
                     loss_record_path = os.path.join(training_dir, "loss_record.json")
                     loss_record = json_io.load_json(loss_record_path)
                     needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
@@ -505,7 +517,7 @@ def check_train(username, farm_name, field_name, mission_date):
 
 
 
-                if needs_training_with_cur_set or changed: #needs_training_with_new_set:
+                if needs_training_with_cur_set or len(changed_image_names) > 0: #needs_training_with_new_set:
 
                     status_path = os.path.join(image_set_dir, "model", "status.json")
                     status = json_io.load_json(status_path)
@@ -519,8 +531,8 @@ def check_train(username, farm_name, field_name, mission_date):
 
                     # create_patches_if_needed(username, farm_name, field_name, mission_date, training_image_names)
 
-                    if changed:
-                        image_set_aux.update_training_tf_record(image_set_dir, annotations)
+                    if len(changed_image_names) > 0:
+                        image_set_aux.update_training_tf_records(image_set_dir, changed_image_names, annotations)
                         #update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names)
                         image_set_aux.reset_loss_record(image_set_dir)
 
@@ -590,8 +602,17 @@ def predict_on_images(username, farm_name, field_name, mission_date, image_names
     annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-    ep.update_patches(image_set_dir, annotations, annotations_read_time=None, image_names=image_names)
+    # first make sure that training records are up to date, so that if the inference
+    # request is changing the patch data for a training image we will reset the loss record and the
+    # model will train later
+    changed_image_names = ep.update_patches(image_set_dir, annotations, image_status="completed_for_training")
+    if len(changed_image_names) > 0:
+        image_set_aux.update_training_tf_records(image_set_dir, changed_image_names, annotations)
+        image_set_aux.reset_loss_record(image_set_dir)
 
+    ep.update_patches(image_set_dir, annotations, image_names=image_names)
+
+    #image_set_aux.update_training_tf_records(image_set_dir, changed_images, annotations)
     image_set_aux.update_prediction_tf_records(image_set_dir, image_names=image_names)
     
     return yolov4_image_set_driver.predict(username, farm_name, field_name, mission_date, image_names=image_names, save_result=save_result)

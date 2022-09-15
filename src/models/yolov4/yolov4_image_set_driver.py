@@ -836,8 +836,11 @@ def train(root_dir): #farm_name, field_name, mission_date):
     #training_patch_dir = os.path.join(training_patches_dir, str(seq_num), "training")
     #validation_patch_dir = os.path.join(training_patches_dir, str(seq_num), "validation")
 
-    training_tf_record_paths = [os.path.join(training_dir, "training-patches-record.tfrec")]
-    validation_tf_record_paths = [os.path.join(training_dir, "validation-patches-record.tfrec")]
+    training_record_dir = os.path.join(training_dir, "training_tf_records")
+    validation_record_dir = os.path.join(training_dir, "validation_tf_records")
+
+    training_tf_record_paths = glob.glob(os.path.join(training_record_dir, "*.tfrec")) #[os.path.join(training_dir, "training-patches-record.tfrec")]
+    validation_tf_record_paths = glob.glob(os.path.join(validation_record_dir, "*.tfrec")) #[os.path.join(training_dir, "validation-patches-record.tfrec")]
 
     config = create_default_config()
     model_keys.add_general_keys(config)
@@ -991,15 +994,18 @@ def train(root_dir): #farm_name, field_name, mission_date):
         val_loss_metric.reset_states()
 
 
-        annotations_read_time = int(time.time())
+        # annotations_read_time = int(time.time())
 
         annotations_path = os.path.join(root_dir, "annotations", "annotations_w3c.json")
         annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-        changed = ep.update_patches(root_dir, annotations, annotations_read_time, image_status="completed_for_training")
-        if changed:
-            image_set_aux.update_training_tf_record(root_dir, annotations)
+        changed_image_names = ep.update_patches(root_dir, annotations, image_status="completed_for_training")
+        if len(changed_image_names) > 0:
+
+            image_set_aux.update_training_tf_records(root_dir, changed_image_names, annotations)
             image_set_aux.reset_loss_record(root_dir)
 
+            training_tf_record_paths = glob.glob(os.path.join(training_record_dir, "*.tfrec"))
+            validation_tf_record_paths = glob.glob(os.path.join(validation_record_dir, "*.tfrec"))
 
             train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
             val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)

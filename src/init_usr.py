@@ -136,6 +136,32 @@ def fix_k():
 
                 json_io.save_json(status_path, status)
 
+
+def delete_patches():
+
+    for usr_path in glob.glob(os.path.join("usr", "data", "*")):
+        username = os.path.basename(usr_path)
+        if username != "image_sets":
+            for farm_path in glob.glob(os.path.join(usr_path, "image_sets", "*")):
+                #farm_dir = os.path.basename(farm_path)
+                for field_path in glob.glob(os.path.join(farm_path, "*")):
+                    #field_dir = os.path.basename(field_path)
+                    for mission_path in glob.glob(os.path.join(field_path, "*")):
+                        #mission_dir = os.path.basename(mission_path)
+
+                        patches_dir = os.path.join(mission_path, "patches")
+                        shutil.rmtree(patches_dir)
+                        os.makedirs(patches_dir)
+
+                        training_dir = os.path.join(mission_path, "model", "training")
+                        training_patches_record_path = os.path.join(training_dir, "training-patches-record.tfrec")
+                        if os.path.exists(training_patches_record_path):
+                            os.remove(training_patches_record_path)
+
+                        validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
+                        if os.path.exists(validation_patches_record_path):
+                            os.remove(validation_patches_record_path)
+
 def fix_kaylie_sets():
 
     logging.basicConfig(level=logging.INFO)

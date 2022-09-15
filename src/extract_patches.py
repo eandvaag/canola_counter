@@ -17,14 +17,14 @@ from image_set import Image
 
 
 
-def update_patches(image_set_dir, annotations, annotations_read_time=None, image_names=None, image_status=None):
+def update_patches(image_set_dir, annotations, image_names=None, image_status=None):
     
     logger = logging.getLogger(__name__)
 
     if (image_names is None and image_status is None) or (image_names is not None and image_status is not None):
         raise RuntimeError("Only one of 'image_names' and 'image_status' should be None")
 
-    changed = False
+    changed_images = []
 
     images_dir = os.path.join(image_set_dir, "images")
     patches_dir = os.path.join(image_set_dir, "patches")
@@ -75,24 +75,28 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
         if image_name not in patch_data:
             update_image = True
             patch_data[image_name] = {}
-
         else:
-            if "update_time" not in patch_data[image_name] or "patches" not in patch_data[image_name]:
+
+            if patch_data[image_name]["saved_status"] != annotations[image_name]["status"]:
+                update_image = True # not optimal, because the patches might not need to be re-calculated
+
+
+            # if "update_time" not in patch_data[image_name] or "patches" not in patch_data[image_name]:
+            #     update_image = True
+            # else:
+            #     update_time = patch_data[image_name]["update_time"]
+            #     # print(annotations[image_name])
+            #     if update_time < annotations[image_name]["update_time"]:
+            #         update_image = True
+            #     else:
+            if len(patch_data[image_name]["patches"]) == 0:
                 update_image = True
             else:
-                update_time = patch_data[image_name]["update_time"]
-                # print(annotations[image_name])
-                if update_time < annotations[image_name]["update_time"]:
+                sample_patch_coords = patch_data[image_name]["patches"][0]["patch_coords"]
+                existing_patch_size = sample_patch_coords[2] - sample_patch_coords[0]
+                abs_patch_size_diff = abs(existing_patch_size - updated_patch_size)
+                if abs_patch_size_diff >= update_thresh:
                     update_image = True
-                else:
-                    if len(patch_data[image_name]["patches"]) == 0:
-                        update_image = True
-                    else:
-                        sample_patch_coords = patch_data[image_name]["patches"][0]["patch_coords"]
-                        existing_patch_size = sample_patch_coords[2] - sample_patch_coords[0]
-                        abs_patch_size_diff = abs(existing_patch_size - updated_patch_size)
-                        if abs_patch_size_diff >= update_thresh:
-                            update_image = True
 
 
         if update_image:
@@ -106,7 +110,7 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
                 patch_overlap_percent=50, 
                 include_patch_arrays=True)
 
-            logger.info("Writing patches for image {}".format(image_name))
+            logger.info("Writing patches for image {} (from: {})".format(image_name, image_set_dir))
             write_patches(patches_dir, patch_records)
 
             patch_records = extract_patch_records_from_image_tiled(
@@ -117,14 +121,16 @@ def update_patches(image_set_dir, annotations, annotations_read_time=None, image
                 include_patch_arrays=False)
 
             # annotations[]
+            patch_data[image_name]["saved_status"] = annotations[image_name]["status"]
             patch_data[image_name]["patches"] = patch_records
-            if annotations_read_time is not None:
-                patch_data[image_name]["update_time"] = annotations_read_time
-            changed = True
+            # if annotations_read_time is not None:
+                # patch_data[image_name]["update_time"] = annotations_read_time
+            changed_images.append(image_name)
+
             
     json_io.save_json(patch_data_path, patch_data)
 
-    return changed
+    return changed_images
 
 
 
