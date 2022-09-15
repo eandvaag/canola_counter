@@ -251,7 +251,7 @@ def get_num_annotations(annotations, require_completed_for_training=True):
 def get_patch_size(annotations):
     
 
-    typical_box_area = get_typical_box_area(annotations, measure="mean")
+    typical_box_area = get_typical_box_area(annotations, allowed_statuses=["completed_for_training"], measure="mean")
 
     #(40000 / 288) (90000 / 2296) 
 
@@ -265,14 +265,15 @@ def get_patch_size(annotations):
     return patch_size
     
 
-def get_typical_box_area(annotations, measure="mean"):
+def get_typical_box_area(annotations, allowed_statuses, measure):
     
     box_areas = []
-    for img_name in annotations.keys():
-        boxes = annotations[img_name]["boxes"]
-        if boxes.size > 0:
-            img_box_areas = ((boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])).tolist()
-            box_areas.extend(img_box_areas)
+    for image_name in annotations.keys():
+        if annotations[image_name]["status"] in allowed_statuses:
+            boxes = annotations[image_name]["boxes"]
+            if boxes.size > 0:
+                img_box_areas = ((boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])).tolist()
+                box_areas.extend(img_box_areas)
 
     if len(box_areas) == 0:
         raise RuntimeError("No annotations found.") 
