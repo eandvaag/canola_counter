@@ -18,41 +18,80 @@ from io_utils import json_io
 status_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/plant_detection/status_notification"
 results_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/plant_detection/results_notification"
 
-INITIALIZING = "initializing"
+# INITIALIZING = "initializing"
 IDLE = "idle"
 TRAINING = "training"
+FINISHED_TRAINING = "finished_training"
 PREDICTING = "predicting"
+FINISHED_PREDICTING = "finished_predicting"
+RESTARTING = "restarting"
+FINISHED_RESTARTING = "finished_restarting"
 
 
+def emit_scheduler_status_change(data):
 
-def notify(username, farm_name, field_name, mission_date, error=False, extra_items={}, results_notification=False):
-    #print("sending data", data)
+    #data = {}
 
-    logger = logging.getLogger(__name__)
+    emit(status_notification_url, data)
 
-    status_path = os.path.join("usr", "data", username, "image_sets",
-                                farm_name, field_name, mission_date, 
-                                "model", "status.json")
-    status = json_io.load_json(status_path)
+def emit_results_change(username, farm_name, field_name, mission_date):
 
     data = {
         "username": username,
         "farm_name": farm_name,
         "field_name": field_name,
         "mission_date": mission_date,
-        "error": error
     }
-    for k, v in status.items():
-        data[k] = v
-    for k, v in extra_items.items():
-        data[k] = v
 
-    # print(data)
+    emit(results_notification_url, data)
 
-    if results_notification:
-        url = results_notification_url
-    else:
-        url = status_notification_url
+
+# def notify(username, farm_name, field_name, mission_date, error=False, extra_items={}, results_notification=False):
+#     #print("sending data", data)
+
+#     logger = logging.getLogger(__name__)
+
+#     status_path = os.path.join("usr", "data", username, "image_sets",
+#                                 farm_name, field_name, mission_date, 
+#                                 "model", "status.json")
+#     status = json_io.load_json(status_path)
+
+#     data = {
+#         "username": username,
+#         "farm_name": farm_name,
+#         "field_name": field_name,
+#         "mission_date": mission_date,
+#         "error": error
+#     }
+#     for k, v in status.items():
+#         data[k] = v
+#     for k, v in extra_items.items():
+#         data[k] = v
+
+#     # print(data)
+
+#     if results_notification:
+#         url = results_notification_url
+#     else:
+#         url = status_notification_url
+#     response = requests.post(url, data=data)
+#     response.raise_for_status()  # raises exception when not a 2xx response
+#     if response.status_code != 200:
+#         logger.error("Response status code is not 200. Status code: {}".format(response.status_code))
+#         response = response.json()
+#         logger.error(response)
+
+#     response = response.json()
+#     if response["message"] != "received":
+#         logger.error("Response message is not 'received'.")
+#         logger.error(response)
+#         #exit()
+
+
+def emit(url, data):
+    logger = logging.getLogger(__name__)
+
+    logger.info("Emitting to {}".format(url))
     response = requests.post(url, data=data)
     response.raise_for_status()  # raises exception when not a 2xx response
     if response.status_code != 200:
@@ -64,9 +103,6 @@ def notify(username, farm_name, field_name, mission_date, error=False, extra_ite
     if response["message"] != "received":
         logger.error("Response message is not 'received'.")
         logger.error(response)
-        #exit()
-
-
 
 
 def check_for_predictions():

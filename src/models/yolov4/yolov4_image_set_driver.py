@@ -375,11 +375,11 @@ def update_loss_record(loss_record, key, cur_loss):
 
 
 
-def predict(username, farm_name, field_name, mission_date, image_names, save_result):
+def predict(image_set_dir, annotations_json, annotations, image_names, save_result):
 
     logger = logging.getLogger(__name__)
 
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+    #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
     model_dir = os.path.join(image_set_dir, "model")
     weights_dir = os.path.join(model_dir, "weights")
     predictions_dir = os.path.join(model_dir, "prediction")
@@ -389,9 +389,9 @@ def predict(username, farm_name, field_name, mission_date, image_names, save_res
     #patch_data_path = os.path.join(patches_dir, "patch_data.json")
     #patch_data = json_io.load_json(patch_data_path)
 
-    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    annotations_json = json_io.load_json(annotations_path)
-    annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
+    # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    # annotations_json = json_io.load_json(annotations_path)
+    # annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
 
     excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
     excess_green_record = json_io.load_json(excess_green_record_path)
@@ -675,11 +675,11 @@ def train_baseline(root_dir):
     ))
 
 
-    train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+    train_dataset, num_train_patches = train_data_loader.create_batched_dataset(
                                       take_percent=config["training"]["active"]["percent_of_training_set_used"])
     # if check_restart():
     #     return False
-    val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+    val_dataset, num_val_patches = val_data_loader.create_batched_dataset(
                                   take_percent=config["training"]["active"]["percent_of_validation_set_used"])
 
 
@@ -732,8 +732,8 @@ def train_baseline(root_dir):
     train_steps_per_epoch = np.sum([1 for _ in train_dataset])
     val_steps_per_epoch = np.sum([1 for _ in val_dataset])
 
-    logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
-                    config["arch"]["model_type"], config["model_name"], num_train_images, num_val_images))
+    logger.info("{} ('{}'): Starting to train with {} training patches and {} validation patches.".format(
+                    config["arch"]["model_type"], config["model_name"], num_train_patches, num_val_patches))
 
 
 
@@ -814,7 +814,7 @@ def train_baseline(root_dir):
 
 
 
-def train(root_dir): #farm_name, field_name, mission_date):
+def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
     
     logger = logging.getLogger(__name__)
 
@@ -862,11 +862,11 @@ def train(root_dir): #farm_name, field_name, mission_date):
     train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
     val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
 
-    train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+    train_dataset, num_train_patches = train_data_loader.create_batched_dataset(
                                       take_percent=config["training"]["active"]["percent_of_training_set_used"])
     # if check_restart():
     #     return False
-    val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+    val_dataset, num_val_patches = val_data_loader.create_batched_dataset(
                                   take_percent=config["training"]["active"]["percent_of_validation_set_used"])
 
 
@@ -924,8 +924,8 @@ def train(root_dir): #farm_name, field_name, mission_date):
         train_steps_per_epoch = np.sum([1 for _ in train_dataset])
         val_steps_per_epoch = np.sum([1 for _ in val_dataset])
 
-        logger.info("{} ('{}'): Starting to train with {} training images and {} validation images.".format(
-                        config["arch"]["model_type"], config["model_name"], num_train_images, num_val_images))
+        logger.info("{} ('{}'): Starting to train with {} training patches and {} validation patches.".format(
+                        config["arch"]["model_type"], config["model_name"], num_train_patches, num_val_patches))
 
 
         loss_record_path = os.path.join(training_dir, "loss_record.json")
@@ -998,10 +998,15 @@ def train(root_dir): #farm_name, field_name, mission_date):
 
         annotations_path = os.path.join(root_dir, "annotations", "annotations_w3c.json")
         annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
-        changed_image_names = ep.update_patches(root_dir, annotations, image_status="completed_for_training")
-        if len(changed_image_names) > 0:
+        training_image_names = []
+        for image_name in annotations.keys():
+            if annotations[image_name]["status"] == "completed_for_training":
+                training_image_names.append(image_name)
 
-            image_set_aux.update_training_tf_records(root_dir, changed_image_names, annotations)
+        changed_training_image_names = ep.update_patches(root_dir, annotations, image_names=training_image_names)
+        if len(changed_training_image_names) > 0:
+
+            image_set_aux.update_training_tf_records(root_dir, changed_training_image_names, annotations)
             image_set_aux.reset_loss_record(root_dir)
 
             training_tf_record_paths = glob.glob(os.path.join(training_record_dir, "*.tfrec"))
@@ -1010,10 +1015,10 @@ def train(root_dir): #farm_name, field_name, mission_date):
             train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
             val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
 
-            train_dataset, num_train_images = train_data_loader.create_batched_dataset(
+            train_dataset, num_train_patches = train_data_loader.create_batched_dataset(
                                             take_percent=config["training"]["active"]["percent_of_training_set_used"])
 
-            val_dataset, num_val_images = val_data_loader.create_batched_dataset(
+            val_dataset, num_val_patches = val_data_loader.create_batched_dataset(
                                         take_percent=config["training"]["active"]["percent_of_validation_set_used"])
 
 
@@ -1023,7 +1028,8 @@ def train(root_dir): #farm_name, field_name, mission_date):
             shutil.copyfile(best_weights_path, cur_weights_path)
             return True
 
-        if isa.check_for_predictions():
+        #if isa.check_for_predictions():
+        if sch_ctx["prediction_queue"].size() > 0 or sch_ctx["restart_queue"].size() > 0:
             return False
 
         if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):

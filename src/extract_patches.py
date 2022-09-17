@@ -17,14 +17,14 @@ from image_set import Image
 
 
 
-def update_patches(image_set_dir, annotations, image_names=None, image_status=None):
+def update_patches(image_set_dir, annotations, image_names): #=None, image_status=None):
     
     logger = logging.getLogger(__name__)
 
-    if (image_names is None and image_status is None) or (image_names is not None and image_status is not None):
-        raise RuntimeError("Only one of 'image_names' and 'image_status' should be None")
+    # if (image_names is None and image_status is None) or (image_names is not None and image_status is not None):
+    #     raise RuntimeError("Only one of 'image_names' and 'image_status' should be None")
 
-    changed_images = []
+    changed_training_image_names = []
 
     images_dir = os.path.join(image_set_dir, "images")
     patches_dir = os.path.join(image_set_dir, "patches")
@@ -35,11 +35,11 @@ def update_patches(image_set_dir, annotations, image_names=None, image_status=No
     # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
     # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-    if image_status is not None:
-        image_names = []
-        for image_name in annotations.keys():
-            if annotations[image_name]["status"] == image_status:
-                image_names.append(image_name)
+    # if image_status is not None:
+    #     image_names = []
+    #     for image_name in annotations.keys():
+    #         if annotations[image_name]["status"] == image_status:
+    #             image_names.append(image_name)
 
 
     num_annotations = w3c_io.get_num_annotations(annotations)
@@ -77,9 +77,7 @@ def update_patches(image_set_dir, annotations, image_names=None, image_status=No
             patch_data[image_name] = {}
         else:
 
-            if patch_data[image_name]["saved_status"] != annotations[image_name]["status"]:
-                update_image = True # not optimal, because the patches might not need to be re-calculated
-
+            
 
             # if "update_time" not in patch_data[image_name] or "patches" not in patch_data[image_name]:
             #     update_image = True
@@ -125,12 +123,22 @@ def update_patches(image_set_dir, annotations, image_names=None, image_status=No
             patch_data[image_name]["patches"] = patch_records
             # if annotations_read_time is not None:
                 # patch_data[image_name]["update_time"] = annotations_read_time
-            changed_images.append(image_name)
+            if annotations[image_name]["status"] == "completed_for_training":
+                changed_training_image_names.append(image_name)
+
+
+        else:
+            if annotations[image_name]["status"] == "completed_for_training" and \
+                patch_data[image_name]["saved_status"] != "completed_for_training":
+
+                patch_data[image_name]["saved_status"] = "completed_for_training"
+                changed_training_image_names.append(image_name)
+
 
             
     json_io.save_json(patch_data_path, patch_data)
 
-    return changed_images
+    return changed_training_image_names
 
 
 

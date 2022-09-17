@@ -34,7 +34,7 @@ def reset_loss_record(image_set_dir):
 
 #def update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names):
 
-def update_training_tf_records(image_set_dir, changed_image_names, annotations):
+def update_training_tf_records(image_set_dir, changed_training_image_names, annotations):
 
     logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def update_training_tf_records(image_set_dir, changed_image_names, annotations):
         training_tf_record_path = os.path.join(training_records_dir, image_name + ".tfrec")
         validation_tf_record_path = os.path.join(validation_records_dir, image_name + ".tfrec")
 
-        if annotations[image_name]["status"] == "completed_for_training" and image_name in changed_image_names:
+        if annotations[image_name]["status"] == "completed_for_training" and image_name in changed_training_image_names:
 
             logger.info("Writing training and validation records for image {} (from: {})".format(image_name, image_set_dir))
 

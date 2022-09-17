@@ -485,10 +485,10 @@ def check_train(username, farm_name, field_name, mission_date):
 
 
                 #changed = update_patches(username, farm_name, field_name, mission_date, image_status="completed_for_training")
-                changed_image_names = ep.update_patches(image_set_dir, annotations, image_status="completed_for_training")
+                changed_training_image_names = ep.update_patches(image_set_dir, annotations, image_status="completed_for_training")
 
                 needs_training_with_cur_set = False
-                if len(changed_image_names) == 0:
+                if len(changed_training_image_names) == 0:
                     loss_record_path = os.path.join(training_dir, "loss_record.json")
                     loss_record = json_io.load_json(loss_record_path)
                     needs_training_with_cur_set = loss_record["validation_loss"]["epochs_since_improvement"] < yolov4_image_set_driver.VALIDATION_IMPROVEMENT_TOLERANCE
@@ -517,7 +517,7 @@ def check_train(username, farm_name, field_name, mission_date):
 
 
 
-                if needs_training_with_cur_set or len(changed_image_names) > 0: #needs_training_with_new_set:
+                if needs_training_with_cur_set or len(changed_training_image_names) > 0: #needs_training_with_new_set:
 
                     status_path = os.path.join(image_set_dir, "model", "status.json")
                     status = json_io.load_json(status_path)
@@ -531,8 +531,8 @@ def check_train(username, farm_name, field_name, mission_date):
 
                     # create_patches_if_needed(username, farm_name, field_name, mission_date, training_image_names)
 
-                    if len(changed_image_names) > 0:
-                        image_set_aux.update_training_tf_records(image_set_dir, changed_image_names, annotations)
+                    if len(changed_training_image_names) > 0:
+                        image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
                         #update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names)
                         image_set_aux.reset_loss_record(image_set_dir)
 
@@ -605,9 +605,9 @@ def predict_on_images(username, farm_name, field_name, mission_date, image_names
     # first make sure that training records are up to date, so that if the inference
     # request is changing the patch data for a training image we will reset the loss record and the
     # model will train later
-    changed_image_names = ep.update_patches(image_set_dir, annotations, image_status="completed_for_training")
-    if len(changed_image_names) > 0:
-        image_set_aux.update_training_tf_records(image_set_dir, changed_image_names, annotations)
+    changed_training_image_names = ep.update_patches(image_set_dir, annotations, image_status="completed_for_training")
+    if len(changed_training_image_names) > 0:
+        image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
         image_set_aux.reset_loss_record(image_set_dir)
 
     ep.update_patches(image_set_dir, annotations, image_names=image_names)
