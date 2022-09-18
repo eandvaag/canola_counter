@@ -29,7 +29,6 @@ sch_ctx = {}
 
 app = Flask(__name__)
 
-# #pending_requests = []
 
 @app.route('/plant_detection/add_request', methods=['POST'])
 def add_request():
@@ -121,15 +120,27 @@ def needs_training(image_set_dir):
 
 def check_train(username, farm_name, field_name, mission_date):
     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+    training_dir = os.path.join(image_set_dir, "model", "training")
 
-    if needs_training(image_set_dir):
+    if not needs_training(image_set_dir):
+        return
 
-        sch_ctx["training_queue"].enqueue({
-            "username": username,
-            "farm_name": farm_name,
-            "field_name": field_name,
-            "mission_date": mission_date
-        })
+    usr_block_path = os.path.join(training_dir, "usr_block.json")
+    sys_block_path = os.path.join(training_dir, "sys_block.json")
+    if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+        return
+
+    restart_req_path = os.path.join(training_dir, "restart_request.json")
+    if os.path.exists(restart_req_path):
+        return
+
+
+    sch_ctx["training_queue"].enqueue({
+        "username": username,
+        "farm_name": farm_name,
+        "field_name": field_name,
+        "mission_date": mission_date
+    })
 
 
 def process_train(item):
@@ -182,8 +193,8 @@ def process_train(item):
                 if os.path.exists(restart_req_path):
                     return False
 
-                # NOTIFY: STARTING TO TRAIN ON item
-                logging.info("STARTING TO TRAIN ON {}".format(item))
+
+                logging.info("Starting to train {}".format(item))
                 set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
                 
                 
@@ -197,8 +208,7 @@ def process_train(item):
 
                     set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING)
 
-                    # NOTIFY: FINISHED TRAINING ON item
-                    logger.info("FINISHED TRAINING ON {}".format(item))
+                    logger.info("Finished training {}".format(item))
 
                     return False
 
@@ -310,7 +320,7 @@ def process_predict(item):
                 prediction_request_path = prediction_request_paths[0]
                 request = json_io.load_json(prediction_request_path)
 
-                logger.info("STARTING TO PREDICT ON: {}".format(item))
+                logger.info("Starting to predict for: {}".format(item))
                 set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING)
 
                 end_time = predict_on_images(
@@ -327,7 +337,7 @@ def process_predict(item):
                 if request["save_result"]:
                     json_io.save_json(os.path.join(model_dir, "results", str(end_time), "request.json"), request)
 
-                logger.info("FINISHED PREDICTING ON {}".format(item))
+                logger.info("Finished predicting for {}".format(item))
                 set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
                                 extra_items={"prediction_image_names": ",".join(request["image_names"])})
 
@@ -407,7 +417,7 @@ def process_restart(item):
     restart_req_path = os.path.join(model_dir, "training", "restart_request.json")
     if os.path.exists(restart_req_path):
 
-        logger.info("RESTARTING {}".format(item))
+        logger.info("Restarting {}".format(item))
         set_scheduler_status(username, farm_name, field_name, mission_date, isa.RESTARTING)
 
         
@@ -482,8 +492,6 @@ def process_restart(item):
 
         isa.emit_results_change(username, farm_name, field_name, mission_date)
 
-        # set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_RESTARTING)
-
         return
 
 
@@ -526,7 +534,7 @@ def sweep():
 
 
 
-            if (sch_ctx["restart_queue"].size() > 0 or sch_ctx["prediction_queue"].size() > 0) or sch_ctx["training_queue"].size() > 0:
+            if an_item_is_available():
                 logger.info("Sweeper is notifying")
                 with cv:
                     cv.notify_all()
@@ -576,13 +584,13 @@ def drain():
 
         if (sch_ctx["restart_queue"].size() == 0 and sch_ctx["prediction_queue"].size() == 0) and sch_ctx["training_queue"].size() == 0:
 
-            # NOTIFY: IDLE
             logger.info("Drain has finished")
             set_scheduler_status("---", "---", "---", "---", isa.IDLE)
             return
 
              
-
+def an_item_is_available():
+    return (sch_ctx["restart_queue"].size() > 0 or sch_ctx["prediction_queue"].size() > 0) or sch_ctx["training_queue"].size() > 0
 
 
 def work():
@@ -594,7 +602,9 @@ def work():
         drain()
         logger.info("Worker waiting")
         with cv:
-            cv.wait()
+            #while not an_item_is_available():
+            #    cv.wait()
+            cv.wait_for(an_item_is_available)
         logger.info("Worker woken up")
 
 
