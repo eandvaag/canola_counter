@@ -30,10 +30,10 @@ sch_ctx = {}
 app = Flask(__name__)
 
 
-@app.route('/canola_counter/add_request', methods=['POST'])
+@app.route(os.environ.get("CC_PATH") + '/add_request', methods=['POST'])
 def add_request():
     logger = logging.getLogger(__name__)
-    logger.info("POST to /canola_counter/add_request")
+    logger.info("POST to add_request")
     content_type = request.headers.get('Content-Type')
 
     if (content_type == 'application/json'):

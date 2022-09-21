@@ -9,9 +9,9 @@ from io_utils import json_io
 #import image_set_model as ism
 
 
+status_notification_url = "https://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + os.environ.get("CC_PATH") + "/status_notification"
+results_notification_url = "https://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + os.environ.get("CC_PATH") + "/results_notification"
 
-status_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/canola_counter/status_notification"
-results_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/canola_counter/results_notification"
 
 # INITIALIZING = "initializing"
 IDLE = "idle"
@@ -87,7 +87,9 @@ def emit(url, data):
     logger = logging.getLogger(__name__)
 
     logger.info("Emitting to {}".format(url))
-    response = requests.post(url, data=data)
+
+
+    response = requests.post(url, data=data, verify=False)
     response.raise_for_status()  # raises exception when not a 2xx response
     if response.status_code != 200:
         logger.error("Response status code is not 200. Status code: {}".format(response.status_code))
