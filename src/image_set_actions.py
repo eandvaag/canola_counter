@@ -9,14 +9,9 @@ from io_utils import json_io
 #import image_set_model as ism
 
 
-#status_notification_url = "http://172.16.1.71:8110/plant_detection/status_notification"
-#results_notification_url = "http://172.16.1.71:8110/plant_detection/results_notification"
 
-# status_notification_url = "http://172.16.1.75:8110/plant_detection/status_notification"
-# results_notification_url = "http://172.16.1.75:8110/plant_detection/results_notification"
-
-status_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/plant_detection/status_notification"
-results_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/plant_detection/results_notification"
+status_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/canola_counter/status_notification"
+results_notification_url = "http://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + "/canola_counter/results_notification"
 
 # INITIALIZING = "initializing"
 IDLE = "idle"

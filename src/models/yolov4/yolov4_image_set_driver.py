@@ -429,7 +429,7 @@ def predict(image_set_dir, annotations_json, annotations, image_names, save_resu
 
         steps = np.sum([1 for _ in tf_dataset])
 
-        logger.info("{} ('{}'): Running inference on {} images.".format(config["arch"]["model_type"], 
+        logger.info("{} ('{}'): Running inference on {} patches.".format(config["arch"]["model_type"], 
                                                                         config["model_name"], 
                                                                         tf_dataset_size))
 
