@@ -173,6 +173,8 @@ def process_train(item):
                     # restart_model(username, farm_name, field_name, mission_date)
                     return False
 
+                logging.info("Starting to train {}".format(item))
+                set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
 
                 annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
                 annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
@@ -192,11 +194,6 @@ def process_train(item):
                     return False
                 if os.path.exists(restart_req_path):
                     return False
-
-
-                logging.info("Starting to train {}".format(item))
-                set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
-                
                 
                 training_finished = yolov4_image_set_driver.train(image_set_dir, sch_ctx)
                 if training_finished:
@@ -585,7 +582,11 @@ def drain():
         if (sch_ctx["restart_queue"].size() == 0 and sch_ctx["prediction_queue"].size() == 0) and sch_ctx["training_queue"].size() == 0:
 
             logger.info("Drain has finished")
-            set_scheduler_status("---", "---", "---", "---", isa.IDLE)
+
+            scheduler_status_path = os.path.join("usr", "shared", "scheduler_status.json")
+            scheduler_status = json_io.load_json(scheduler_status_path)
+            if scheduler_status["status"] != isa.IDLE:
+                set_scheduler_status("---", "---", "---", "---", isa.IDLE)
             return
 
              
