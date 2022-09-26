@@ -14,14 +14,14 @@ results_notification_url = "https://" + os.environ.get("CC_IP") + ":" + os.envir
 
 
 # INITIALIZING = "initializing"
-IDLE = "idle"
-TRAINING = "training"
-FINISHED_TRAINING = "finished_training"
-PREDICTING = "predicting"
-FINISHED_PREDICTING = "finished_predicting"
-RESTARTING = "restarting"
-FINISHED_RESTARTING = "finished_restarting"
-
+IDLE = "Idle"
+TRAINING = "Training"
+FINISHED_TRAINING = "Finished Training"
+PREDICTING = "Predicting"
+FINISHED_PREDICTING = "Finished Predicting"
+RESTARTING = "Restarting"
+FINISHED_RESTARTING = "Finished Restarting"
+DETERMINING_PATCH_SIZE = "Determining Patch Size"
 
 def emit_scheduler_status_change(data):
 

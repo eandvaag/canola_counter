@@ -375,7 +375,9 @@ def update_loss_record(loss_record, key, cur_loss):
 
 
 
-def predict(image_set_dir, annotations_json, annotations, image_names, save_result):
+
+
+def predict(image_set_dir, annotations_json, annotations, image_names, save_result, save_image_predictions=True):
 
     logger = logging.getLogger(__name__)
 
@@ -593,14 +595,14 @@ def predict(image_set_dir, annotations_json, annotations, image_names, save_resu
         #inference_metrics.collect_metrics(all_image_names, metrics, predictions, dataset, config)
     
 
-
-    for image_name in image_names:
-        image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
-        predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
-        # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
-        w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
-        # if image_name in metrics:
-        #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
+    if save_image_predictions:
+        for image_name in image_names:
+            image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+            predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
+            # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
+            w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
+            # if image_name in metrics:
+            #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
 
 
     end_time = int(time.time())
@@ -622,7 +624,7 @@ def predict(image_set_dir, annotations_json, annotations, image_names, save_resu
         #                                  image_predictions, annotations, excess_green_record, metrics)
         
         
-    return end_time
+    return end_time, image_predictions
 
 
 

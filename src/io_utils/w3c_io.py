@@ -248,22 +248,54 @@ def get_num_annotations(annotations, require_completed_for_training=True):
     return num_annotations
 
 
+def typical_box_area_to_patch_size(typical_box_area):
+    patch_area = typical_box_area * (90000 / 2296)
+    patch_size = round(m.sqrt(patch_area))
+    return patch_size 
+
+def typical_box_hyp_to_patch_size(typical_box_hyp):
+
+    # patch_size = round(typical_box_hyp * (300 / 67.88))
+    patch_hyp = (424.26 - (67.88 - typical_box_hyp))
+    patch_size = round(patch_hyp / m.sqrt(2))
+    return patch_size 
+
+
 def get_patch_size(annotations):
     
 
     typical_box_area = get_typical_box_area(annotations, allowed_statuses=["completed_for_training"], measure="mean")
-
+    #typical_box_hyp = get_typical_box_hyp(annotations, allowed_statuses=["completed_for_training"], measure="mean")
     #(40000 / 288) (90000 / 2296) 
 
 
     #slope = (90000 - 40000) / (2296 - 288)
     #patch_area = slope * (median_box_area - 288) + 40000
-
-    patch_area = typical_box_area * (90000 / 2296)
-    patch_size = round(m.sqrt(patch_area))
+    patch_size = typical_box_area_to_patch_size(typical_box_area)
+    #patch_size = typical_box_hyp_to_patch_size(typical_box_hyp)
+    
     # print("patch_size", patch_size)
     return patch_size
-    
+
+
+def get_typical_box_hyp(annotations, allowed_statuses=["completed_for_training"], measure="mean"):
+    box_hyps = []
+    for image_name in annotations.keys():
+        if annotations[image_name]["status"] in allowed_statuses:
+            boxes = annotations[image_name]["boxes"]
+            if boxes.size > 0:
+                img_box_hyps = (np.sqrt((boxes[:, 3] - boxes[:, 1]) ** 2 + (boxes[:, 2] - boxes[:, 0]) ** 2)).tolist()
+                box_hyps.extend(img_box_hyps)
+
+    if len(box_hyps) == 0:
+        raise RuntimeError("No annotations found.") 
+
+    if measure == "mean":
+        return np.mean(box_hyps)
+    elif measure == "median":
+        return np.median(box_hyps)
+    else:
+        raise RuntimeError("Unknown measure")
 
 def get_typical_box_area(annotations, allowed_statuses, measure):
     

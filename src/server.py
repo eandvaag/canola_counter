@@ -184,7 +184,8 @@ def process_train(item):
                     if annotations[image_name]["status"] == "completed_for_training":
                         training_image_names.append(image_name) 
 
-                changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names)
+                updated_patch_size = get_updated_patch_size(username, farm_name, field_name, mission_date, annotations)
+                changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
 
                 if len(changed_training_image_names) > 0:
                     image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
@@ -260,7 +261,41 @@ def check_predict(username, farm_name, field_name, mission_date):
             return
 
 
+
+
+def get_updated_patch_size(username, farm_name, field_name, mission_date, annotations):
+
+    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+
+    num_annotations = w3c_io.get_num_annotations(annotations)
+    if num_annotations < 500:
+        patch_size_estimate_record_path = os.path.join(image_set_dir, "patches", "patch_size_estimate_record.json")
+        if os.path.exists(patch_size_estimate_record_path):
+            patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
+            updated_patch_size = patch_size_estimate_record["patch_size_estimate"]
+        else:
+            set_scheduler_status(username, farm_name, field_name, mission_date, isa.DETERMINING_PATCH_SIZE)
+            updated_patch_size = ep.estimate_patch_size(image_set_dir, annotations)
+            patch_size_estimate_record = {"patch_size_estimate": updated_patch_size}
+            json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
+
+        # num_annotations = w3c_io.get_num_annotations(annotations)
+
+        # if num_annotations < 500:
+            
+        #     updated_patch_size = estimate_patch_size(image_set_dir, annotations)
+    else:
+        try:
+            updated_patch_size = w3c_io.get_patch_size(annotations)
+        except RuntimeError:
+            updated_patch_size = ep.DEFAULT_PATCH_SIZE
+
+
+    return updated_patch_size
+
 def predict_on_images(username, farm_name, field_name, mission_date, image_names, save_result):
+
+    logger = logging.getLogger(__name__)
 
     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
@@ -274,19 +309,28 @@ def predict_on_images(username, farm_name, field_name, mission_date, image_names
         if annotations[image_name]["status"] == "completed_for_training":
             training_image_names.append(image_name) 
 
+
+
+    updated_patch_size = get_updated_patch_size(username, farm_name, field_name, mission_date, annotations)
+
+    logger.info("Starting to predict for: {}/{}/{}/{}".format(username, farm_name, field_name, mission_date))
+    set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING)
+
     # first make sure that training records are up to date, so that if the inference
     # request is changing the patch data for a training image we will reset the loss record and the
     # model will train later
-    changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names)
+    changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
     if len(changed_training_image_names) > 0:
         image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
         image_set_aux.reset_loss_record(image_set_dir)
 
-    ep.update_patches(image_set_dir, annotations, image_names=image_names)
+    ep.update_patches(image_set_dir, annotations, image_names, updated_patch_size)
 
     image_set_aux.update_prediction_tf_records(image_set_dir, image_names=image_names)
     
-    return yolov4_image_set_driver.predict(image_set_dir, annotations_json, annotations, image_names=image_names, save_result=save_result)
+    end_time, _ = yolov4_image_set_driver.predict(image_set_dir, annotations_json, annotations, image_names=image_names, save_result=save_result)
+
+    return end_time
 
 
 def process_predict(item):
@@ -317,8 +361,7 @@ def process_predict(item):
                 prediction_request_path = prediction_request_paths[0]
                 request = json_io.load_json(prediction_request_path)
 
-                logger.info("Starting to predict for: {}".format(item))
-                set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING)
+                
 
                 end_time = predict_on_images(
                         username,
@@ -416,7 +459,6 @@ def process_restart(item):
 
         logger.info("Restarting {}".format(item))
         set_scheduler_status(username, farm_name, field_name, mission_date, isa.RESTARTING)
-
         
         loss_record_path = os.path.join(model_dir, "training", "loss_record.json")
 
@@ -467,9 +509,16 @@ def process_restart(item):
             os.makedirs(validation_records_dir)
 
         patches_dir = os.path.join(image_set_dir, "patches")
+        patch_size_estimate_record_path = os.path.join(patches_dir, "patch_size_estimate_record.json")
+        patch_size_estimate_record = None
+        if os.path.exists(patch_size_estimate_record_path):
+            patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
+
         shutil.rmtree(patches_dir)
         os.makedirs(patches_dir)
 
+        if patch_size_estimate_record is not None:
+            json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
 
 
         annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
@@ -493,7 +542,7 @@ def process_restart(item):
 
 
 def one_pass():
-
+    logger = logging.getLogger(__name__)
     for username_path in glob.glob(os.path.join("usr", "data", "*")):
         username = os.path.basename(username_path)
         for user_dir in glob.glob(os.path.join(username_path, "*")):
@@ -504,10 +553,27 @@ def one_pass():
                         field_name = os.path.basename(field_path)
                         for mission_path in glob.glob(os.path.join(field_path, "*")):
                             mission_date = os.path.basename(mission_path)
-
-                            check_restart(username, farm_name, field_name, mission_date)
-                            check_predict(username, farm_name, field_name, mission_date)
-                            check_train(username, farm_name, field_name, mission_date)
+                            try:
+                                check_restart(username, farm_name, field_name, mission_date)
+                            except Exception as e:
+                                trace = traceback.format_exc()
+                                logger.error("Exception occurred while performing pass (check_restart)")
+                                logger.error(e)
+                                logger.error(trace)
+                            try:
+                                check_predict(username, farm_name, field_name, mission_date)
+                            except Exception as e:
+                                trace = traceback.format_exc()
+                                logger.error("Exception occurred while performing pass (check_predict)")
+                                logger.error(e)
+                                logger.error(trace)
+                            try:                            
+                                check_train(username, farm_name, field_name, mission_date)
+                            except Exception as e:
+                                trace = traceback.format_exc()
+                                logger.error("Exception occurred while performing pass (check_train)")
+                                logger.error(e)
+                                logger.error(trace)
 
 
 
@@ -525,7 +591,7 @@ def sweep():
                 one_pass()
             except Exception as e:
                 trace = traceback.format_exc()
-                logger.error("Exception occurred while draining queue")
+                logger.error("Exception occurred during sweep")
                 logger.error(e)
                 logger.error(trace)
 
