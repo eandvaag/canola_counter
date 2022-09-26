@@ -268,22 +268,18 @@ def get_updated_patch_size(username, farm_name, field_name, mission_date, annota
     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
     num_annotations = w3c_io.get_num_annotations(annotations)
-    if num_annotations < 500:
-        patch_size_estimate_record_path = os.path.join(image_set_dir, "patches", "patch_size_estimate_record.json")
-        if os.path.exists(patch_size_estimate_record_path):
-            patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
-            updated_patch_size = patch_size_estimate_record["patch_size_estimate"]
-        else:
-            set_scheduler_status(username, farm_name, field_name, mission_date, isa.DETERMINING_PATCH_SIZE)
-            updated_patch_size = ep.estimate_patch_size(image_set_dir, annotations)
-            patch_size_estimate_record = {"patch_size_estimate": updated_patch_size}
-            json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
+    if num_annotations < 100:
+        updated_patch_size = ep.DEFAULT_PATCH_SIZE
+        # patch_size_estimate_record_path = os.path.join(image_set_dir, "patches", "patch_size_estimate_record.json")
+        # if os.path.exists(patch_size_estimate_record_path):
+        #     patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
+        #     updated_patch_size = patch_size_estimate_record["patch_size_estimate"]
+        # else:
+        #     set_scheduler_status(username, farm_name, field_name, mission_date, isa.DETERMINING_PATCH_SIZE)
+        #     updated_patch_size = ep.estimate_patch_size(image_set_dir, annotations)
+        #     patch_size_estimate_record = {"patch_size_estimate": updated_patch_size}
+        #     json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
 
-        # num_annotations = w3c_io.get_num_annotations(annotations)
-
-        # if num_annotations < 500:
-            
-        #     updated_patch_size = estimate_patch_size(image_set_dir, annotations)
     else:
         try:
             updated_patch_size = w3c_io.get_patch_size(annotations)
@@ -509,16 +505,16 @@ def process_restart(item):
             os.makedirs(validation_records_dir)
 
         patches_dir = os.path.join(image_set_dir, "patches")
-        patch_size_estimate_record_path = os.path.join(patches_dir, "patch_size_estimate_record.json")
-        patch_size_estimate_record = None
-        if os.path.exists(patch_size_estimate_record_path):
-            patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
+        # patch_size_estimate_record_path = os.path.join(patches_dir, "patch_size_estimate_record.json")
+        # patch_size_estimate_record = None
+        # if os.path.exists(patch_size_estimate_record_path):
+            # patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
 
         shutil.rmtree(patches_dir)
         os.makedirs(patches_dir)
 
-        if patch_size_estimate_record is not None:
-            json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
+        # if patch_size_estimate_record is not None:
+            # json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
 
 
         annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")

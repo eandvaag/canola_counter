@@ -16,7 +16,7 @@ def run_baseline_request():
     logging.basicConfig(level=logging.INFO)
 
     request = {
-        "baseline_name": "p2irc_baseline_linear", #full_yolov4_8_sets_0",
+        "baseline_name": "p2irc_baseline_fixed_416", #full_yolov4_8_sets_0",
         #                  "UNI::LowN1::2021-06-07::"
         #                  "BlaineLake::HornerWest::2021-06-09::" +
         #                  "Saskatoon::Norheim1::2021-05-26::" +

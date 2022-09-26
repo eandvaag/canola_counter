@@ -132,7 +132,8 @@ def handle_resume_direct_baseline_request(baseline_name):
 
 
 def handle_direct_baseline_request(request, extra_records=None):
-
+    logger = logging.getLogger(__name__)
+    
     baseline_name = request["baseline_name"]
 
     # baseline_dir = os.path.join("usr", "data", "baselines", baseline_name) #"training", baseline_name)
@@ -163,6 +164,8 @@ def handle_direct_baseline_request(request, extra_records=None):
 
     all_records = []
     for image_set in request["image_sets"]:
+        logger.info("Baseline: Preparing patches from {}".format(image_set))
+
         username = image_set["username"]
         farm_name = image_set["farm_name"]
         field_name = image_set["field_name"]
@@ -174,7 +177,7 @@ def handle_direct_baseline_request(request, extra_records=None):
         annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
         annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-        patch_size = w3c_io.get_patch_size(annotations)
+        patch_size = 416 #w3c_io.get_patch_size(annotations)
 
         #patch_sizes = [patch_size - 50, patch_size, patch_size + 50]
 
