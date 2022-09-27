@@ -119,15 +119,15 @@ def handle_resume_direct_baseline_request(baseline_name):
     logger = logging.getLogger(__name__)
     logger.info("Resuming baseline model '{}'".format(baseline_name))
 
-    baseline_dir = os.path.join("usr", "data", "baselines", baseline_name)
+    baseline_dir = os.path.join("usr", "additional", "baselines", baseline_name)
     model_dir = os.path.join(baseline_dir, "model")
     weights_dir = os.path.join(model_dir, "weights")
     assert os.path.exists(baseline_dir)
 
-    yolov4_image_set_driver.train(baseline_dir)
+    yolov4_image_set_driver.train_baseline(baseline_dir)
 
     shutil.move(os.path.join(weights_dir, "best_weights.h5"),
-                os.path.join("usr", "data", "baselines", baseline_name + ".h5"))
+                os.path.join("usr", "additional", "baselines", baseline_name + ".h5"))
     shutil.rmtree(baseline_dir)
 
 
