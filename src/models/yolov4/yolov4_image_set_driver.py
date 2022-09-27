@@ -820,6 +820,8 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
     
     logger = logging.getLogger(__name__)
 
+    
+
     start_time = int(time.time())
 
     tf.keras.backend.clear_session()
@@ -1005,7 +1007,8 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
             if annotations[image_name]["status"] == "completed_for_training":
                 training_image_names.append(image_name)
 
-        changed_training_image_names = ep.update_patches(root_dir, annotations, image_names=training_image_names)
+        updated_patch_size = get_updated_patch_size(root_dir, annotations)
+        changed_training_image_names = ep.update_patches(root_dir, annotations, training_image_names, updated_patch_size)
         if len(changed_training_image_names) > 0:
 
             image_set_aux.update_training_tf_records(root_dir, changed_training_image_names, annotations)

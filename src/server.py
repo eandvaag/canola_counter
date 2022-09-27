@@ -184,7 +184,7 @@ def process_train(item):
                     if annotations[image_name]["status"] == "completed_for_training":
                         training_image_names.append(image_name) 
 
-                updated_patch_size = get_updated_patch_size(username, farm_name, field_name, mission_date, annotations)
+                updated_patch_size = get_updated_patch_size(image_set_dir, annotations)
                 changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
 
                 if len(changed_training_image_names) > 0:
@@ -263,9 +263,9 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 
 
-def get_updated_patch_size(username, farm_name, field_name, mission_date, annotations):
+def get_updated_patch_size(image_set_dir, annotations):
 
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+    #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
     num_annotations = w3c_io.get_num_annotations(annotations)
     if num_annotations < 100:
@@ -289,12 +289,11 @@ def get_updated_patch_size(username, farm_name, field_name, mission_date, annota
 
     return updated_patch_size
 
-def predict_on_images(username, farm_name, field_name, mission_date, image_names, save_result):
+def predict_on_images(image_set_dir, image_names, save_result):
 
     logger = logging.getLogger(__name__)
 
-    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-
+    #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
     annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
     annotations_json = json_io.load_json(annotations_path)
@@ -306,11 +305,7 @@ def predict_on_images(username, farm_name, field_name, mission_date, image_names
             training_image_names.append(image_name) 
 
 
-
-    updated_patch_size = get_updated_patch_size(username, farm_name, field_name, mission_date, annotations)
-
-    logger.info("Starting to predict for: {}/{}/{}/{}".format(username, farm_name, field_name, mission_date))
-    set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING)
+    updated_patch_size = get_updated_patch_size(image_set_dir, annotations)
 
     # first make sure that training records are up to date, so that if the inference
     # request is changing the patch data for a training image we will reset the loss record and the
@@ -357,13 +352,12 @@ def process_predict(item):
                 prediction_request_path = prediction_request_paths[0]
                 request = json_io.load_json(prediction_request_path)
 
-                
+                logger.info("Starting to predict for {}".format(item))
+                set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING)
+                            
 
                 end_time = predict_on_images(
-                        username,
-                        farm_name,
-                        field_name,
-                        mission_date,
+                        image_set_dir,
                         request["image_names"],
                         request["save_result"]
                 )
@@ -673,6 +667,8 @@ def work():
 
 
 if __name__ == "__main__":
+
+    #os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
     logging.basicConfig(level=logging.INFO)
 
