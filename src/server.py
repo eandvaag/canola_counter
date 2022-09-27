@@ -184,7 +184,7 @@ def process_train(item):
                     if annotations[image_name]["status"] == "completed_for_training":
                         training_image_names.append(image_name) 
 
-                updated_patch_size = get_updated_patch_size(image_set_dir, annotations)
+                updated_patch_size = ep.get_updated_patch_size(annotations)
                 changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
 
                 if len(changed_training_image_names) > 0:
@@ -263,32 +263,6 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 
 
-def get_updated_patch_size(image_set_dir, annotations):
-
-    #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-
-    num_annotations = w3c_io.get_num_annotations(annotations)
-    if num_annotations < 100:
-        updated_patch_size = ep.DEFAULT_PATCH_SIZE
-        # patch_size_estimate_record_path = os.path.join(image_set_dir, "patches", "patch_size_estimate_record.json")
-        # if os.path.exists(patch_size_estimate_record_path):
-        #     patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
-        #     updated_patch_size = patch_size_estimate_record["patch_size_estimate"]
-        # else:
-        #     set_scheduler_status(username, farm_name, field_name, mission_date, isa.DETERMINING_PATCH_SIZE)
-        #     updated_patch_size = ep.estimate_patch_size(image_set_dir, annotations)
-        #     patch_size_estimate_record = {"patch_size_estimate": updated_patch_size}
-        #     json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
-
-    else:
-        try:
-            updated_patch_size = w3c_io.get_patch_size(annotations)
-        except RuntimeError:
-            updated_patch_size = ep.DEFAULT_PATCH_SIZE
-
-
-    return updated_patch_size
-
 def predict_on_images(image_set_dir, image_names, save_result):
 
     logger = logging.getLogger(__name__)
@@ -305,7 +279,7 @@ def predict_on_images(image_set_dir, image_names, save_result):
             training_image_names.append(image_name) 
 
 
-    updated_patch_size = get_updated_patch_size(image_set_dir, annotations)
+    updated_patch_size = ep.get_updated_patch_size(annotations)
 
     # first make sure that training records are up to date, so that if the inference
     # request is changing the patch data for a training image we will reset the loss record and the

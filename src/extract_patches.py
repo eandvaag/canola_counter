@@ -131,6 +131,32 @@ def estimate_patch_size(image_set_dir, annotations):
 
 
 
+def get_updated_patch_size(annotations):
+
+    #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+
+    num_annotations = w3c_io.get_num_annotations(annotations)
+    if num_annotations < 100:
+        updated_patch_size = DEFAULT_PATCH_SIZE
+        # patch_size_estimate_record_path = os.path.join(image_set_dir, "patches", "patch_size_estimate_record.json")
+        # if os.path.exists(patch_size_estimate_record_path):
+        #     patch_size_estimate_record = json_io.load_json(patch_size_estimate_record_path)
+        #     updated_patch_size = patch_size_estimate_record["patch_size_estimate"]
+        # else:
+        #     set_scheduler_status(username, farm_name, field_name, mission_date, isa.DETERMINING_PATCH_SIZE)
+        #     updated_patch_size = ep.estimate_patch_size(image_set_dir, annotations)
+        #     patch_size_estimate_record = {"patch_size_estimate": updated_patch_size}
+        #     json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
+
+    else:
+        try:
+            updated_patch_size = w3c_io.get_patch_size(annotations)
+        except RuntimeError:
+            updated_patch_size = DEFAULT_PATCH_SIZE
+
+
+    return updated_patch_size
+
 
 
 def update_patches(image_set_dir, annotations, image_names, updated_patch_size): #=None, image_status=None):

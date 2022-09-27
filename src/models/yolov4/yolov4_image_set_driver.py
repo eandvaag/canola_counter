@@ -1007,7 +1007,7 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
             if annotations[image_name]["status"] == "completed_for_training":
                 training_image_names.append(image_name)
 
-        updated_patch_size = ep.get_updated_patch_size(root_dir, annotations)
+        updated_patch_size = ep.get_updated_patch_size(annotations)
         changed_training_image_names = ep.update_patches(root_dir, annotations, training_image_names, updated_patch_size)
         if len(changed_training_image_names) > 0:
 
