@@ -421,7 +421,7 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
     updated_patch_size = ep.get_updated_patch_size(annotations)
     for image_index, image_name in enumerate(image_names):
 
-        image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + "*"))[0]
+        image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
         image = Image(image_path)
         
         patch_records = ep.extract_patch_records_from_image_tiled(
@@ -446,7 +446,7 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
         #                                                                 config["model_name"], 
         #                                                                 tf_dataset_size))
 
-        logger.info("Running inference for image {} ({}/{})".format(image_name, image_index, len(image_names)))
+        logger.info("Running inference for image {} ({}/{})".format(image_name, image_index+1, len(image_names)))
 
         for batch_data in tf_dataset: #tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
 
