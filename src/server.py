@@ -68,40 +68,6 @@ def add_request():
         return {"message": 'Content-Type not supported!'}
         
 
-
-def set_scheduler_status(username, farm_name, field_name, mission_date, status, extra_items={}):
-
-    scheduler_status_path = os.path.join("usr", "shared", "scheduler_status.json")
-    scheduler_status = json_io.load_json(scheduler_status_path)
-    # updates = scheduler_status["updates"]
-    # if len(updates) > MAX_STORED_SCHEDULER_UPDATES:
-    #     updates.pop(0)
-        
-    update_num = scheduler_status["update_num"] + 1
-    scheduler_status = {
-        "update_num": update_num,
-        "username": username,
-        "farm_name": farm_name,
-        "field_name": field_name,
-        "mission_date": mission_date,
-        "status": status,
-        "timestamp": int(time.time())
-    }
-
-    for k, v in extra_items.items():
-        scheduler_status[k] = v
-    # scheduler_status["update_num"] = scheduler_status["update_num"] + 1
-    # scheduler_status["username"] = username
-    # scheduler_status["farm_name"] = farm_name
-    # scheduler_status["field_name"] = field_name
-    # scheduler_status["mission_date"] = mission_date
-    # scheduler_status["status"] = status
-    json_io.save_json(scheduler_status_path, scheduler_status)
-
-    isa.emit_scheduler_status_change(scheduler_status)
-
-
-
     
 
 def needs_training(image_set_dir):
@@ -174,7 +140,7 @@ def process_train(item):
                     return False
 
                 logging.info("Starting to train {}".format(item))
-                set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
 
                 annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
                 annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
@@ -204,7 +170,7 @@ def process_train(item):
                     status["num_images_fully_trained_on"] = len(training_image_names)
                     json_io.save_json(status_path, status)
 
-                    set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING)
+                    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING)
 
                     logger.info("Finished training {}".format(item))
 
@@ -222,7 +188,7 @@ def process_train(item):
         try:
             json_io.save_json(sys_block_path, {"error_message": str(e)})
 
-            set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING,
+            isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING,
                                  extra_items={"error_setting": "training", "error_message": str(e)})
         except Exception as e:
             trace = traceback.format_exc()
@@ -263,39 +229,35 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 
 
-def predict_on_images(image_set_dir, image_names, save_result):
+# def predict_on_images(image_set_dir, image_names, save_result):
 
-    logger = logging.getLogger(__name__)
+#     # logger = logging.getLogger(__name__)
 
-    #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+#     #image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
 
-    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    annotations_json = json_io.load_json(annotations_path)
-    annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
-
-    training_image_names = []
-    for image_name in annotations.keys():
-        if annotations[image_name]["status"] == "completed_for_training":
-            training_image_names.append(image_name) 
+#     # training_image_names = []
+#     # for image_name in annotations.keys():
+#     #     if annotations[image_name]["status"] == "completed_for_training":
+#     #         training_image_names.append(image_name) 
 
 
-    updated_patch_size = ep.get_updated_patch_size(annotations)
+#     # updated_patch_size = ep.get_updated_patch_size(annotations)
 
-    # first make sure that training records are up to date, so that if the inference
-    # request is changing the patch data for a training image we will reset the loss record and the
-    # model will train later
-    changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
-    if len(changed_training_image_names) > 0:
-        image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
-        image_set_aux.reset_loss_record(image_set_dir)
+#     # # first make sure that training records are up to date, so that if the inference
+#     # # request is changing the patch data for a training image we will reset the loss record and the
+#     # # model will train later
+#     # changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
+#     # if len(changed_training_image_names) > 0:
+#     #     image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
+#     #     image_set_aux.reset_loss_record(image_set_dir)
 
-    ep.update_patches(image_set_dir, annotations, image_names, updated_patch_size)
+#     # ep.update_patches(image_set_dir, annotations, image_names, updated_patch_size)
 
-    image_set_aux.update_prediction_tf_records(image_set_dir, image_names=image_names)
+#     # image_set_aux.update_prediction_tf_records(image_set_dir, image_names=image_names)
     
-    end_time, _ = yolov4_image_set_driver.predict(image_set_dir, annotations_json, annotations, image_names=image_names, save_result=save_result)
+#     end_time, _ = yolov4_image_set_driver.predict(image_set_dir, image_names=image_names, save_result=save_result)
 
-    return end_time
+#     return end_time
 
 
 def process_predict(item):
@@ -327,14 +289,19 @@ def process_predict(item):
                 request = json_io.load_json(prediction_request_path)
 
                 logger.info("Starting to predict for {}".format(item))
-                set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
+                                            extra_items={"num_processed": 0, "num_images": len(request["image_names"])})
                             
+                    
+                end_time, _ = yolov4_image_set_driver.predict(image_set_dir, 
+                                    image_names=request["image_names"], 
+                                    save_result=request["save_result"])
 
-                end_time = predict_on_images(
-                        image_set_dir,
-                        request["image_names"],
-                        request["save_result"]
-                )
+                #end_time = predict_on_images(
+                #        image_set_dir,
+                #        request["image_names"],
+                #        request["save_result"]
+                #)
 
                 request["end_time"] = end_time
                 os.remove(prediction_request_path)
@@ -342,7 +309,7 @@ def process_predict(item):
                     json_io.save_json(os.path.join(model_dir, "results", str(end_time), "request.json"), request)
 
                 logger.info("Finished predicting for {}".format(item))
-                set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
                                 extra_items={"prediction_image_names": ",".join(request["image_names"])})
 
                 if request["save_result"]:
@@ -371,7 +338,7 @@ def process_predict(item):
                         request)
 
 
-                set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
                             extra_items={"error_setting": "prediction", "error_message": str(e)})
 
                 if request["save_result"]:
@@ -422,7 +389,7 @@ def process_restart(item):
     if os.path.exists(restart_req_path):
 
         logger.info("Restarting {}".format(item))
-        set_scheduler_status(username, farm_name, field_name, mission_date, isa.RESTARTING)
+        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.RESTARTING)
         
         loss_record_path = os.path.join(model_dir, "training", "loss_record.json")
 
@@ -616,7 +583,7 @@ def drain():
             scheduler_status_path = os.path.join("usr", "shared", "scheduler_status.json")
             scheduler_status = json_io.load_json(scheduler_status_path)
             if scheduler_status["status"] != isa.IDLE:
-                set_scheduler_status("---", "---", "---", "---", isa.IDLE)
+                isa.set_scheduler_status("---", "---", "---", "---", isa.IDLE)
             return
 
              

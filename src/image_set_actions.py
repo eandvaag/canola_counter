@@ -3,6 +3,7 @@ import glob
 import shutil
 import requests
 import logging
+import time
 
 from io_utils import json_io
 
@@ -22,6 +23,41 @@ FINISHED_PREDICTING = "Finished Predicting"
 RESTARTING = "Restarting"
 FINISHED_RESTARTING = "Finished Restarting"
 DETERMINING_PATCH_SIZE = "Determining Patch Size"
+
+
+
+
+
+
+def set_scheduler_status(username, farm_name, field_name, mission_date, status, extra_items={}):
+
+    scheduler_status_path = os.path.join("usr", "shared", "scheduler_status.json")
+    scheduler_status = json_io.load_json(scheduler_status_path)
+        
+    update_num = scheduler_status["update_num"] + 1
+    scheduler_status = {
+        "update_num": update_num,
+        "username": username,
+        "farm_name": farm_name,
+        "field_name": field_name,
+        "mission_date": mission_date,
+        "status": status,
+        "timestamp": int(time.time())
+    }
+
+    for k, v in extra_items.items():
+        scheduler_status[k] = v
+
+    json_io.save_json(scheduler_status_path, scheduler_status)
+
+    emit_scheduler_status_change(scheduler_status)
+
+
+
+
+
+
+
 
 def emit_scheduler_status_change(data):
 

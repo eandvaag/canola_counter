@@ -54,7 +54,52 @@ class DataLoader(ABC):
     
 
 
-class InferenceDataLoader(DataLoader):
+
+class InferenceDataLoader:
+
+    def __init__(self, patch_records, config):
+        self.input_image_shape = config["arch"]["input_image_shape"]
+        self.batch_size = config["inference"]["batch_size"]
+        self.patch_records = patch_records
+
+    def get_model_input_shape(self):
+        return self.input_image_shape
+
+    def create_dataset(self):
+        dataset = tf.data.Dataset.from_tensor_slices(np.arange(len(self.patch_records)))
+        dataset = dataset.batch(batch_size=self.batch_size)
+        return dataset
+
+    def read_batch_data(self, batch_data):
+        batch_images = []
+        batch_ratios = []
+        batch_indices = []
+
+        for index in batch_data:
+            sample_record = self.patch_records[index.numpy()]
+            image, ratio = self._preprocess(sample_record)
+            batch_images.append(image)
+            batch_ratios.append(ratio)
+            batch_indices.append(index)
+
+        batch_images = tf.stack(batch_images, axis=0)
+        return batch_images, batch_ratios, batch_indices
+
+
+    def _image_preprocess(self, image):
+        ratio = np.array(image.shape[:2]) / np.array(self.input_image_shape[:2])
+        image = tf.image.resize(images=image, size=self.input_image_shape[:2])
+        #print("image shape", tf.shape(image))
+        return image, ratio
+
+    def _preprocess(self, sample_record):
+        image = tf.cast(sample_record["patch"], dtype=tf.float32)
+        image, ratio = self._image_preprocess(image)
+        return image, ratio
+
+
+
+class InferenceDataLoaderOrg(DataLoader):
 
     def __init__(self, tf_record_paths, config, mask_border_boxes=False):
         super().__init__(tf_record_paths, config)

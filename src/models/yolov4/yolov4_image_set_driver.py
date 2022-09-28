@@ -6,6 +6,7 @@ import glob
 import tqdm
 import logging
 import time
+import math as m
 import numpy as np
 import tensorflow as tf
 import uuid
@@ -374,10 +375,207 @@ def update_loss_record(loss_record, key, cur_loss):
 #                     best_weights_path)
 
 
+def predict(image_set_dir, image_names, save_result, save_image_predictions=True):
+
+    start_time = time.time()
+
+    logger = logging.getLogger(__name__)
+
+    pieces = image_set_dir.split("/")
+    mission_date = pieces[-1]
+    field_name = pieces[-2]
+    farm_name = pieces[-3]
+    username = pieces[-5]
+
+
+    model_dir = os.path.join(image_set_dir, "model")
+    weights_dir = os.path.join(model_dir, "weights")
+    predictions_dir = os.path.join(model_dir, "prediction")
+    results_dir = os.path.join(model_dir, "results")
+    
+    excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
+    excess_green_record = json_io.load_json(excess_green_record_path)
+
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations_json = json_io.load_json(annotations_path)
+    annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
 
 
 
-def predict(image_set_dir, annotations_json, annotations, image_names, save_result, save_image_predictions=True):
+    config = create_default_config()
+    model_keys.add_general_keys(config)
+    model_keys.add_specialized_keys(config)
+
+    if config["arch"]["model_type"] == "yolov4":
+        yolov4 = YOLOv4(config)
+    elif config["arch"]["model_type"] == "yolov4_tiny":
+        yolov4 = YOLOv4Tiny(config)
+
+    decoder = Decoder(config)
+
+    image_predictions = {}
+
+    # transform_types = ["nop"]
+
+    updated_patch_size = ep.get_updated_patch_size(annotations)
+    for image_index, image_name in enumerate(image_names):
+
+        image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + "*"))[0]
+        image = Image(image_path)
+        
+        patch_records = ep.extract_patch_records_from_image_tiled(
+                image, 
+                updated_patch_size,
+                image_annotations=None,
+                patch_overlap_percent=50, 
+                include_patch_arrays=True)
+
+        data_loader = data_load.InferenceDataLoader(patch_records, config)
+        tf_dataset = data_loader.create_dataset()
+
+        input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
+        yolov4.build(input_shape=input_shape)
+
+        best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+        yolov4.load_weights(best_weights_path, by_name=False)
+
+        #steps = np.sum([1 for _ in tf_dataset])
+
+        # logger.info("{} ('{}'): Running inference on {} patches.".format(config["arch"]["model_type"], 
+        #                                                                 config["model_name"], 
+        #                                                                 tf_dataset_size))
+
+        logger.info("Running inference for image {} ({}/{})".format(image_name, image_index, len(image_names)))
+
+        for batch_data in tf_dataset: #tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
+
+            batch_images, batch_ratios, batch_indices = data_loader.read_batch_data(batch_data)
+            batch_size = batch_images.shape[0]
+            
+            # batch_images = data_augment.apply_inference_transform(batch_images, transform_type)
+
+
+            pred = yolov4(batch_images, training=False)
+            detections = decoder(pred)
+
+            batch_pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+
+            batch_pred_bbox = tf.concat(batch_pred_bbox, axis=1)
+
+            for i in range(batch_size):
+
+                pred_bbox = batch_pred_bbox[i]
+                ratio = batch_ratios[i]
+
+                patch_index = batch_indices[i]
+
+                # image_path = bytes.decode((patch_info["image_path"]).numpy())
+                image_path = patch_records[patch_index]["image_path"]
+                # patch_path = bytes.decode((patch_info["patch_path"]).numpy())
+                # image_name = os.path.basename(image_path)[:-4]
+                #patch_name = os.path.basename(patch_path)[:-4]
+                patch_coords = patch_records[patch_index]["patch_coords"] #tf.sparse.to_dense(patch_records[patch_index]["patch_coords"]).numpy().astype(np.int32)
+
+
+                # pred_bbox = data_augment.undo_inference_transform(pred_bbox, transform_type)
+
+                #if is_annotated:
+                #    patch_boxes = tf.reshape(tf.sparse.to_dense(patch_info["patch_abs_boxes"]), shape=(-1, 4)).numpy().tolist()
+                #    patch_classes = tf.sparse.to_dense(patch_info["patch_classes"]).numpy().tolist()
+                # pred_bbox = \
+                #     data_augment.undo_inference_transform(batch_images[i].numpy(), pred_bbox, 
+                #                                           transform_type)
+
+
+                pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = \
+                        post_process_sample(pred_bbox, ratio, patch_coords, config, score_threshold=config["inference"]["score_thresh"])
+
+                # resize to input size
+
+
+                if image_name not in image_predictions:
+                    image_predictions[image_name] = {
+                            "image_path": image_path,
+                            "pred_image_abs_boxes": [],
+                            "pred_classes": [],
+                            "pred_scores": [],
+                            #"patch_coords": []               
+                    }
+                    
+                    
+
+                pred_image_abs_boxes, pred_image_scores, pred_image_classes = \
+                    driver_utils.get_image_detections(pred_patch_abs_boxes, 
+                                                    pred_patch_scores, 
+                                                    pred_patch_classes, 
+                                                    patch_coords, 
+                                                    image_path, 
+                                                    trim=True) #False) #True)
+                                                    
+                # print("pred_image_abs_boxes", pred_image_abs_boxes)
+                image_predictions[image_name]["pred_image_abs_boxes"].extend(pred_image_abs_boxes.tolist())
+                image_predictions[image_name]["pred_scores"].extend(pred_image_scores.tolist())
+                image_predictions[image_name]["pred_classes"].extend(pred_image_classes.tolist())
+                #image_predictions[transform_type][image_name]["patch_coords"].append(patch_coords.tolist())
+
+
+        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
+                                 extra_items={"num_processed": image_index+1, "num_images": len(image_names)})            
+
+    driver_utils.clip_image_boxes(image_predictions)
+
+    driver_utils.apply_nms_to_image_boxes(image_predictions, 
+                                            iou_thresh=config["inference"]["image_nms_iou_thresh"])
+
+
+    # for image_name in image_predictions.keys():
+    #     image_predictions[image_name] = image_predictions[image_name][transform_types[0]]
+
+
+
+
+    if save_image_predictions:
+        for image_name in image_names:
+            image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+            os.makedirs(image_predictions_dir, exist_ok=True)
+            predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
+            # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
+            w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
+            # if image_name in metrics:
+            #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
+
+
+    end_time = int(time.time())
+    if save_result:
+        metrics = inference_metrics.collect_image_set_metrics(image_predictions, annotations, config)
+        
+        image_set_results_dir = os.path.join(results_dir, str(end_time))
+        os.makedirs(image_set_results_dir)
+        annotations_path = os.path.join(image_set_results_dir, "annotations_w3c.json")
+        json_io.save_json(annotations_path, annotations_json)
+        excess_green_record_path = os.path.join(image_set_results_dir, "excess_green_record.json")
+        json_io.save_json(excess_green_record_path, excess_green_record)
+        image_predictions_path = os.path.join(image_set_results_dir, "predictions_w3c.json")
+        w3c_io.save_predictions(image_predictions_path, image_predictions, config)
+        metrics_path = os.path.join(image_set_results_dir, "metrics.json")
+        json_io.save_json(metrics_path, metrics)
+        # report_path = os.path.join(image_set_results_dir, "results.csv") #xlsx")
+        # inference_metrics.prepare_report(report_path, farm_name, field_name, mission_date, 
+        #                                  image_predictions, annotations, excess_green_record, metrics)
+    elapsed_time = end_time - start_time
+    logger.info("Finished predicting. Elapsed time: {}".format(elapsed_time))
+
+    return end_time, image_predictions
+
+
+
+
+
+
+
+
+def predict_org(image_set_dir, annotations_json, annotations, image_names, save_result, save_image_predictions=True):
 
     logger = logging.getLogger(__name__)
 
@@ -419,7 +617,7 @@ def predict(image_set_dir, annotations_json, annotations, image_names, save_resu
         image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
         tf_record_path = os.path.join(image_predictions_dir, "patches-record.tfrec")
 
-        data_loader = data_load.InferenceDataLoader(tf_record_path, config)
+        data_loader = data_load.InferenceDataLoaderOrg(tf_record_path, config)
         tf_dataset, tf_dataset_size = data_loader.create_dataset()
 
         input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
@@ -811,6 +1009,68 @@ def train_baseline(root_dir):
         if loss_record["validation_loss"]["epochs_since_improvement"] >= VALIDATION_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
             return True
+
+
+
+# def train(image_set_dir, sch_ctx):
+
+#     tf.keras.backend.clear_session()
+    
+#     images_dir = os.path.join(image_set_dir, "images")
+#     model_dir = os.path.join(image_set_dir, "model")
+#     weights_dir = os.path.join(model_dir, "weights")
+#     training_dir = os.path.join(model_dir, "training")
+
+#     usr_block_path = os.path.join(training_dir, "usr_block.json")
+#     sys_block_path = os.path.join(training_dir, "sys_block.json")
+
+#     restart_req_path = os.path.join(training_dir, "restart_request.json")
+
+
+#     annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+#     annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+
+#     training_image_names = []
+#     for image_name in annotations.keys():
+#         if annotations[image_name]["status"] == "completed_for_training":
+#             training_image_names.append(image_name)
+
+#     updated_patch_size = ep.get_updated_patch_size(annotations)
+#     sample_training_image_path = glob.glob(os.path.join(images_dir, training_image_names[0] + "*"))[0]
+#     sample_training_image = Image(sample_training_image_path)
+#     image_width, image_height = sample_training_image.get_wh()
+
+#     patch_overlap_percent = 50
+#     num_patches_per_image = m.ceil(image_width / (updated_patch_size * (patch_overlap_percent / 100))) * \
+#                             m.ceil(image_height / (updated_patch_size * (patch_overlap_percent / 100)))
+
+#     num_patches = num_patches_per_image * len(training_image_names)
+
+#     input_image_shape = config["arch"]["input_image_shape"]
+
+#     space_consumed = num_patches * input_image_shape[0] * input_image_shape[1] * 3
+#     available_bytes = psutil.virtual_memory()[1]
+
+#     THRESH = 0.6
+#     write_data = (space_consumed / available_bytes) > THRESH
+#     patch_records = []
+#     if write_data:
+
+#     else:
+#         for training_image_name in training_image_names:
+
+#             image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+#             image = Image(image_path)
+#             image_patch_records = ep.extract_patch_records_from_image_tiled(
+#                 image, 
+#                 updated_patch_size,
+#                 image_annotations=annotations[image_name],
+#                 patch_overlap_percent=patch_overlap_percent, 
+#                 include_patch_arrays=True)
+
+#             patch_records.extend(image_patch_records)
+
+
 
 
 
