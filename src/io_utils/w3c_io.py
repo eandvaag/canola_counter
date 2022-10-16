@@ -204,27 +204,26 @@ def convert_xml_files_to_w3c(xml_dir, class_map):
     return res
 
 
-def get_annotation_stats():
+def get_annotation_stats(username):
     num_annotations = 0
     num_completed_images = 0
     num_image_sets = 0
     #image_set_root = os.path.join("usr", "data", "image_sets")
     for username_path in glob.glob(os.path.join("usr", "data", "*")):
-        for user_dir in glob.glob(os.path.join(username_path, "*")):
-            if os.basename(user_dir) == "image_sets":
-                for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
-                    farm_name = os.path.basename(farm_path)
-                    for field_path in glob.glob(os.path.join(farm_path, "*")):
-                        field_name = os.path.basename(field_path)
-                        for mission_path in glob.glob(os.path.join(field_path, "*")):
-                            num_image_sets += 1
-                            mission_date = os.path.basename(mission_path)
-                            annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
-                            annotations = load_annotations(annotations_path, {"plant": 0})
-                            completed_images = get_completed_images(annotations)
-                            num_completed_images += len(completed_images)
-                            for image_name in annotations.keys(): #completed_images:
-                                num_annotations += annotations[image_name]["boxes"].shape[0]
+        if os.path.basename(username_path) == username:
+            for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
+                farm_name = os.path.basename(farm_path)
+                for field_path in glob.glob(os.path.join(farm_path, "*")):
+                    field_name = os.path.basename(field_path)
+                    for mission_path in glob.glob(os.path.join(field_path, "*")):
+                        num_image_sets += 1
+                        mission_date = os.path.basename(mission_path)
+                        annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
+                        annotations = load_annotations(annotations_path, {"plant": 0})
+                        completed_images = get_completed_images(annotations)
+                        num_completed_images += len(completed_images)
+                        for image_name in annotations.keys(): #completed_images:
+                            num_annotations += annotations[image_name]["boxes"].shape[0]
 
     return {
         "num_image_sets": num_image_sets,
@@ -239,80 +238,97 @@ def get_completed_images(annotations, allow_empty=True):
 
 
 
-def get_num_annotations(annotations, require_completed_for_training=True):
+def get_num_annotations(annotations, image_names):
     num_annotations = 0
-    for image_name in annotations.keys():
-        if annotations[image_name]["status"] == "completed_for_training" or not require_completed_for_training:
-            boxes = annotations[image_name]["boxes"]
-            num_annotations += np.shape(boxes)[0]
+    for image_name in image_names: #annotations.keys():
+        #if annotations[image_name]["status"] == "completed_for_training" or not require_completed_for_training:
+        boxes = annotations[image_name]["boxes"]
+        num_annotations += np.shape(boxes)[0]
     return num_annotations
 
 
-def typical_box_area_to_patch_size(typical_box_area):
-    patch_area = typical_box_area * (90000 / 2296)
-    patch_size = round(m.sqrt(patch_area))
-    return patch_size 
-
-def typical_box_hyp_to_patch_size(typical_box_hyp):
-
-    # patch_size = round(typical_box_hyp * (300 / 67.88))
-    patch_hyp = (424.26 - (67.88 - typical_box_hyp))
-    patch_size = round(patch_hyp / m.sqrt(2))
-    return patch_size 
 
 
-def get_patch_size(annotations):
-    
+# def typical_box_hyp_to_patch_size(typical_box_hyp):
 
-    typical_box_area = get_typical_box_area(annotations, allowed_statuses=["completed_for_training"], measure="mean")
+#     # patch_size = round(typical_box_hyp * (300 / 67.88))
+#     patch_hyp = (424.26 - (67.88 - typical_box_hyp))
+#     patch_size = round(patch_hyp / m.sqrt(2))
+#     return patch_size 
+
+
+def get_patch_size(annotations, image_names):
+
+
+    average_box_area = get_average_box_area(annotations, image_names=image_names, measure="mean")
     #typical_box_hyp = get_typical_box_hyp(annotations, allowed_statuses=["completed_for_training"], measure="mean")
     #(40000 / 288) (90000 / 2296) 
 
 
     #slope = (90000 - 40000) / (2296 - 288)
     #patch_area = slope * (median_box_area - 288) + 40000
-    patch_size = typical_box_area_to_patch_size(typical_box_area)
+    patch_size = average_box_area_to_patch_size(average_box_area)
     #patch_size = typical_box_hyp_to_patch_size(typical_box_hyp)
     
     # print("patch_size", patch_size)
     return patch_size
 
 
-def get_typical_box_hyp(annotations, allowed_statuses=["completed_for_training"], measure="mean"):
-    box_hyps = []
-    for image_name in annotations.keys():
-        if annotations[image_name]["status"] in allowed_statuses:
-            boxes = annotations[image_name]["boxes"]
-            if boxes.size > 0:
-                img_box_hyps = (np.sqrt((boxes[:, 3] - boxes[:, 1]) ** 2 + (boxes[:, 2] - boxes[:, 0]) ** 2)).tolist()
-                box_hyps.extend(img_box_hyps)
+# def get_typical_box_hyp(annotations, image_names, measure="mean"):
+#     box_hyps = []
+#     for image_name in image_names: #annotations.keys():
+#         # if annotations[image_name]["status"] in allowed_statuses:
+#         boxes = annotations[image_name]["boxes"]
+#         if boxes.size > 0:
+#             img_box_hyps = (np.sqrt((boxes[:, 3] - boxes[:, 1]) ** 2 + (boxes[:, 2] - boxes[:, 0]) ** 2)).tolist()
+#             box_hyps.extend(img_box_hyps)
 
-    if len(box_hyps) == 0:
-        raise RuntimeError("No annotations found.") 
+#     if len(box_hyps) == 0:
+#         raise RuntimeError("No annotations found.") 
 
-    if measure == "mean":
-        return np.mean(box_hyps)
-    elif measure == "median":
-        return np.median(box_hyps)
-    else:
-        raise RuntimeError("Unknown measure")
+#     if measure == "mean":
+#         return np.mean(box_hyps)
+#     elif measure == "median":
+#         return np.median(box_hyps)
+#     else:
+#         raise RuntimeError("Unknown measure")
+def average_box_area_to_patch_size(average_box_area):
+    patch_area = average_box_area * (90000 / 2296)
+    patch_size = round(m.sqrt(patch_area))
+    return patch_size 
 
-def get_typical_box_area(annotations, allowed_statuses, measure):
+
+def get_average_box_area(annotations, image_names, measure):
+    return get_average_box_dim("area", annotations, image_names, measure)
+
+def get_average_box_height(annotations, image_names, measure):
+    return get_average_box_dim("height", annotations, image_names, measure)
+
+def get_average_box_width(annotations, image_names, measure):
+    return get_average_box_dim("width", annotations, image_names, measure)    
+
+def get_average_box_dim(dim, annotations, image_names, measure):
     
-    box_areas = []
-    for image_name in annotations.keys():
-        if annotations[image_name]["status"] in allowed_statuses:
-            boxes = annotations[image_name]["boxes"]
-            if boxes.size > 0:
-                img_box_areas = ((boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])).tolist()
-                box_areas.extend(img_box_areas)
+    box_dims = []
+    for image_name in image_names:
+        # if annotations[image_name]["status"] in allowed_statuses:
+        boxes = annotations[image_name]["boxes"]
+        if boxes.size > 0:
+            if dim == "area":
+                img_box_dims = ((boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])).tolist()
+            elif dim == "height":
+                img_box_dims = (boxes[:, 2] - boxes[:, 0]).tolist()
+            elif dim == "width":
+                img_box_dims = (boxes[:, 3] - boxes[:, 1]).tolist()
+            
+            box_dims.extend(img_box_dims)
 
-    if len(box_areas) == 0:
+    if len(box_dims) == 0:
         raise RuntimeError("No annotations found.") 
 
     if measure == "mean":
-        return np.mean(box_areas)
+        return np.mean(box_dims)
     elif measure == "median":
-        return np.median(box_areas)
+        return np.median(box_dims)
     else:
         raise RuntimeError("Unknown measure")

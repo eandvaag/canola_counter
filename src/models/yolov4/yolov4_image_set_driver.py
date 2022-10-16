@@ -375,17 +375,17 @@ def update_loss_record(loss_record, key, cur_loss):
 #                     best_weights_path)
 
 
-def predict(image_set_dir, image_names, save_result, save_image_predictions=True):
+def predict(sch_ctx, image_set_dir, image_names, save_result):
 
     start_time = time.time()
 
     logger = logging.getLogger(__name__)
 
     pieces = image_set_dir.split("/")
-    mission_date = pieces[-1]
-    field_name = pieces[-2]
-    farm_name = pieces[-3]
     username = pieces[-5]
+    farm_name = pieces[-3]
+    field_name = pieces[-2]
+    mission_date = pieces[-1]
 
 
     model_dir = os.path.join(image_set_dir, "model")
@@ -400,6 +400,11 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
     annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
     annotations_json = json_io.load_json(annotations_path)
     annotations = w3c_io.convert_json_annotations(annotations_json, {"plant": 0})
+
+    training_image_names = []
+    for image_name in annotations.keys():
+        if annotations[image_name]["status"] == "completed_for_training":
+            training_image_names.append(image_name) 
 
 
 
@@ -418,7 +423,42 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
 
     # transform_types = ["nop"]
 
-    updated_patch_size = ep.get_updated_patch_size(annotations)
+    best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+    if not os.path.exists(best_weights_path):
+        raise RuntimeError("Model weights could not be located.")
+        # status_path = os.path.join(model_dir, "status.json")
+        # status = json_io.load_json(status_path)
+        # model_name = status["model_name"]
+        # model_creator = status["model_creator"]
+        # model_path = os.path.join("usr", "data", model_creator, "models")
+        # public_weights_path = os.path.join(model_path, "available", "public", model_name, "weights.h5")
+        # private_weights_path = os.path.join(model_path, "available", "private", model_name, "weights.h5")
+
+        # print("public_weights_path: {}".format(public_weights_path))
+        # print("private_weights_path: {}".format(private_weights_path))
+
+        # if os.path.exists(public_weights_path):
+        #     best_weights_path = public_weights_path
+        # elif os.path.exists(private_weights_path):
+        #     best_weights_path = private_weights_path
+        # else:
+        #     raise RuntimeError("Model weights could not be located.")
+
+    input_shape = (config["inference"]["batch_size"], *(config["arch"]["input_image_shape"]))
+    yolov4.build(input_shape=input_shape)
+    yolov4.load_weights(best_weights_path, by_name=False)
+
+
+    loss_record_path = os.path.join(image_set_dir, "model", "training", "loss_record.json")
+    loss_record = json_io.load_json(loss_record_path)
+    # if len(loss_record["training_loss"]["values"]) == 0:
+    # updated_patch_size = ep.get_updated_patch_size(annotations, training_image_names)
+
+    status_path = os.path.join(model_dir, "status.json")
+    status = json_io.load_json(status_path)
+    model_patch_size = status["patch_size"]
+
+
     for image_index, image_name in enumerate(image_names):
 
         image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
@@ -426,7 +466,7 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
         
         patch_records = ep.extract_patch_records_from_image_tiled(
                 image, 
-                updated_patch_size,
+                model_patch_size,
                 image_annotations=None,
                 patch_overlap_percent=50, 
                 include_patch_arrays=True)
@@ -434,11 +474,11 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
         data_loader = data_load.InferenceDataLoader(patch_records, config)
         tf_dataset = data_loader.create_dataset()
 
-        input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
-        yolov4.build(input_shape=input_shape)
+        # input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
+        # yolov4.build(input_shape=input_shape)
 
-        best_weights_path = os.path.join(weights_dir, "best_weights.h5")
-        yolov4.load_weights(best_weights_path, by_name=False)
+        # best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+        # yolov4.load_weights(best_weights_path, by_name=False)
 
         #steps = np.sum([1 for _ in tf_dataset])
 
@@ -449,6 +489,15 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
         logger.info("Running inference for image {} ({}/{})".format(image_name, image_index+1, len(image_names)))
 
         for batch_data in tf_dataset: #tqdm.tqdm(tf_dataset, total=steps, desc="Generating predictions")):
+            
+            if sch_ctx["switch_queue"].size() > 0:
+                affected = drain_switch_queue(sch_ctx, cur_image_set_dir=image_set_dir)
+                if affected:
+                    end_time = int(time.time())
+                    return True, end_time
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
+                                         extra_items={"num_processed": image_index, "num_images": len(image_names)})   
+
 
             batch_images, batch_ratios, batch_indices = data_loader.read_batch_data(batch_data)
             batch_size = batch_images.shape[0]
@@ -535,15 +584,14 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
 
 
 
-    if save_image_predictions:
-        for image_name in image_names:
-            image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
-            os.makedirs(image_predictions_dir, exist_ok=True)
-            predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
-            # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
-            w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
-            # if image_name in metrics:
-            #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
+    for image_name in image_names:
+        image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+        os.makedirs(image_predictions_dir, exist_ok=True)
+        predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
+        # metrics_path = os.path.join(image_predictions_dir, "metrics.json")
+        w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
+        # if image_name in metrics:
+        #     json_io.save_json(metrics_path, {image_name: metrics[image_name]})
 
 
     end_time = int(time.time())
@@ -566,7 +614,7 @@ def predict(image_set_dir, image_names, save_result, save_image_predictions=True
     elapsed_time = end_time - start_time
     logger.info("Finished predicting. Elapsed time: {}".format(elapsed_time))
 
-    return end_time, image_predictions
+    return False, end_time # image_predictions
 
 
 
@@ -845,11 +893,16 @@ def predict_org(image_set_dir, annotations_json, annotations, image_names, save_
 
 
 
-def train_baseline(root_dir):
+def train_baseline(root_dir, sch_ctx):
     
     logger = logging.getLogger(__name__)
 
+    pieces = root_dir.split("/")
+    username = pieces[-4]
+
     tf.keras.backend.clear_session()
+
+    start_time = int(time.time())
 
     model_dir = os.path.join(root_dir, "model")
     weights_dir = os.path.join(model_dir, "weights")
@@ -866,13 +919,16 @@ def train_baseline(root_dir):
     for k in config["training"]:
         config["training"]["active"][k] = config["training"][k]
 
-    train_loader_is_preloaded, train_data_loader = data_load.get_data_loader(training_tf_record_paths, config, shuffle=True, augment=True)
-    val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
+    # train_loader_is_preloaded, train_data_loader = data_load.get_data_loader(training_tf_record_paths, config, shuffle=True, augment=True)
+    # val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
     
+    train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+    val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
 
-    logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}.".format(
-        train_loader_is_preloaded, val_loader_is_preloaded
-    ))
+
+    # logger.info("Data loaders created. Train loader is preloaded?: {}. Validation loader is preloaded?: {}.".format(
+    #     train_loader_is_preloaded, val_loader_is_preloaded
+    # ))
 
 
     train_dataset, num_train_patches = train_data_loader.create_batched_dataset(
@@ -959,6 +1015,10 @@ def train_baseline(root_dir):
             train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
                                         train_loss_metric.result(), 
                                         loss_record["training_loss"]["best"]))
+
+            if sch_ctx["switch_queue"].size() > 0:
+                drain_switch_queue(sch_ctx)
+                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING_BASELINE)
             # steps_taken += 1
 
 
@@ -990,6 +1050,10 @@ def train_baseline(root_dir):
                                     val_loss_metric.result(), 
                                     loss_record["validation_loss"]["best"]))
 
+            if sch_ctx["switch_queue"].size() > 0:
+                drain_switch_queue(sch_ctx)
+                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING_BASELINE)
+
         
         cur_validation_loss = float(val_loss_metric.result())
 
@@ -1007,9 +1071,23 @@ def train_baseline(root_dir):
 
 
         if loss_record["validation_loss"]["epochs_since_improvement"] >= VALIDATION_IMPROVEMENT_TOLERANCE:
-            shutil.copyfile(best_weights_path, cur_weights_path)
+            # shutil.copyfile(best_weights_path, cur_weights_path)
             return True
 
+        #if isa.check_for_predictions():
+        if sch_ctx["prediction_queue"].size() > 0: # or sch_ctx["restart_queue"].size() > 0:
+            return False
+
+        # if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+        #     return False
+
+        # if os.path.exists(restart_req_path):
+        #     return False
+
+        cur_time = int(time.time())
+        elapsed_train_time = cur_time - start_time
+        if elapsed_train_time > TRAINING_TIME_SESSION_CEILING:
+            return False
 
 
 # def train(image_set_dir, sch_ctx):
@@ -1072,13 +1150,33 @@ def train_baseline(root_dir):
 
 
 
+def drain_switch_queue(sch_ctx, cur_image_set_dir=None):
+    affected = False
+    switch_queue_size = sch_ctx["switch_queue"].size()
+    while switch_queue_size > 0:
+        item = sch_ctx["switch_queue"].dequeue()
+        isa.process_switch(item)
+        switch_queue_size = sch_ctx["switch_queue"].size()
+
+        if cur_image_set_dir is not None:
+            affected_image_set_dir = os.path.join("usr", "data", item["username"],
+                                                  "image_sets", 
+                                                  item["farm_name"], item["field_name"], item["mission_date"])
+            if affected_image_set_dir == cur_image_set_dir:
+                affected = True
+
+    return affected
 
 
-
-
-def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
+def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
     
     logger = logging.getLogger(__name__)
+
+    pieces = root_dir.split("/")
+    username = pieces[-5]
+    farm_name = pieces[-3]
+    field_name = pieces[-2]
+    mission_date = pieces[-1]
 
     
 
@@ -1094,7 +1192,6 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
     usr_block_path = os.path.join(training_dir, "usr_block.json")
     sys_block_path = os.path.join(training_dir, "sys_block.json")
 
-    restart_req_path = os.path.join(training_dir, "restart_request.json")
 
 
     #training_patch_dir = os.path.join(training_patches_dir, str(seq_num), "training")
@@ -1145,6 +1242,9 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
     loss_fn = YOLOv4Loss(config)
 
 
+    # TODO: change model input shape from static to get_patch_size() rounded to multiple of 32 
+    # (with reasonable upper and lower limits)
+
     input_shape = (config["training"]["active"]["batch_size"], *(train_data_loader.get_model_input_shape()))
     yolov4.build(input_shape=input_shape)
 
@@ -1153,13 +1253,37 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
 
     cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
     best_weights_path = os.path.join(weights_dir, "best_weights.h5")
-    if os.path.exists(cur_weights_path):
-        logger.info("Loading weights...")
-        yolov4.load_weights(cur_weights_path, by_name=False)
-        logger.info("Weights loaded.")
-    else:
-        logger.info("No initial weights found.")
+    # if os.path.exists(cur_weights_path):
 
+    # else:
+
+
+
+    cur_weights_path = os.path.join(weights_dir, "cur_weights.h5")
+    if not os.path.exists(cur_weights_path):
+        raise RuntimeError("Model weights could not be located.")
+    # if not os.path.exists(cur_weights_path):
+    #     logger.info("No fine-tuned weights found .. checking status file.")
+    #     status_path = os.path.join(model_dir, "status.json")
+    #     status = json_io.load_json(status_path)
+    #     model_name = status["model_name"]
+    #     model_creator = status["model_creator"]
+    #     model_path = os.path.join("usr", "data", model_creator, "models")
+    #     public_weights_path = os.path.join(model_path, "available", "public", model_name, "weights.h5")
+    #     private_weights_path = os.path.join(model_path, "available", "private", model_name, "weights.h5")
+
+    #     if os.path.exists(public_weights_path):
+    #         shutil.move(public_weights_path, cur_weights_path)
+    #         shutil.move(public_weights_path, best_weights_path)
+    #     elif os.path.exists(private_weights_path):
+    #         shutil.move(private_weights_path, cur_weights_path)
+    #         shutil.move(private_weights_path, best_weights_path)
+    #     else:
+    #         raise RuntimeError("Model weights could not be located.")
+
+    logger.info("Loading weights...")
+    yolov4.load_weights(cur_weights_path, by_name=False)
+    logger.info("Weights loaded.")
 
     optimizer = tf.optimizers.Adam()
 
@@ -1184,6 +1308,7 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
 
 
     # steps_taken = 0
+
     while True:
         train_steps_per_epoch = np.sum([1 for _ in train_dataset])
         val_steps_per_epoch = np.sum([1 for _ in val_dataset])
@@ -1217,6 +1342,13 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
             # if check_restart():
             #     return False
 
+            if sch_ctx["switch_queue"].size() > 0:
+                affected = drain_switch_queue(sch_ctx, cur_image_set_dir=root_dir)
+                if affected:
+                    return (False, False)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
+
+
         cur_training_loss = float(train_loss_metric.result())
 
         update_loss_record(loss_record, "training_loss", cur_training_loss)
@@ -1241,6 +1373,12 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
             val_bar.set_description("v. loss: {:.4f} | best: {:.4f}".format(
                                     val_loss_metric.result(), 
                                     loss_record["validation_loss"]["best"]))
+
+            if sch_ctx["switch_queue"].size() > 0:
+                affected = drain_switch_queue(sch_ctx, cur_image_set_dir=root_dir)
+                if affected:
+                    return (False, False)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
 
         
         cur_validation_loss = float(val_loss_metric.result())
@@ -1267,7 +1405,7 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
             if annotations[image_name]["status"] == "completed_for_training":
                 training_image_names.append(image_name)
 
-        updated_patch_size = ep.get_updated_patch_size(annotations)
+        updated_patch_size = ep.get_updated_patch_size(annotations, training_image_names)
         changed_training_image_names = ep.update_patches(root_dir, annotations, training_image_names, updated_patch_size)
         if len(changed_training_image_names) > 0:
 
@@ -1291,22 +1429,22 @@ def train(root_dir, sch_ctx): #farm_name, field_name, mission_date):
 
         if loss_record["validation_loss"]["epochs_since_improvement"] >= VALIDATION_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
-            return True
+            return (True, False)
 
         #if isa.check_for_predictions():
-        if sch_ctx["prediction_queue"].size() > 0 or sch_ctx["restart_queue"].size() > 0:
-            return False
+        if sch_ctx["prediction_queue"].size() > 0: # or sch_ctx["switch_queue"].size() > 0:
+            return (False, True)
 
         if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
-            return False
+            return (False, False)
 
-        if os.path.exists(restart_req_path):
-            return False
+        # if os.path.exists(restart_req_path):
+        #     return False
 
         cur_time = int(time.time())
         elapsed_train_time = cur_time - start_time
         if elapsed_train_time > TRAINING_TIME_SESSION_CEILING:
-            return False
+            return (False, True)
 
 
 

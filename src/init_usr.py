@@ -68,17 +68,47 @@ def clear_usr_requests_and_results(username):
                 os.makedirs(results_dir)
 
 
+def fix_statuses():
+
+    for usr_path in glob.glob(os.path.join("usr", "data", "*")):
+        username = os.path.basename(usr_path)
+        for farm_path in glob.glob(os.path.join(usr_path, "image_sets", "*")):
+            #farm_dir = os.path.basename(farm_path)
+            for field_path in glob.glob(os.path.join(farm_path, "*")):
+                #field_dir = os.path.basename(field_path)
+                for mission_path in glob.glob(os.path.join(field_path, "*")):
+
+                    status_path = os.path.join(mission_path, "model", "status.json")
+                    status = json_io.load_json(status_path)
+
+                    status["model_name"] = "---"
+                    status["model_creator"] = "---"
+                    print(status)
+                    print()
+                    json_io.save_json(status_path, status)
 
 def init_usr(username):
 
     usr_dir = os.path.join("usr", "data", username)
     cameras_dir = os.path.join(usr_dir, "cameras")
     image_sets_dir = os.path.join(usr_dir, "image_sets")
+    models_dir = os.path.join(usr_dir, "models")
+    pending_dir = os.path.join(models_dir, "pending")
+    aborted_dir = os.path.join(models_dir, "aborted")
+    available_dir = os.path.join(models_dir, "available")
+    public_dir = os.path.join(available_dir, "public")
+    private_dir = os.path.join(available_dir, "private")
 
 
     os.makedirs(usr_dir)
     os.makedirs(cameras_dir)
     os.makedirs(image_sets_dir)
+    os.makedirs(models_dir)
+    os.makedirs(pending_dir)
+    os.makedirs(aborted_dir)
+    os.makedirs(available_dir)
+    os.makedirs(public_dir)
+    os.makedirs(private_dir)
 
     cameras_path = os.path.join(cameras_dir, "cameras.json")
     json_io.save_json(cameras_path, init_cameras)

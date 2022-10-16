@@ -146,10 +146,10 @@ def handle_direct_baseline_request(request, extra_records=None):
     if os.path.exists(baseline_dir):
         raise RuntimeError("Baseline directory already exists!")
 
-    baseline_log = {}
-    baseline_log["start_time"] = time.time()
-    baseline_log["baseline_name"] = baseline_name
-    baseline_log["image_sets"] = request["image_sets"]
+    # baseline_log = {}
+    # baseline_log["start_time"] = time.time()
+    # baseline_log["baseline_name"] = baseline_name
+    # baseline_log["image_sets"] = request["image_sets"]
     # if not os.path.exists(baseline_dir):
     os.makedirs(baseline_dir)
     # if not os.path.exists(patches_dir):
@@ -177,7 +177,8 @@ def handle_direct_baseline_request(request, extra_records=None):
         annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
         annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-        patch_size = 416 #w3c_io.get_patch_size(annotations)
+        patch_size = w3c_io.get_patch_size(annotations, image_set["images"])
+        logger.info("Patch size: {} px".format(patch_size))
 
         #patch_sizes = [patch_size - 50, patch_size, patch_size + 50]
 
@@ -244,13 +245,13 @@ def handle_direct_baseline_request(request, extra_records=None):
     #     shutil.move("usr/data/baselines/training/" + baseline_name,
     #                 "usr/data/baselines/completed/" + baseline_name)
 
-    baseline_log["end_time"] = time.time()
+    # baseline_log["end_time"] = time.time()
 
-    log_dir = os.path.join("usr", "data", "baseline_logs")
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    baseline_log_path = os.path.join(log_dir, baseline_name + ".json")
-    json_io.save_json(baseline_log_path, baseline_log)
+    # log_dir = os.path.join("usr", "data", "baseline_logs")
+    # if not os.path.exists(log_dir):
+    #     os.makedirs(log_dir)
+    # baseline_log_path = os.path.join(log_dir, baseline_name + ".json")
+    # json_io.save_json(baseline_log_path, baseline_log)
 
 # def handle_prediction_request(request_path):
 
