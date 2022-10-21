@@ -17,8 +17,9 @@ results_notification_url = "https://" + os.environ.get("CC_IP") + ":" + os.envir
 
 # INITIALIZING = "initializing"
 IDLE = "Idle"
-TRAINING = "Training"
-FINISHED_TRAINING = "Finished Training"
+FINE_TUNING = "Fine-Tuning"
+FINISHED_FINE_TUNING = "Finished Fine-Tuning"
+# FINISHED_TRAINING = "Finished Training"
 PREDICTING = "Predicting"
 FINISHED_PREDICTING = "Finished Predicting"
 SWITCHING_MODELS = "Switching Models"
@@ -26,8 +27,8 @@ FINISHED_SWITCHING_MODELS = "Finished Switching Models"
 # RESTARTING = "Restarting"
 # FINISHED_RESTARTING = "Finished Restarting"
 # DETERMINING_PATCH_SIZE = "Determining Patch Size"
-TRAINING_BASELINE = "Training Baseline"
-
+# TRAINING_BASELINE = "Training Baseline"
+TRAINING = "Training"
 
 
 

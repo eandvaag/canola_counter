@@ -137,7 +137,7 @@ def update_model_patch_size(annotations, image_names, image_set_dir):
     updated_patch_size = status["patch_size"]
 
     num_annotations = w3c_io.get_num_annotations(annotations, image_names)
-    if num_annotations > 100:
+    if num_annotations > 0: #100:
         try:
             updated_patch_size = w3c_io.get_patch_size(annotations, image_names)
             status["patch_size"] = updated_patch_size
@@ -607,9 +607,12 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=
     patch_min_y = 0
     while not col_covered:
         patch_max_y = patch_min_y + tile_size
+        max_content_y = patch_max_y
         if patch_max_y >= h:
-            patch_min_y = h - tile_size
-            patch_max_y = h
+            max_content_y = h
+            
+            # patch_min_y = h - tile_size
+            # patch_max_y = h
             col_covered = True
 
         row_covered = False
@@ -617,18 +620,26 @@ def extract_patch_records_from_image_tiled(image, patch_size, image_annotations=
         while not row_covered:
 
             patch_max_x = patch_min_x + tile_size
+            max_content_x = patch_max_x
             if patch_max_x >= w:
-                patch_min_x = w - tile_size
-                patch_max_x = w
+                max_content_x = w
+                
+                # patch_min_x = w - tile_size
+                # patch_max_x = w
                 row_covered = True
 
             
             patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+            # print("patch_coords", patch_coords)
 
             patch_data = {}
             if include_patch_arrays:
-                patch_array = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
+                patch_array = np.zeros(shape=(patch_size, patch_size, 3), dtype=np.uint8)
+                patch_array[0:(max_content_y-patch_min_y), 0:(max_content_x-patch_min_x)] = image_array[patch_min_y:max_content_y, patch_min_x:max_content_x]
+                
+                # patch_array = image_array[patch_min_y:patch_max_y, patch_min_x:patch_max_x]
                 patch_data["patch"] = patch_array
+                # print("patch_array.shape", patch_array.shape)
             patch_data["image_name"] = image.image_name
             patch_data["image_path"] = image.image_path
             patch_data["patch_name"] = username + "-" + farm_name + "-" + field_name + "-" + mission_date + "-" + \

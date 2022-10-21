@@ -173,7 +173,7 @@ def process_baseline(item):
             return False #raise RuntimeError("A baseline with the same name already exists!")
 
         logging.info("Starting to train baseline {}".format(item))
-        isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING_BASELINE)
+        isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
 
         patches_dir = os.path.join(baseline_pending_dir, "patches")
         model_dir = os.path.join(baseline_pending_dir, "model")
@@ -186,6 +186,7 @@ def process_baseline(item):
         else:
             #log = {}
             log["model_creator"] = item["model_creator"]
+            log["model_object"] = item["model_object"]
             log["public"] = item["public"]
             log["model_name"] = item["model_name"]
             log["image_sets"] = item["image_sets"]
@@ -369,7 +370,7 @@ def process_train(item):
                     return False
 
                 logging.info("Starting to train {}".format(item))
-                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
 
                 annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
                 annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
@@ -400,7 +401,7 @@ def process_train(item):
                     status["num_images_fully_trained_on"] = len(training_image_names)
                     json_io.save_json(status_path, status)
 
-                    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING)
+                    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_FINE_TUNING)
 
                     logger.info("Finished training {}".format(item))
 
@@ -419,7 +420,7 @@ def process_train(item):
         try:
             json_io.save_json(sys_block_path, {"error_message": str(e)})
 
-            isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING,
+            isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_FINE_TUNING,
                                  extra_items={"error_setting": "training", "error_message": str(e)})
         except Exception as e:
             trace = traceback.format_exc()

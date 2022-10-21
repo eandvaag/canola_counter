@@ -1018,7 +1018,7 @@ def train_baseline(root_dir, sch_ctx):
 
             if sch_ctx["switch_queue"].size() > 0:
                 drain_switch_queue(sch_ctx)
-                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING_BASELINE)
+                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
             # steps_taken += 1
 
 
@@ -1052,7 +1052,7 @@ def train_baseline(root_dir, sch_ctx):
 
             if sch_ctx["switch_queue"].size() > 0:
                 drain_switch_queue(sch_ctx)
-                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING_BASELINE)
+                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
 
         
         cur_validation_loss = float(val_loss_metric.result())
@@ -1346,7 +1346,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
                 affected = drain_switch_queue(sch_ctx, cur_image_set_dir=root_dir)
                 if affected:
                     return (False, False)
-                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
 
 
         cur_training_loss = float(train_loss_metric.result())
@@ -1378,7 +1378,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
                 affected = drain_switch_queue(sch_ctx, cur_image_set_dir=root_dir)
                 if affected:
                     return (False, False)
-                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
 
         
         cur_validation_loss = float(val_loss_metric.result())
@@ -1405,7 +1405,8 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
             if annotations[image_name]["status"] == "completed_for_training":
                 training_image_names.append(image_name)
 
-        updated_patch_size = ep.get_updated_patch_size(annotations, training_image_names)
+        # updated_patch_size = ep.get_updated_patch_size(annotations, training_image_names)
+        updated_patch_size = ep.update_model_patch_size(annotations, training_image_names, root_dir)
         changed_training_image_names = ep.update_patches(root_dir, annotations, training_image_names, updated_patch_size)
         if len(changed_training_image_names) > 0:
 

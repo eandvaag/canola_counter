@@ -68,7 +68,7 @@ def clear_usr_requests_and_results(username):
                 os.makedirs(results_dir)
 
 
-def fix_statuses():
+def add_objects_names(): #fix_statuses():
 
     for usr_path in glob.glob(os.path.join("usr", "data", "*")):
         username = os.path.basename(usr_path)
@@ -78,14 +78,20 @@ def fix_statuses():
                 #field_dir = os.path.basename(field_path)
                 for mission_path in glob.glob(os.path.join(field_path, "*")):
 
-                    status_path = os.path.join(mission_path, "model", "status.json")
-                    status = json_io.load_json(status_path)
+                    object_info_path = os.path.join(mission_path, "annotations", "object_info.json")
+                    object_info = {
+                        "object_name": "canola_seedling"
+                    }
+                    json_io.save_json(object_info_path, object_info)
 
-                    status["model_name"] = "---"
-                    status["model_creator"] = "---"
-                    print(status)
-                    print()
-                    json_io.save_json(status_path, status)
+                    #status_path = os.path.join(mission_path, "model", "status.json")
+                    #status = json_io.load_json(status_path)
+
+                    #status["model_name"] = "---"
+                    #status["model_creator"] = "---"
+                    #print(status)
+                    #print()
+                    #json_io.save_json(status_path, status)
 
 def init_usr(username):
 
