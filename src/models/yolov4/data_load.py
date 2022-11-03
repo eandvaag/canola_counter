@@ -68,6 +68,8 @@ class InferenceDataLoader:
     def create_dataset(self):
         dataset = tf.data.Dataset.from_tensor_slices(np.arange(len(self.patch_records)))
         dataset = dataset.batch(batch_size=self.batch_size)
+        autotune = tf.data.experimental.AUTOTUNE
+        dataset = dataset.prefetch(autotune)
         return dataset
 
     def read_batch_data(self, batch_data):
@@ -93,7 +95,14 @@ class InferenceDataLoader:
         return image, ratio
 
     def _preprocess(self, sample_record):
-        image = tf.cast(sample_record["patch"], dtype=tf.float32)
+        # print("Sample record", sample_record)
+        if "patch" in sample_record:
+            patch = sample_record["patch"]
+        else:
+            patch = cv2.cvtColor(cv2.imread(sample_record["patch_path"]), cv2.COLOR_BGR2RGB)
+
+        image = tf.cast(patch, dtype=tf.float32)
+
         image, ratio = self._image_preprocess(image)
         return image, ratio
 
@@ -272,7 +281,9 @@ class TrainDataLoader(DataLoader):
         h, w = image.shape[:2]
         #boxes = tf.cast(box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_abs_boxes"]), shape=(-1, 4))), tf.float32)
         boxes = (box_utils.swap_xy_tf(tf.reshape(tf.sparse.to_dense(sample["patch_normalized_boxes"]), shape=(-1, 4)))).numpy().astype(np.float32)
-        classes = tf.sparse.to_dense(sample["patch_classes"]).numpy().astype(np.float32)
+        
+        classes = np.zeros(shape=(tf.shape(boxes)[0]))
+        # classes = tf.sparse.to_dense(sample["patch_classes"]).numpy().astype(np.float32)
 
         if self.augment:
             image, boxes, classes = data_augment.apply_augmentations(self.data_augmentations, image, boxes, classes)

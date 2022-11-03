@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+import shutil
 import random
 import numpy as np
 
@@ -7,7 +8,7 @@ import numpy as np
 import extract_patches as ep
 from io_utils import json_io, tf_record_io
 
-
+from models.common import annotation_utils
 
 
 
@@ -34,8 +35,8 @@ def reset_loss_record(image_set_dir):
 
 #def update_training_tf_record(username, farm_name, field_name, mission_date, training_image_names):
 
-def update_training_tf_records(image_set_dir, changed_training_image_names, annotations):
-
+# def update_training_tf_records(image_set_dir, changed_training_image_names, annotations):
+def update_training_tf_records(image_set_dir, annotations):
     logger = logging.getLogger(__name__)
 
     patches_dir = os.path.join(image_set_dir, "patches")
@@ -44,44 +45,59 @@ def update_training_tf_records(image_set_dir, changed_training_image_names, anno
 
     training_dir = os.path.join(image_set_dir, "model", "training")
     training_records_dir = os.path.join(training_dir, "training_tf_records")
-    validation_records_dir = os.path.join(training_dir, "validation_tf_records")
+    # validation_records_dir = os.path.join(training_dir, "validation_tf_records")
 
-    if not os.path.exists(training_records_dir):
-        os.makedirs(training_records_dir)
-    if not os.path.exists(validation_records_dir):
-        os.makedirs(validation_records_dir)
+    if os.path.exists(training_records_dir):
+        shutil.rmtree(training_records_dir)
 
-    for image_name in annotations.keys():
+    # if os.path.exists(validation_records_dir):
+    #     shutil.rmtree(validation_records_dir)
+
+    os.makedirs(training_records_dir)
+    # os.makedirs(validation_records_dir)
+
+    # if not os.path.exists(training_records_dir):
+    #     os.makedirs(training_records_dir)
+    # if not os.path.exists(validation_records_dir):
+    #     os.makedirs(validation_records_dir)
+
+    for image_name in patch_data["patches"].keys():
         training_tf_record_path = os.path.join(training_records_dir, image_name + ".tfrec")
-        validation_tf_record_path = os.path.join(validation_records_dir, image_name + ".tfrec")
-
-        if annotations[image_name]["status"] == "completed_for_training" and image_name in changed_training_image_names:
-
-            logger.info("Writing training and validation records for image {} (from: {})".format(image_name, image_set_dir))
-
-            if os.path.exists(training_tf_record_path):
-                os.remove(training_tf_record_path)
-            if os.path.exists(validation_tf_record_path):
-                os.remove(validation_tf_record_path)
-
-            ep.add_annotations_to_patch_records(patch_data[image_name]["patches"], annotations[image_name])
-            #patch_records.extend(patch_data[image_name]["patches"])
-
-            patch_records = np.array(patch_data[image_name]["patches"])
-
-            training_size = round(patch_records.size * 0.8)
-            training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
-
-            training_patch_records = patch_records[training_subset]
-            validation_patch_records = np.delete(patch_records, training_subset)
-
-            training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
-            tf_record_io.output_patch_tf_records(training_tf_record_path, training_tf_records)
-
-            validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
-            tf_record_io.output_patch_tf_records(validation_tf_record_path, validation_tf_records)
+        # validation_tf_record_path = os.path.join(validation_records_dir, image_name + ".tfrec")
 
 
+        # if annotations[image_name]["status"] == "completed_for_training" and image_name in changed_training_image_names:
+
+        logger.info("Writing training records for image {} (from: {})".format(image_name, image_set_dir))
+
+            # if os.path.exists(training_tf_record_path):
+            #     os.remove(training_tf_record_path)
+            # if os.path.exists(validation_tf_record_path):
+            #     os.remove(validation_tf_record_path)
+
+        ep.add_annotations_to_patch_records(patch_data["patches"][image_name], annotations[image_name])
+        #patch_records.extend(patch_data[image_name]["patches"])
+
+        patch_records = np.array(patch_data["patches"][image_name])
+
+        training_patch_records = patch_records
+        # training_size = round(patch_records.size * 0.8)
+        # training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
+
+        # training_patch_records = patch_records[training_subset]
+        # validation_patch_records = np.delete(patch_records, training_subset)
+
+        training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
+        tf_record_io.output_patch_tf_records(training_tf_record_path, training_tf_records)
+
+        # validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
+        # tf_record_io.output_patch_tf_records(validation_tf_record_path, validation_tf_records)
+
+
+
+
+    patch_data["num_training_regions"] = annotation_utils.get_num_training_regions(annotations)
+    json_io.save_json(patch_data_path, patch_data)    
 
 
 # def update_training_tf_record_dep(image_set_dir, annotations):

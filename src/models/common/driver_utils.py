@@ -1,4 +1,5 @@
 import os
+import glob
 import logging
 import pandas as pd
 import pandas.io.formats.excel
@@ -361,13 +362,15 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
 
 
 
-def clip_image_boxes(image_predictions):
-    for image_name in image_predictions.keys():
-        if len(image_predictions[image_name]["pred_image_abs_boxes"]) > 0:
-            pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
-            image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
+def clip_image_boxes(image_set_dir, predictions):
+    for image_name in predictions.keys():
+        if len(predictions[image_name]["boxes"]) > 0:
+            pred_image_abs_boxes = np.array(predictions[image_name]["boxes"])
+            image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+            image = Image(image_path)
+            image_width, image_height = image.get_wh()
             pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-            image_predictions[image_name]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+            predictions[image_name]["boxes"] = pred_image_abs_boxes.tolist()
 
 
 def clip_image_boxes_org(image_predictions):
@@ -388,27 +391,32 @@ def clip_image_boxes_org(image_predictions):
 
 
 
-def apply_nms_to_image_boxes(image_predictions, iou_thresh):
+def apply_nms_to_image_boxes(predictions, iou_thresh):
 
-        for image_name in image_predictions.keys():
-            if len(image_predictions[image_name]["pred_image_abs_boxes"]) > 0:
-                pred_image_abs_boxes = np.array(image_predictions[image_name]["pred_image_abs_boxes"])
-                pred_classes = np.array(image_predictions[image_name]["pred_classes"])
-                pred_scores = np.array(image_predictions[image_name]["pred_scores"])
+        for image_name in predictions.keys():
+            if len(predictions[image_name]["boxes"]) > 0:
+                pred_image_abs_boxes = np.array(predictions[image_name]["boxes"])
+                # pred_classes = np.array(image_predictions[image_name]["pred_classes"])
+                pred_scores = np.array(predictions[image_name]["scores"])
 
-                nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression_with_classes(
+                # nms_boxes, nms_classes, nms_scores = box_utils.non_max_suppression_with_classes(
+                #                                         pred_image_abs_boxes,
+                #                                         pred_classes,
+                #                                         pred_scores,
+                #                                         iou_thresh=iou_thresh)
+
+                nms_boxes, nms_scores = box_utils.non_max_suppression(
                                                         pred_image_abs_boxes,
-                                                        pred_classes,
                                                         pred_scores,
                                                         iou_thresh=iou_thresh)
+                
             else:
                 nms_boxes = np.array([])
-                nms_classes = np.array([])
                 nms_scores = np.array([])
 
-            image_predictions[image_name]["pred_image_abs_boxes"] = nms_boxes.tolist()
-            image_predictions[image_name]["pred_classes"] = nms_classes.tolist()
-            image_predictions[image_name]["pred_scores"] = nms_scores.tolist()
+            predictions[image_name]["boxes"] = nms_boxes.tolist()
+            # image_predictions[image_name]["pred_classes"] = nms_classes.tolist()
+            predictions[image_name]["scores"] = nms_scores.tolist()
 
 def apply_nms_to_image_boxes_org(image_predictions, iou_thresh):
 

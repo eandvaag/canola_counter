@@ -38,10 +38,10 @@ if __name__ == "__main__":
                                     "image_sets", args.farm_name, args.field_name, args.mission_date,
                                     "model", "results", args.results_timestamp))
 
-    inference_metrics.create_csv(args.username, 
-                                args.farm_name, 
-                                args.field_name, 
-                                args.mission_date, 
-                                args.results_timestamp,
-                                args.download_uuid,
-                                args.annotation_version)
+    inference_metrics.create_spreadsheet(args.username, 
+                                        args.farm_name, 
+                                        args.field_name, 
+                                        args.mission_date, 
+                                        args.results_timestamp,
+                                        args.download_uuid,
+                                        args.annotation_version)

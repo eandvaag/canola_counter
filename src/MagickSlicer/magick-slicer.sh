@@ -658,10 +658,18 @@ getZoomLevels(){ # imgLen(pixels) tileLen(pixels) step(int) # Calculate zoom lev
     # done
 
     # Do all zooms down to 1x1 px
+    #infoMsg " Slicer A mid"
+    # if [ "$imgLen" -ge 0 ]
+    # then
+    #     # echo " zoomStep is not 0 "
+    #     exit 1
+    # fi
+
     while [ "$imgLen" -ge 1 ]
     do
         r[$cnt]=$imgLen
         let "cnt+=1"
+        # ${zoomStep}"
         let "imgLen = imgLen * 100 / zoomStep"
     done
 
@@ -748,6 +756,8 @@ sliceImage(){ # zoom image
 
 sliceA(){
     infoMsg " Slicer A is running..."
+    infoMsg " Test... $imageW $imageH $tileW $step"
+    exit 1
     local scalesW=( `getZoomLevels $imageW $tileW $step` )  # Get width  for each zoom level
     local scalesH=( `getZoomLevels $imageH $tileH $step` )  # Get height for each zoom level
     local zw=${scalesW[0]}  # Get zoom level for width

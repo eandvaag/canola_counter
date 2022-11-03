@@ -67,7 +67,7 @@ def create_patch_tf_records(patch_data_lst, out_dir, is_annotated):
                 "patch_normalized_boxes": float_feature_list(list(np.array(patch_data["patch_normalized_boxes"]).astype(np.float32).flatten())),
                 "patch_abs_boxes": int_feature_list(list(np.array(patch_data["patch_abs_boxes"]).astype(np.int64).flatten())),
                 "image_abs_boxes": int_feature_list(list(np.array(patch_data["image_abs_boxes"]).astype(np.int64).flatten())),
-                "patch_classes": int_feature_list(np.array(patch_data["patch_classes"]).astype(np.int64))
+                # "patch_classes": int_feature_list(np.array(patch_data["patch_classes"]).astype(np.int64))
 
             })
 
@@ -158,7 +158,7 @@ def parse_sample_from_tf_record(tf_sample, is_annotated):
             "patch_normalized_boxes": tf.io.VarLenFeature(tf.float32),
             "patch_abs_boxes": tf.io.VarLenFeature(tf.int64),
             "image_abs_boxes": tf.io.VarLenFeature(tf.int64),
-            "patch_classes": tf.io.VarLenFeature(tf.int64)
+            # "patch_classes": tf.io.VarLenFeature(tf.int64)
         })
 
     sample = tf.io.parse_single_example(tf_sample, schema)

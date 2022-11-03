@@ -13,67 +13,68 @@ import time
 RESULT_LIFETIME = 2 * 60 #2 * 3600
 
 from sklearn.metrics import pairwise_distances
+from models.common import annotation_utils
 
 
 # from image_set import DataSet
-from io_utils import json_io, exif_io
+from io_utils import json_io #, exif_io
 
 def range_map(old_val, old_min, old_max, new_min, new_max):
     new_val = (((old_val - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
     return new_val
 
 
-def similarity_map(username, farm_name, field_name, mission_date):
+# def similarity_map(username, farm_name, field_name, mission_date):
 
-    # farm_name = dataset.farm_name
-    # field_name = dataset.field_name
-    # mission_date = dataset.mission_date
+#     # farm_name = dataset.farm_name
+#     # field_name = dataset.field_name
+#     # mission_date = dataset.mission_date
 
     
-    image_set_dir =  os.path.join("usr", "data", username, "image_sets",
-                        farm_name, field_name, mission_date)
+#     image_set_dir =  os.path.join("usr", "data", username, "image_sets",
+#                         farm_name, field_name, mission_date)
 
-    annotations_path = os.path.join(image_set_dir,
-                        "annotations", "annotations_w3c.json")
+#     annotations_path = os.path.join(image_set_dir,
+#                         "annotations", "annotations_w3c.json")
     
-    annotations = json_io.load_json(annotations_path)
+#     annotations = json_io.load_json(annotations_path)
 
-    annotated_features = []
-    unannotated_features = []
-    feature_counts = []
-    unannotated_image_names = []
-    for image_name in annotations.keys():
-        features_path = os.path.join(image_set_dir, "features", image_name + ".npy")
-        features = np.load(features_path)
+#     annotated_features = []
+#     unannotated_features = []
+#     feature_counts = []
+#     unannotated_image_names = []
+#     for image_name in annotations.keys():
+#         features_path = os.path.join(image_set_dir, "features", image_name + ".npy")
+#         features = np.load(features_path)
 
-        if annotations[image_name]["status"] == "completed":
-            annotated_features.extend(features.tolist())
-        else:
-            unannotated_features.extend(features.tolist())
-            feature_counts.append(features.shape[0])
-            unannotated_image_names.append(image_name)
+#         if annotations[image_name]["status"] == "completed":
+#             annotated_features.extend(features.tolist())
+#         else:
+#             unannotated_features.extend(features.tolist())
+#             feature_counts.append(features.shape[0])
+#             unannotated_image_names.append(image_name)
 
-    print("calculating pairwise distances")
-    distances = pairwise_distances(unannotated_features, annotated_features)
-    print("finished")
-    #print("feature_counts", feature_counts)
-    scores = []
-    prev_feature_sum = 0
-    for i, feature_count in enumerate(feature_counts):
-        sel = distances[prev_feature_sum:prev_feature_sum + feature_count, :]
-        sel_sum = np.sum(sel)
-        #print("adding {}, score: {}".format(unannotated_image_names[i], sel_sum))
-        #res[unannotated_image_names[i]] = sel_sum
-        scores.append(sel_sum)
-        prev_feature_sum = prev_feature_sum + feature_count
+#     print("calculating pairwise distances")
+#     distances = pairwise_distances(unannotated_features, annotated_features)
+#     print("finished")
+#     #print("feature_counts", feature_counts)
+#     scores = []
+#     prev_feature_sum = 0
+#     for i, feature_count in enumerate(feature_counts):
+#         sel = distances[prev_feature_sum:prev_feature_sum + feature_count, :]
+#         sel_sum = np.sum(sel)
+#         #print("adding {}, score: {}".format(unannotated_image_names[i], sel_sum))
+#         #res[unannotated_image_names[i]] = sel_sum
+#         scores.append(sel_sum)
+#         prev_feature_sum = prev_feature_sum + feature_count
 
-    #json_io.print_json(res)
-    scores = np.array(scores)
-    inds = np.argsort(scores)
-    sorted_scores = scores[inds]
-    sorted_names = np.array(unannotated_image_names)[inds]
-    for i, (score, name) in enumerate(zip(sorted_scores, sorted_names)):
-        print("{}: Image: {} | Score: {}".format(i, name, score))
+#     #json_io.print_json(res)
+#     scores = np.array(scores)
+#     inds = np.argsort(scores)
+#     sorted_scores = scores[inds]
+#     sorted_names = np.array(unannotated_image_names)[inds]
+#     for i, (score, name) in enumerate(zip(sorted_scores, sorted_names)):
+#         print("{}: Image: {} | Score: {}".format(i, name, score))
 
 
 def create_plot(grid_z0, extent, vmin, vmax, cmap, out_path):
@@ -102,7 +103,9 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
     #annotations_path = os.path.join("usr", "data", "image_sets",
     #                    farm_name, field_name, mission_date,
     #                    "annotations", "annotations_w3c.json")
-    annotations = json_io.load_json(annotations_path)
+    # annotations = json_io.load_json(annotations_path)
+
+    annotations = annotation_utils.load_annotations(annotations_path)
 
     #images_root = os.path.join("usr", "data", "image_sets",
     #                    farm_name, field_name, mission_date, "images")
@@ -150,36 +153,42 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
 
         all_points.append([lon, lat])
 
-        status = annotations[image_name]["status"]
+        # status = annotations[image_name]["status"]
 
         gsd_h = (camera_height * sensor_height) / (focal_length * metadata["images"][image_name]["height_px"])
         gsd_w = (camera_height * sensor_width) / (focal_length * metadata["images"][image_name]["width_px"])
 
         gsd = min(gsd_h, gsd_w)
 
-        image_height_m = metadata["images"][image_name]["height_px"] * gsd
-        image_width_m = metadata["images"][image_name]["width_px"] * gsd
+        image_height_px = metadata["images"][image_name]["height_px"]
+        image_width_px = metadata["images"][image_name]["width_px"]
+
+        image_height_m = image_height_px * gsd
+        image_width_m = image_width_px * gsd
 
         area_m2 = image_width_m * image_height_m
 
-        if status == "completed_for_training" or status == "completed_for_testing":
+        fully_annotated = annotation_utils.is_fully_annotated(annotations, image_name, image_width_px, image_height_px)
+
+        if fully_annotated: #status == "completed_for_training" or status == "completed_for_testing":
 
             #print("image_name", image_name)
-            annotated_value = len(annotations[image_name]["annotations"]) / area_m2
+            annotated_value = annotations[image_name]["boxes"].shape[0] / area_m2
             completed_points.append([lon, lat])
             annotated_values.append(annotated_value)
 
         if pred_path is not None:
-            if not completed_only or (status == "completed_for_training" or status == "completed_for_testing"):  
+            
+            if not completed_only or fully_annotated: #(status == "completed_for_training" or status == "completed_for_testing"):  
                 #predicted_value = len(predictions["image_predictions"][image_name]["pred_image_abs_boxes"]) / metadata["images"][image_name]["area_m2"]
-                v = 0
-                for annotation in predictions[image_name]["annotations"]:
-                    for b in annotation["body"]:
-                        if b["purpose"] == "score" and float(b["value"]) >= 0.5:
-                            v += 1
+                # v = 0
+                # for annotation in predictions[image_name]["annotations"]:
+                #     for b in annotation["body"]:
+                #         if b["purpose"] == "score" and float(b["value"]) >= 0.5:
+                #             v += 1
                 
                 #predicted_value = len(predictions[image_name]["annotations"]) 
-                predicted_value = v / area_m2
+                predicted_value = np.sum(predictions[image_name]["scores"] >= 0.50) / area_m2
                 predicted_values.append(predicted_value)
 
     # print("predicted_values", predicted_values)

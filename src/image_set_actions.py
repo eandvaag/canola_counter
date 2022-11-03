@@ -7,13 +7,13 @@ import time
 import traceback
 
 from io_utils import json_io
-
+from models.common import annotation_utils
 #import image_set_model as ism
 
-
-status_notification_url = "https://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + os.environ.get("CC_PATH") + "/status_notification"
-results_notification_url = "https://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + os.environ.get("CC_PATH") + "/results_notification"
-
+base_url = "https://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + os.environ.get("CC_PATH")
+status_notification_url = base_url + "/status_notification"
+results_notification_url = base_url + "/results_notification"
+model_notification_url = base_url + "/model_notification"
 
 # INITIALIZING = "initializing"
 IDLE = "Idle"
@@ -61,7 +61,13 @@ def set_scheduler_status(username, farm_name, field_name, mission_date, status, 
 
 
 
+def emit_model_change(username):
 
+    data = {
+        "username": username
+    }
+
+    emit(model_notification_url, data)
 
 
 def emit_scheduler_status_change(data):
@@ -127,7 +133,7 @@ def emit_results_change(username, farm_name, field_name, mission_date):
 def emit(url, data):
     logger = logging.getLogger(__name__)
 
-    logger.info("Emitting to {}".format(url))
+    logger.info("Emitting {} to {}".format(data, url))
 
 
     response = requests.post(url, data=data, verify=False)
@@ -385,17 +391,20 @@ def process_switch(item):
                 # json_io.save_json(patch_size_estimate_record_path, patch_size_estimate_record)
 
 
-            annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-            annotations = json_io.load_json(annotations_path)
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            annotations = annotation_utils.load_annotations(annotations_path)
             for image_name in annotations.keys():
-                if annotations[image_name]["status"] == "completed_for_training":
-                    annotations[image_name]["status"] = "completed_for_testing"
-            json_io.save_json(annotations_path, annotations)
+                # for region in annotations[image_name]["training_regions"]:
+                annotations[image_name]["test_regions"].extend(annotations[image_name]["training_regions"])
+                annotations[image_name]["training_regions"] = []
+                # if annotations[image_name]["status"] == "completed_for_training":
+                #     annotations[image_name]["status"] = "completed_for_testing"
+            annotation_utils.save_annotations(annotations_path, annotations)
 
 
             status_path = os.path.join(model_dir, "status.json")
             status = json_io.load_json(status_path)
-            status["num_images_fully_trained_on"] = 0
+            status["num_regions_fully_trained_on"] = 0
             status["model_creator"] = model_creator
             status["model_name"] = model_name
             status["patch_size"] = round(average_patch_size)

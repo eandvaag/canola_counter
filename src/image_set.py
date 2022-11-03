@@ -186,10 +186,14 @@ class Image(object):
 
 
     def load_image_array(self):
+        logger = logging.getLogger(__name__)
+
         image_array = cv2.imread(self.image_path, cv2.IMREAD_UNCHANGED)
         if image_array.ndim == 3:
             image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
         return image_array #cv2.cvtColor(cv2.imread(self.image_path), cv2.COLOR_BGR2RGB)
+
+        
 
     def get_wh(self):
         w, h = imagesize.get(self.image_path)

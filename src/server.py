@@ -17,8 +17,7 @@ from image_set import Image
 
 from io_utils import json_io, w3c_io, tf_record_io
 from models.yolov4 import yolov4_image_set_driver
-
-
+from models.common import annotation_utils, inference_metrics
 
 from lock_queue import LockQueue
 
@@ -77,17 +76,40 @@ def add_request():
     
 
 def needs_training(image_set_dir):
-    annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-    annotations = json_io.load_json(annotations_path)
-    num_training_images = 0
-    for image_name in annotations.keys():
-        if annotations[image_name]["status"] == "completed_for_training":
-            num_training_images += 1
+
+    upload_status_path = os.path.join(image_set_dir, "upload_status.json")
+    if not os.path.exists(upload_status_path):
+        return False
+
+    upload_status = json_io.load_json(upload_status_path)
+    if upload_status["status"] != "uploaded":
+        return False
     
     model_dir = os.path.join(image_set_dir, "model")
     status_path = os.path.join(model_dir, "status.json")
     status = json_io.load_json(status_path)
-    return status["num_images_fully_trained_on"] < num_training_images
+
+    if status["model_name"] == "---" or status["model_creator"] == "---":
+        return False
+
+    # is_ortho = "training_regions" in annotations[list(annotations.keys())[0]]
+    # if is_ortho:
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path)
+    num_training_regions = annotation_utils.get_num_training_regions(annotations)
+    # 0
+    # for image_name in annotations.keys():
+    #     num_training_regions += len(annotations[image_name]["training_regions"])
+    return status["num_regions_fully_trained_on"] < num_training_regions
+
+    # else:
+    #     num_training_images = 0
+    #     for image_name in annotations.keys():
+    #         if annotations[image_name]["status"] == "completed_for_training":
+    #             num_training_images += 1
+    #     needs_training = status["num_images_fully_trained_on"] < num_training_images
+
+    # return needs_training
 
 
 def check_train(username, farm_name, field_name, mission_date):
@@ -165,7 +187,7 @@ def process_baseline(item):
 
         # aborted_dir = os.path.join(baselines_dir, "aborted")
 
-        resuming = os.path.exists(baseline_pending_dir)
+        # resuming = os.path.exists(log_path)
             
         #     raise RuntimeError("A baseline with the same name already exists!")
 
@@ -176,31 +198,36 @@ def process_baseline(item):
         isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
 
         patches_dir = os.path.join(baseline_pending_dir, "patches")
+        annotations_dir = os.path.join(baseline_pending_dir, "annotations")
         model_dir = os.path.join(baseline_pending_dir, "model")
         training_dir = os.path.join(model_dir, "training")
         weights_dir = os.path.join(model_dir, "weights")
 
-        log = {}
-        if resuming:
-            log = json_io.load_json(log_path)
-        else:
+        log = json_io.load_json(log_path)
+        # log = {}
+        # if resuming:
+        #     log = json_io.load_json(log_path)
+        # else:
+        if "training_start_time" not in log:
             #log = {}
-            log["model_creator"] = item["model_creator"]
-            log["model_object"] = item["model_object"]
-            log["public"] = item["public"]
-            log["model_name"] = item["model_name"]
-            log["image_sets"] = item["image_sets"]
-            log["start_time"] = int(time.time())
 
-            os.makedirs(baseline_pending_dir)
+            # log["model_creator"] = item["model_creator"]
+            # log["model_object"] = item["model_object"]
+            # log["public"] = item["public"]
+            # log["model_name"] = item["model_name"]
+            # log["image_sets"] = item["image_sets"]
+            # log["start_time"] = int(time.time())
+
+            # os.makedirs(baseline_pending_dir)
             os.makedirs(patches_dir)
+            os.makedirs(annotations_dir)
             os.makedirs(model_dir)
             os.makedirs(training_dir)
             os.makedirs(weights_dir)
 
 
             all_records = []
-            for image_set_index, image_set in enumerate(item["image_sets"]):
+            for image_set_index, image_set in enumerate(log["image_sets"]):
                 logger.info("Baseline: Preparing patches from {}".format(image_set))
 
                 username = image_set["username"]
@@ -211,15 +238,40 @@ def process_baseline(item):
                                             farm_name, field_name, mission_date)
                 images_dir = os.path.join(image_set_dir, "images")
 
-                annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+                # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+                # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-                average_box_area = w3c_io.get_average_box_area(annotations, image_names=image_set["images"], measure="mean")
-                average_box_height = w3c_io.get_average_box_height(annotations, image_names=image_set["images"], measure="mean")
-                average_box_width = w3c_io.get_average_box_width(annotations, image_names=image_set["images"], measure="mean")
+                metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+                metadata = json_io.load_json(metadata_path)
+                is_ortho = metadata["is_ortho"] == "yes"
+
+                annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+                annotations = annotation_utils.load_annotations(annotations_path)
+
+
+
+                # image_names = []
+                # num_annotations = 0
+                # for image_name in annotations.keys():
+                #     for region_key in ["training_regions", "test_regions"]:
+                #         for region in annotations[image_name][region_key]:
+                #             inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], region)
+                #             num_annotations += inds.size
+
+                num_annotations = annotation_utils.get_num_annotations(annotations, ["training_regions", "test_regions"])
+                    # if annotations[image_name]["status"] == "completed_for_training" or annotations[image_name]["status"] == "completed_for_testing":
+                    #     image_names.append(image_name)
+                    #     num_annotations += annotations[image_name]["boxes"].shape[0]
+
+                average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+                average_box_height = annotation_utils.get_average_box_height(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+                average_box_width = annotation_utils.get_average_box_width(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
                 
 
-                patch_size = w3c_io.average_box_area_to_patch_size(average_box_area)
+                patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
+
+                # log["image_sets"][image_set_index]["image_names"] = image_names
+                log["image_sets"][image_set_index]["num_annotations"] = num_annotations
 
                 log["image_sets"][image_set_index]["average_box_area"] = average_box_area
                 log["image_sets"][image_set_index]["average_box_height"] = average_box_height
@@ -229,19 +281,33 @@ def process_baseline(item):
                 
                 logger.info("Patch size: {} px".format(patch_size))
 
-                for image_name in image_set["images"]:
+                for image_name in annotations.keys():
+                    regions = annotations[image_name]["training_regions"] + annotations[image_name]["test_regions"]
+                    if len(regions) > 0:
 
-                    image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
-                    image = Image(image_path)
-                    patch_records = ep.extract_patch_records_from_image_tiled(
-                        image, 
-                        patch_size,
-                        image_annotations=annotations[image_name],
-                        patch_overlap_percent=50, 
-                        include_patch_arrays=True)
+                        image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
+                        image = Image(image_path)
+                        patch_records = ep.extract_patch_records_from_image_tiled(
+                            image,
+                            patch_size,
+                            image_annotations=annotations[image_name],
+                            patch_overlap_percent=50, 
+                            regions=regions,
+                            is_ortho=is_ortho,
+                            include_patch_arrays=False,
+                            out_dir=patches_dir)
 
-                    ep.write_patches(patches_dir, patch_records)
-                    all_records.extend(patch_records)
+                        # ep.write_patches(patches_dir, patch_records)
+                        all_records.extend(patch_records)
+
+                image_set_annotations_dir = os.path.join(annotations_dir, 
+                                                username, 
+                                                farm_name,
+                                                field_name,
+                                                mission_date)
+                os.makedirs(image_set_annotations_dir, exist_ok=True)
+                image_set_annotations_path = os.path.join(image_set_annotations_dir, "annotations.json")
+                annotation_utils.save_annotations(image_set_annotations_path, annotations)
 
 
             average_box_areas = [log["image_sets"][i]["average_box_area"] for i in range(len(log["image_sets"]))]
@@ -255,22 +321,25 @@ def process_baseline(item):
 
             patch_records = np.array(all_records)
 
-            training_size = round(patch_records.size * 0.8)
-            training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
+            training_patch_records = patch_records
 
-            training_patch_records = patch_records[training_subset]
-            validation_patch_records = np.delete(patch_records, training_subset)
+            # training_size = round(patch_records.size * 0.8)
+            # training_subset = random.sample(np.arange(patch_records.size).tolist(), training_size)
+
+            # training_patch_records = patch_records[training_subset]
+            # validation_patch_records = np.delete(patch_records, training_subset)
 
             training_tf_records = tf_record_io.create_patch_tf_records(training_patch_records, patches_dir, is_annotated=True)
             training_patches_record_path = os.path.join(training_dir, "training-patches-record.tfrec")
             tf_record_io.output_patch_tf_records(training_patches_record_path, training_tf_records)
 
-            validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
-            validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
-            tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
+            # validation_tf_records = tf_record_io.create_patch_tf_records(validation_patch_records, patches_dir, is_annotated=True)
+            # validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
+            # tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
 
             image_set_aux.reset_loss_record(baseline_pending_dir)
 
+            log["training_start_time"] = int(time.time())
             json_io.save_json(log_path, log)
 
 
@@ -278,7 +347,7 @@ def process_baseline(item):
 
         if training_finished:
             # log = json_io.load_json(log_path)
-            log["end_time"] = int(time.time())
+            log["training_end_time"] = int(time.time())
             json_io.save_json(log_path, log)
             
             shutil.move(os.path.join(weights_dir, "best_weights.h5"),
@@ -288,6 +357,8 @@ def process_baseline(item):
             shutil.rmtree(model_dir)
 
             shutil.move(baseline_pending_dir, baseline_available_dir)
+
+            isa.emit_model_change(item["model_creator"])
 
             return False
         else:
@@ -313,6 +384,9 @@ def process_baseline(item):
 
                 os.makedirs(baseline_aborted_dir)
                 json_io.save_json(os.path.join(baseline_aborted_dir, "log.json"), log)
+
+
+            isa.emit_model_change(item["model_creator"])
             #json_io.save_json(sys_block_path, {"error_message": str(e)})
 
             # isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_TRAINING,
@@ -354,62 +428,72 @@ def process_train(item):
     training_dir = os.path.join(model_dir, "training")
 
     try:
-        upload_status_path = os.path.join(image_set_dir, "upload_status.json")
-        upload_status = json_io.load_json(upload_status_path)
-        if upload_status["status"] == "uploaded":
 
-            if needs_training(image_set_dir):
+        if not needs_training(image_set_dir):
+            return False
 
-                usr_block_path = os.path.join(training_dir, "usr_block.json")
-                sys_block_path = os.path.join(training_dir, "sys_block.json")
-                if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
-                    return False
+        usr_block_path = os.path.join(training_dir, "usr_block.json")
+        sys_block_path = os.path.join(training_dir, "sys_block.json")
+        if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+            return False
 
-                switch_req_path = os.path.join(model_dir, "switch_request.json")
-                if os.path.exists(switch_req_path):
-                    return False
+        switch_req_path = os.path.join(model_dir, "switch_request.json")
+        if os.path.exists(switch_req_path):
+            return False
 
-                logging.info("Starting to train {}".format(item))
-                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
+        logging.info("Starting to train {}".format(item))
+        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
 
-                annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-                annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
+        # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+        # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})
 
-                training_image_names = []
-                for image_name in annotations.keys():
-                    if annotations[image_name]["status"] == "completed_for_training":
-                        training_image_names.append(image_name) 
-
-                updated_patch_size = ep.update_model_patch_size(annotations, training_image_names, image_set_dir)
-                changed_training_image_names = ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
 
 
-                if len(changed_training_image_names) > 0:
-                    image_set_aux.update_training_tf_records(image_set_dir, changed_training_image_names, annotations)
-                    image_set_aux.reset_loss_record(image_set_dir)
+        # training_image_names = []
+        # for image_name in annotations.keys():
+        #     if annotations[image_name]["status"] == "completed_for_training":
+        #         training_image_names.append(image_name) 
+        num_training_regions = annotation_utils.get_num_training_regions(annotations)
+        # 0
+        # for image_name in annotations.keys():
+        #     num_training_regions += len(annotations[image_name]["training_regions"])
 
-                if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
-                    return False
-                if os.path.exists(switch_req_path):
-                    return False
-                
-                training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir)
-                if training_finished:
 
-                    status_path = os.path.join(model_dir, "status.json")
-                    status = json_io.load_json(status_path)
-                    status["num_images_fully_trained_on"] = len(training_image_names)
-                    json_io.save_json(status_path, status)
 
-                    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_FINE_TUNING)
+        updated_patch_size = ep.update_model_patch_size(image_set_dir, annotations, ["training_regions"])
+        update_applied = ep.update_training_patches(image_set_dir, annotations, updated_patch_size)
+        #ep.update_patches(image_set_dir, annotations, training_image_names, updated_patch_size)
+        
 
-                    logger.info("Finished training {}".format(item))
+        # if len(changed_training_image_names) > 0:
+        if update_applied:
+            image_set_aux.update_training_tf_records(image_set_dir, annotations) #changed_training_image_names, annotations)
+            image_set_aux.reset_loss_record(image_set_dir)
 
-                #     return False
+        if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+            return False
+        if os.path.exists(switch_req_path):
+            return False
+        
+        training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir)
+        if training_finished:
 
-                # else:
-                #     return True
-                return re_enqueue
+            status_path = os.path.join(model_dir, "status.json")
+            status = json_io.load_json(status_path)
+            status["num_regions_fully_trained_on"] = num_training_regions #len(training_image_names)
+            json_io.save_json(status_path, status)
+
+            isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_FINE_TUNING)
+
+            logger.info("Finished training {}".format(item))
+
+        #     return False
+
+        # else:
+        #     return True
+        return re_enqueue
 
     except Exception as e:
         trace = traceback.format_exc()
@@ -421,7 +505,7 @@ def process_train(item):
             json_io.save_json(sys_block_path, {"error_message": str(e)})
 
             isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_FINE_TUNING,
-                                 extra_items={"error_setting": "training", "error_message": str(e)})
+                                 extra_items={"error_setting": "fine-tuning", "error_message": str(e)})
         except Exception as e:
             trace = traceback.format_exc()
             logger.error("Exception occurred while handling original exception")
@@ -492,6 +576,62 @@ def check_predict(username, farm_name, field_name, mission_date):
 #     return end_time
 
 
+def post_result(image_set_dir, results_dir, predictions):
+
+
+
+    # excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
+    # if os.path.exists(excess_green_record_path):
+    #     excess_green_record = json_io.load_json(excess_green_record_path)
+    # else:
+    #     excess_green_record = None
+
+    annotations_src_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_src_path)
+
+    
+    
+    # image_set_results_dir = os.path.join(results_dir, str(end_time))
+    # os.makedirs(image_set_results_dir)
+    # annotations_path = os.path.join(results_dir, "annotations.json")
+    # json_io.save_json(annotations_path, annotations_json)
+    # annotation_utils.save_annotations(annotations_path, annotations)
+
+    # if excess_green_record is not None:
+    #     excess_green_record_path = os.path.join(results_dir, "excess_green_record.json")
+    #     json_io.save_json(excess_green_record_path, excess_green_record)
+
+    metrics = inference_metrics.collect_image_set_metrics(predictions, annotations) #, config)
+    metrics_path = os.path.join(results_dir, "metrics.json")
+    json_io.save_json(metrics_path, metrics)
+
+    excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
+    if os.path.exists(excess_green_record_src_path):
+        excess_green_record_dst_path = os.path.join(results_dir, "excess_green_record.json")
+        shutil.copyfile(excess_green_record_src_path, excess_green_record_dst_path)
+    
+    # annotations_src_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    annotations_dst_path = os.path.join(results_dir, "annotations.json")
+    annotation_utils.save_annotations(annotations_dst_path, annotations)
+    # shutil.copyfile(annotations_src_path, annotations_dst_path)
+
+    predictions_path = os.path.join(results_dir, "predictions.json")
+    json_io.save_json(predictions_path, predictions)
+    # w3c_io.save_predictions(image_predictions_path, image_predictions, config)
+    return
+
+
+def post_predict(image_set_dir, image_names, predictions):
+    model_dir = os.path.join(image_set_dir, "model")
+    predictions_dir = os.path.join(model_dir, "prediction")
+    for image_name in image_names:
+        image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+        os.makedirs(image_predictions_dir, exist_ok=True)
+        predictions_path = os.path.join(image_predictions_dir, "predictions.json")
+        json_io.save_json(predictions_path, {image_name: predictions[image_name]})
+
+
+
 def process_predict(item):
 
     logger = logging.getLogger(__name__)
@@ -516,16 +656,18 @@ def process_predict(item):
         try:
             while len(prediction_request_paths) > 0:
             
+                results_dir = None
                 
                 prediction_request_path = prediction_request_paths[0]
                 request = json_io.load_json(prediction_request_path)
 
                 logger.info("Starting to predict for {}".format(item))
                 isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
-                                            extra_items={"num_processed": 0, "num_images": len(request["image_names"])})
+                                            extra_items={"percent_complete": 0})
                             
-                    
-                interrupted, end_time = yolov4_image_set_driver.predict(sch_ctx,
+
+     
+                interrupted, predictions = yolov4_image_set_driver.predict(sch_ctx,
                                     image_set_dir, 
                                     image_names=request["image_names"], 
                                     save_result=request["save_result"])
@@ -535,19 +677,27 @@ def process_predict(item):
                 #        request["image_names"],
                 #        request["save_result"]
                 #)
-                if not interrupted:
+                if interrupted:
+                    return
 
+                post_predict(image_set_dir, request["image_names"], predictions)
+
+                if request["save_result"]:
+                    end_time = int(time.time())
                     request["end_time"] = end_time
-                    os.remove(prediction_request_path)
-                    if request["save_result"]:
-                        json_io.save_json(os.path.join(model_dir, "results", str(end_time), "request.json"), request)
+                    results_dir = os.path.join(model_dir, "results", str(end_time))
+                    os.makedirs(results_dir)
+                    post_result(image_set_dir, results_dir, predictions)
+                    json_io.save_json(os.path.join(results_dir, "request.json"), request)
 
-                    logger.info("Finished predicting for {}".format(item))
-                    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
-                                    extra_items={"prediction_image_names": ",".join(request["image_names"])})
+                os.remove(prediction_request_path)
 
-                    if request["save_result"]:
-                        isa.emit_results_change(username, farm_name, field_name, mission_date)
+                logger.info("Finished predicting for {}".format(item))
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINISHED_PREDICTING, 
+                                extra_items={"prediction_image_names": ",".join(request["image_names"])})
+
+                if request["save_result"]:
+                    isa.emit_results_change(username, farm_name, field_name, mission_date)
 
                 prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
                 
@@ -563,6 +713,10 @@ def process_predict(item):
             try:
                 if os.path.exists(prediction_request_path):
                     os.remove(prediction_request_path)
+
+                if results_dir is not None and os.path.exists(results_dir):
+                    shutil.rmtree(results_dir)
+
                 if os.path.basename(prediction_requests_dir) == "pending":
                     request["aborted_time"] = int(time.time())
                     request["error_message"] = str(e)

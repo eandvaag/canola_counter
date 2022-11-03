@@ -3,10 +3,13 @@ import os
 import shutil
 import glob
 
-from io_utils import json_io
+from io_utils import json_io, w3c_io
 
 import excess_green
 import metadata
+
+from image_set import Image
+from models.common import annotation_utils
 
 
 init_cameras = {
@@ -68,7 +71,7 @@ def clear_usr_requests_and_results(username):
                 os.makedirs(results_dir)
 
 
-def add_objects_names(): #fix_statuses():
+def make_all_image_sets_public(): #add_objects_names(): #fix_statuses():
 
     for usr_path in glob.glob(os.path.join("usr", "data", "*")):
         username = os.path.basename(usr_path)
@@ -79,10 +82,26 @@ def add_objects_names(): #fix_statuses():
                 for mission_path in glob.glob(os.path.join(field_path, "*")):
 
                     object_info_path = os.path.join(mission_path, "annotations", "object_info.json")
-                    object_info = {
-                        "object_name": "canola_seedling"
-                    }
-                    json_io.save_json(object_info_path, object_info)
+                    #object_info = {
+                    #    "object_name": "canola_seedling"
+                    #}
+                    #json_io.save_json(object_info_path, object_info)
+
+                    public_path = os.path.join(mission_path, "public.json")
+                    os.remove(public_path)
+                    os.remove(object_info_path)
+
+                    metadata_path = os.path.join(mission_path, "metadata", "metadata.json")
+                    metadata = json_io.load_json(metadata_path)
+
+                    metadata["is_ortho"] = "no"
+                    metadata["is_public"] = "yes"
+                    metadata["object_name"] = "canola_seedling"
+
+                    json_io.save_json(metadata_path, metadata)
+
+
+                    # json_io.save_json(public_path, {})
 
                     #status_path = os.path.join(mission_path, "model", "status.json")
                     #status = json_io.load_json(status_path)
@@ -92,6 +111,32 @@ def add_objects_names(): #fix_statuses():
                     #print(status)
                     #print()
                     #json_io.save_json(status_path, status)
+
+
+def update_w3c_annotation_file(image_set_dir):
+    
+    annotations_w3c_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
+    annotations_w3c = w3c_io.load_annotations(annotations_w3c_path, {"plant": 0})
+    annotations = {}
+    for image_name in annotations_w3c.keys():
+        image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+        image = Image(image_path)
+        w, h = image.get_wh()
+        annotations[image_name] = {
+            "boxes": [],
+            "training_regions": [],
+            "test_regions": []
+        }
+        annotations[image_name]["boxes"] = annotations_w3c[image_name]["boxes"]
+        if annotations_w3c[image_name]["status"] == "completed_for_training":
+            annotations[image_name]["training_regions"].append([0, 0, h, w])
+        elif annotations_w3c[image_name]["status"] == "completed_for_testing":
+            annotations[image_name]["test_regions"].append([0, 0, h, w])
+
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    annotation_utils.save_annotations(annotations_path, annotations)
+
+
 
 def init_usr(username):
 
@@ -118,6 +163,9 @@ def init_usr(username):
 
     cameras_path = os.path.join(cameras_dir, "cameras.json")
     json_io.save_json(cameras_path, init_cameras)
+
+    private_image_sets_path = os.path.join(usr_dir, "private_image_sets.json")
+    json_io.save_json(private_image_sets_path, {})
 
 
 def update_init_cameras(replace=False):
