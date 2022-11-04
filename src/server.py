@@ -577,6 +577,7 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 
 def post_result(image_set_dir, results_dir, predictions):
+    print("running post_result")
 
 
 
@@ -601,6 +602,7 @@ def post_result(image_set_dir, results_dir, predictions):
     #     excess_green_record_path = os.path.join(results_dir, "excess_green_record.json")
     #     json_io.save_json(excess_green_record_path, excess_green_record)
 
+    print("running collect_image_set_metrics")
     metrics = inference_metrics.collect_image_set_metrics(predictions, annotations) #, config)
     metrics_path = os.path.join(results_dir, "metrics.json")
     json_io.save_json(metrics_path, metrics)
@@ -616,19 +618,40 @@ def post_result(image_set_dir, results_dir, predictions):
     # shutil.copyfile(annotations_src_path, annotations_dst_path)
 
     predictions_path = os.path.join(results_dir, "predictions.json")
+    for image_name in predictions.keys():
+        inds = np.array(predictions[image_name]["scores"]) >= 0.25
+        predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
+        predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
+
+
+
     json_io.save_json(predictions_path, predictions)
     # w3c_io.save_predictions(image_predictions_path, image_predictions, config)
     return
 
 
 def post_predict(image_set_dir, image_names, predictions):
+    print("running post-predict")
+
     model_dir = os.path.join(image_set_dir, "model")
     predictions_dir = os.path.join(model_dir, "prediction")
     for image_name in image_names:
         image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
         os.makedirs(image_predictions_dir, exist_ok=True)
         predictions_path = os.path.join(image_predictions_dir, "predictions.json")
+
+        save_boxes = predictions[image_name]["boxes"]
+        save_scores = predictions[image_name]["scores"]
+        inds = np.array(predictions[image_name]["scores"]) >= 0.25
+
+        print("{}: num_boxes: {} num_above_thresh_boxes: {}".format(image_name, len(save_boxes), np.sum(inds)))
+        predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
+        predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
+
         json_io.save_json(predictions_path, {image_name: predictions[image_name]})
+
+        predictions[image_name]["boxes"] = save_boxes
+        predictions[image_name]["scores"] = save_scores
 
 
 

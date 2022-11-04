@@ -257,7 +257,7 @@ def set_active_training_params(config, seq_num):
 
 
 
-def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coords, 
+def get_image_detections(patch_abs_boxes, patch_scores, patch_coords, 
                       image_path, trim=True): #, patch_border_buffer_percent=None): # buffer_pct=None):
 
     if patch_abs_boxes.size == 0:
@@ -321,10 +321,10 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
 
             image_abs_boxes = image_abs_boxes[mask]
             image_scores = patch_scores[mask]
-            image_classes = patch_classes[mask]
+            # image_classes = patch_classes[mask]
         else:
             image_scores = patch_scores
-            image_classes = patch_classes
+            # image_classes = patch_classes
 
 
 
@@ -358,7 +358,7 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_classes, patch_coo
         #print("image_abs_boxes", image_abs_boxes)
         #print("image_scores", image_scores)
 
-    return image_abs_boxes, image_scores, image_classes
+    return image_abs_boxes, image_scores #, image_classes
 
 
 

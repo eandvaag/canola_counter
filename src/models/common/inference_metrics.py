@@ -349,30 +349,37 @@ def collect_image_set_metrics(predictions, annotations): #, config):
 
     # image_metrics = {}
     metrics = {
-        "MS COCO mAP": {},
-        "F1 Score (IoU=0.5)" : {},
-        "F1 Score (IoU=0.7)" : {},
-        "F1 Score (IoU=0.9)" : {}
+        "AP (IoU=.50:.50:.95)": {},
+        "AP (IoU=.50)": {},
+        "AP (IoU=.75)": {},
+        "F1 Score (IoU=.50)" : {},
+        "F1 Score (IoU=.75)" : {}
     }
 
     for image_name in annotations.keys():
-        metrics["MS COCO mAP"][image_name] = {}
-        metrics["F1 Score (IoU=0.5)"][image_name] = {}
-        metrics["F1 Score (IoU=0.7)"][image_name] = {}
-        metrics["F1 Score (IoU=0.9)"][image_name] = {}
+
+        print("collect_image_set_metrics", image_name)
+
+        metrics["AP (IoU=.50:.50:.95)"][image_name] = {}
+        metrics["AP (IoU=.50)"][image_name] = {}
+        metrics["AP (IoU=.75)"][image_name] = {}
+        metrics["F1 Score (IoU=.50)"][image_name] = {}
+        metrics["F1 Score (IoU=.75)"][image_name] = {}
 
         annotated_boxes = annotations[image_name]["boxes"]
         pred_boxes = np.array(predictions[image_name]["boxes"])
         pred_scores = np.array(predictions[image_name]["scores"])
 
         for region_key in ["training_regions", "test_regions"]:
-            metrics["MS COCO mAP"][image_name][region_key] = []
-            metrics["F1 Score (IoU=0.5)"][image_name][region_key] = []
-            metrics["F1 Score (IoU=0.7)"][image_name][region_key] = []
-            metrics["F1 Score (IoU=0.9)"][image_name][region_key] = []
+            metrics["AP (IoU=.50:.50:.95)"][image_name][region_key] = []
+            metrics["AP (IoU=.50)"][image_name][region_key] = []
+            metrics["AP (IoU=.75)"][image_name][region_key] = []
+            metrics["F1 Score (IoU=.50)"][image_name][region_key] = []
+            metrics["F1 Score (IoU=.75)"][image_name][region_key] = []
 
 
             for region in annotations[image_name][region_key]:
+
                 
                 region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
                 region_annotated_boxes = annotated_boxes[region_annotated_inds]
@@ -382,11 +389,16 @@ def collect_image_set_metrics(predictions, annotations): #, config):
                 region_pred_boxes = pred_boxes[region_pred_inds]
                 region_pred_scores = pred_scores[region_pred_inds]
                 
+                sel_region_pred_scores = region_pred_scores[region_pred_scores >= 0.50]
                 sel_region_pred_boxes = region_pred_boxes[region_pred_scores >= 0.50]
                 # region_pred_classes = np.zeros(shape=(region_pred_boxes.shape[0]))
 
+                print("getting AP vals")
+                AP_vals = get_AP_vals(region_annotated_boxes, region_pred_boxes, region_pred_scores)
 
-                MS_COCO_mAP = get_MS_COCO_mAP(region_annotated_boxes, region_pred_boxes, region_pred_scores)
+                metrics["AP (IoU=.50:.50:.95)"][image_name][region_key].append(AP_vals["AP (IoU=.50:.50:.95)"])
+                metrics["AP (IoU=.50)"][image_name][region_key].append(AP_vals["AP (IoU=.50)"])
+                metrics["AP (IoU=.75)"][image_name][region_key].append(AP_vals["AP (IoU=.75)"])
 
                 # pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(
                 #     region_pred_boxes, region_pred_classes, region_pred_scores,
@@ -399,14 +411,14 @@ def collect_image_set_metrics(predictions, annotations): #, config):
 
 
                 # image_metrics[image_name]["Image PASCAL VOC mAP"] = float(pascal_voc_mAP) * 100
-                metrics["MS COCO mAP"][image_name][region_key].append(MS_COCO_mAP)
+                # metrics["MS COCO mAP"][image_name][region_key].append(MS_COCO_mAP)
 
-                f1_iou_05 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.5)
-                f1_iou_07 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.7)
-                f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.9)
-                metrics["F1 Score (IoU=0.5)"][image_name][region_key].append(f1_iou_05)
-                metrics["F1 Score (IoU=0.7)"][image_name][region_key].append(f1_iou_07)
-                metrics["F1 Score (IoU=0.9)"][image_name][region_key].append(f1_iou_09)
+                print("getting F1 scores")
+                f1_iou_05 = get_f1_score(region_annotated_boxes, region_pred_boxes, iou_thresh=0.5)
+                f1_iou_075 = get_f1_score(region_annotated_boxes, region_pred_boxes, iou_thresh=0.75)
+                # f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.9)
+                metrics["F1 Score (IoU=.50)"][image_name][region_key].append(f1_iou_05)
+                metrics["F1 Score (IoU=.75)"][image_name][region_key].append(f1_iou_075)
 
 
     return metrics
@@ -443,7 +455,7 @@ def collect_image_set_metrics(predictions, annotations): #, config):
     # return image_metrics
 
 
-def get_MS_COCO_mAP(annotated_boxes, predicted_boxes, predicted_scores):
+def get_AP_vals(annotated_boxes, predicted_boxes, predicted_scores):
 
     annotated_classes = np.zeros(shape=(annotated_boxes.shape[0]))
     predicted_classes = np.zeros(shape=(predicted_boxes.shape[0]))
@@ -455,11 +467,19 @@ def get_MS_COCO_mAP(annotated_boxes, predicted_boxes, predicted_scores):
         annotated_boxes,
         annotated_classes)
 
-    image_metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
-    image_metric_fn.add(pred_for_mAP, true_for_mAP)
-    ms_coco_mAP = image_metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
+    metric_fn.add(pred_for_mAP, true_for_mAP)
 
-    return float(ms_coco_mAP) * 100
+    ms_coco_mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    mAP_IoU_50 = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    mAP_IoU_75 = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+
+    return {
+        "AP (IoU=.50:.50:.95)": float(ms_coco_mAP) * 100,
+        "AP (IoU=.50)": float(mAP_IoU_50) * 100,
+        "AP (IoU=.75)": float(mAP_IoU_75) * 100
+    }
+
 
     
 

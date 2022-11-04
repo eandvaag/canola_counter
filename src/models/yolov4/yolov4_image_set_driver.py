@@ -28,7 +28,8 @@ from io_utils import json_io
 from models.common import inference_metrics, \
                           driver_utils, \
                           model_keys, \
-                          annotation_utils
+                          annotation_utils, \
+                          box_utils
 
 from image_set import Image
 
@@ -43,13 +44,74 @@ from models.yolov4.loss import YOLOv4Loss
 from models.yolov4.yolov4 import YOLOv4, YOLOv4Tiny
 import models.yolov4.data_load as data_load
 from models.yolov4.encode import Decoder
-from models.yolov4.yolov4_driver import post_process_sample
+# from models.yolov4.yolov4_driver import post_process_sample
 
 # VALIDATION_IMPROVEMENT_TOLERANCE = 10
 EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10
 TRAINING_TIME_SESSION_CEILING = 5000            # number of seconds before current session is stopped in order to give others a chance
 
 # MAX_IN_MEMORY_IMAGE_SIZE = 5e+8     # 500 megabytes
+
+
+
+
+
+def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nms=True, score_threshold=0.5, round_scores=True):
+
+    detections = np.array(detections)
+
+    pred_xywh = detections[:, 0:4]
+    pred_conf = detections[:, 4]
+    pred_prob = detections[:, 5:]
+
+    pred_boxes = (box_utils.swap_xy_tf(box_utils.convert_to_corners_tf(pred_xywh))).numpy()
+
+    pred_boxes = np.stack([
+            pred_boxes[:, 0] * resize_ratio[0],
+            pred_boxes[:, 1] * resize_ratio[1],
+            pred_boxes[:, 2] * resize_ratio[0],
+            pred_boxes[:, 3] * resize_ratio[1]
+    ], axis=-1)
+
+
+    invalid_mask = np.logical_or((pred_boxes[:, 0] > pred_boxes[:, 2]), (pred_boxes[:, 1] > pred_boxes[:, 3]))
+    pred_boxes[invalid_mask] = 0
+
+    # # (4) discard some invalid boxes
+    #bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
+    #scale_mask = np.logical_and((valid_scale[0] < bboxes_scale), (bboxes_scale < valid_scale[1]))
+
+    pred_classes = np.argmax(pred_prob, axis=-1)
+    pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
+    if round_scores:
+        pred_scores = np.round(pred_scores, 2)
+    score_mask = pred_scores >= score_threshold
+
+    # in_bounds_mask = np.logical_and(
+    #     np.logical_and(pred_boxes[:, 0] > 0, pred_boxes[:, 1] > 0),
+    #     np.logical_and(pred_boxes[:, 2] < patch_coords[2], pred_boxes[:, 3] < patch_coords[3])
+    # )
+
+    #mask = np.logical_and(scale_mask, score_mask)
+    mask = score_mask #np.logical_and(score_mask, in_bounds_mask)
+    pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
+
+    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
+
+    pred_boxes = np.rint(pred_boxes).astype(np.int32)
+    pred_scores = pred_scores.astype(np.float32)
+    pred_classes = pred_classes.astype(np.int32)
+
+    if apply_nms:
+        pred_boxes, pred_classes, pred_scores = box_utils.non_max_suppression_with_classes(
+            pred_boxes,
+            pred_classes,
+            pred_scores,
+            iou_thresh=config["inference"]["patch_nms_iou_thresh"])
+
+    return pred_boxes, pred_scores, pred_classes
+
+
 
 
 def create_default_config():
@@ -412,8 +474,8 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
 
                         
 
-                        pred_patch_abs_boxes, pred_patch_scores, pred_patch_classes = \
-                                post_process_sample(pred_bbox, ratio, patch_coords, config, score_threshold=config["inference"]["score_thresh"])
+                        pred_patch_abs_boxes, pred_patch_scores, _ = \
+                                post_process_sample(pred_bbox, ratio, patch_coords, config, score_threshold=0.001) #config["inference"]["score_thresh"])
 
 
 
@@ -429,10 +491,9 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
                         
 
 
-                        pred_image_abs_boxes, pred_image_scores, pred_image_classes = \
+                        pred_image_abs_boxes, pred_image_scores = \
                             driver_utils.get_image_detections(pred_patch_abs_boxes, 
-                                                            pred_patch_scores, 
-                                                            pred_patch_classes, 
+                                                            pred_patch_scores,
                                                             patch_coords, 
                                                             image_path, 
                                                             trim=True)
@@ -473,9 +534,10 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
                                      extra_items={"percent_complete": (image_index+1) / len(image_names)}) #"num_processed": image_index+1, "num_images": len(image_names)}) 
 
 
-
+    print("running clip image boxes")
     driver_utils.clip_image_boxes(image_set_dir, predictions)
 
+    print("running apply_nms_to_image_boxes")
     driver_utils.apply_nms_to_image_boxes(predictions, 
                                           iou_thresh=config["inference"]["image_nms_iou_thresh"])
 

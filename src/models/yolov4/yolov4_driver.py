@@ -31,62 +31,6 @@ from io_utils import json_io, tf_record_io, w3c_io
     
 
 
-def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nms=True, score_threshold=0.5, round_scores=True):
-
-    detections = np.array(detections)
-
-    pred_xywh = detections[:, 0:4]
-    pred_conf = detections[:, 4]
-    pred_prob = detections[:, 5:]
-
-    pred_boxes = (box_utils.swap_xy_tf(box_utils.convert_to_corners_tf(pred_xywh))).numpy()
-
-    pred_boxes = np.stack([
-            pred_boxes[:, 0] * resize_ratio[0],
-            pred_boxes[:, 1] * resize_ratio[1],
-            pred_boxes[:, 2] * resize_ratio[0],
-            pred_boxes[:, 3] * resize_ratio[1]
-    ], axis=-1)
-
-
-    invalid_mask = np.logical_or((pred_boxes[:, 0] > pred_boxes[:, 2]), (pred_boxes[:, 1] > pred_boxes[:, 3]))
-    pred_boxes[invalid_mask] = 0
-
-    # # (4) discard some invalid boxes
-    #bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
-    #scale_mask = np.logical_and((valid_scale[0] < bboxes_scale), (bboxes_scale < valid_scale[1]))
-
-    pred_classes = np.argmax(pred_prob, axis=-1)
-    pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
-    if round_scores:
-        pred_scores = np.round(pred_scores, 2)
-    score_mask = pred_scores >= score_threshold
-
-    # in_bounds_mask = np.logical_and(
-    #     np.logical_and(pred_boxes[:, 0] > 0, pred_boxes[:, 1] > 0),
-    #     np.logical_and(pred_boxes[:, 2] < patch_coords[2], pred_boxes[:, 3] < patch_coords[3])
-    # )
-
-    #mask = np.logical_and(scale_mask, score_mask)
-    mask = score_mask #np.logical_and(score_mask, in_bounds_mask)
-    pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
-
-    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
-
-    pred_boxes = np.rint(pred_boxes).astype(np.int32)
-    pred_scores = pred_scores.astype(np.float32)
-    pred_classes = pred_classes.astype(np.int32)
-
-    if apply_nms:
-        pred_boxes, pred_classes, pred_scores = box_utils.non_max_suppression_with_classes(
-            pred_boxes,
-            pred_classes,
-            pred_scores,
-            iou_thresh=config["inference"]["patch_nms_iou_thresh"])
-
-    return pred_boxes, pred_scores, pred_classes
-
-
 
 
 
