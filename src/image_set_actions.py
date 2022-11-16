@@ -22,6 +22,9 @@ FINISHED_FINE_TUNING = "Finished Fine-Tuning"
 # FINISHED_TRAINING = "Finished Training"
 PREDICTING = "Predicting"
 FINISHED_PREDICTING = "Finished Predicting"
+
+COLLECTING_METRICS = "Collecting Metrics"
+
 SWITCHING_MODELS = "Switching Models"
 FINISHED_SWITCHING_MODELS = "Finished Switching Models"
 # RESTARTING = "Restarting"

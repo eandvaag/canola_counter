@@ -30,8 +30,8 @@ def scale_image(img, old_min, old_max, new_min, new_max, rint=False, np_type=Non
 
 
 
-def excess_green(image):
-    image_array = np.float32(image.load_image_array()) / 255
+def excess_green(image_array):
+    image_array = np.float32(image_array) / 255
     exg_array = (2 * image_array[:,:,1]) - image_array[:,:,0] - image_array[:,:,2]
     return exg_array
 

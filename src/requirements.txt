@@ -86,6 +86,7 @@ py==1.11.0
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 PyExifTool==0.4.11
+#pygdal==3.4.1.10
 pynndescent==0.5.6
 pyparsing==3.0.6
 pyrsistent==0.18.1
@@ -102,6 +103,7 @@ rsa==4.8
 scikit-image==0.19.0
 scikit-learn==1.0.1
 scipy==1.7.3
+Shapely==1.8.5.post1
 six==1.16.0
 statsmodels==0.13.1
 tempora==5.0.0
@@ -122,7 +124,7 @@ tomli==2.0.1
 toolz==0.11.2
 tqdm==4.62.3
 typeguard==2.13.2
-typing-extensions==4.0.1
+typing_extensions==4.0.1
 ujson==5.1.0
 umap-learn==0.5.2
 urllib3==1.26.7

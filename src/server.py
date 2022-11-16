@@ -13,6 +13,7 @@ import image_set_aux
 import image_set_actions as isa
 import extract_patches as ep
 from image_set import Image
+import excess_green
 
 
 from io_utils import json_io, w3c_io, tf_record_io
@@ -575,8 +576,24 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 #     return end_time
 
+def update_vegetation_record(image_set_dir, annotations, excess_green_record):
 
-def post_result(image_set_dir, results_dir, predictions):
+    vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
+    vegetation_record = json_io.load_json(vegetation_record_path)
+
+    metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    metadata = json_io.load_json(metadata_path)
+
+    if metadata["is_ortho"] == "yes":
+        updated_vegetation_record = excess_green.update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, excess_green_record, annotations)
+    else:
+        updated_vegetation_record = excess_green.update_vegetation_record_for_image_set(image_set_dir, vegetation_record, excess_green_record, annotations)
+
+    return updated_vegetation_record
+
+
+
+def collect_results(image_set_dir, results_dir, predictions, full_predictions):
     print("running post_result")
 
 
@@ -590,8 +607,8 @@ def post_result(image_set_dir, results_dir, predictions):
     annotations_src_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotations = annotation_utils.load_annotations(annotations_src_path)
 
-    
-    
+    excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
+    excess_green_record = json_io.load_json(excess_green_record_src_path)
     # image_set_results_dir = os.path.join(results_dir, str(end_time))
     # os.makedirs(image_set_results_dir)
     # annotations_path = os.path.join(results_dir, "annotations.json")
@@ -603,9 +620,19 @@ def post_result(image_set_dir, results_dir, predictions):
     #     json_io.save_json(excess_green_record_path, excess_green_record)
 
     print("running collect_image_set_metrics")
-    metrics = inference_metrics.collect_image_set_metrics(predictions, annotations) #, config)
+    metrics = inference_metrics.collect_image_set_metrics(image_set_dir, full_predictions, annotations) #, config)
     metrics_path = os.path.join(results_dir, "metrics.json")
     json_io.save_json(metrics_path, metrics)
+
+
+
+    updated_vegetation_record = update_vegetation_record(image_set_dir, annotations, excess_green_record)
+
+    vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
+    json_io.save_json(vegetation_record_path, updated_vegetation_record)
+
+    results_vegetation_record_path = os.path.join(results_dir, "vegetation_record.json")
+    json_io.save_json(results_vegetation_record_path, updated_vegetation_record)
 
     excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
     if os.path.exists(excess_green_record_src_path):
@@ -617,21 +644,28 @@ def post_result(image_set_dir, results_dir, predictions):
     annotation_utils.save_annotations(annotations_dst_path, annotations)
     # shutil.copyfile(annotations_src_path, annotations_dst_path)
 
+    full_predictions_path = os.path.join(results_dir, "full_predictions.json")
+    json_io.save_json(full_predictions_path, full_predictions)
+
+
     predictions_path = os.path.join(results_dir, "predictions.json")
-    for image_name in predictions.keys():
-        inds = np.array(predictions[image_name]["scores"]) >= 0.25
-        predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
-        predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
-
-
-
     json_io.save_json(predictions_path, predictions)
+
+
+    # for image_name in predictions.keys():
+    #     inds = np.array(predictions[image_name]["scores"]) >= 0.25
+    #     predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
+    #     predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
+
+
+
+    
     # w3c_io.save_predictions(image_predictions_path, image_predictions, config)
     return
 
 
-def post_predict(image_set_dir, image_names, predictions):
-    print("running post-predict")
+def save_predictions(image_set_dir, image_names, predictions):
+    print("Saving predictions")
 
     model_dir = os.path.join(image_set_dir, "model")
     predictions_dir = os.path.join(model_dir, "prediction")
@@ -640,18 +674,18 @@ def post_predict(image_set_dir, image_names, predictions):
         os.makedirs(image_predictions_dir, exist_ok=True)
         predictions_path = os.path.join(image_predictions_dir, "predictions.json")
 
-        save_boxes = predictions[image_name]["boxes"]
-        save_scores = predictions[image_name]["scores"]
-        inds = np.array(predictions[image_name]["scores"]) >= 0.25
+        # save_boxes = predictions[image_name]["boxes"]
+        # save_scores = predictions[image_name]["scores"]
+        # inds = np.array(predictions[image_name]["scores"]) >= 0.25
 
-        print("{}: num_boxes: {} num_above_thresh_boxes: {}".format(image_name, len(save_boxes), np.sum(inds)))
-        predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
-        predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
+        # print("{}: num_boxes: {} num_above_thresh_boxes: {}".format(image_name, len(save_boxes), np.sum(inds)))
+        # predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
+        # predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
 
         json_io.save_json(predictions_path, {image_name: predictions[image_name]})
 
-        predictions[image_name]["boxes"] = save_boxes
-        predictions[image_name]["scores"] = save_scores
+        # predictions[image_name]["boxes"] = save_boxes
+        # predictions[image_name]["scores"] = save_scores
 
 
 
@@ -690,10 +724,12 @@ def process_predict(item):
                             
 
      
-                interrupted, predictions = yolov4_image_set_driver.predict(sch_ctx,
+                interrupted, predictions, full_predictions = yolov4_image_set_driver.predict(
+                                    sch_ctx,
                                     image_set_dir, 
                                     image_names=request["image_names"], 
                                     save_result=request["save_result"])
+                
 
                 #end_time = predict_on_images(
                 #        image_set_dir,
@@ -703,14 +739,15 @@ def process_predict(item):
                 if interrupted:
                     return
 
-                post_predict(image_set_dir, request["image_names"], predictions)
+                save_predictions(image_set_dir, request["image_names"], predictions)
 
                 if request["save_result"]:
+                    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.COLLECTING_METRICS)
                     end_time = int(time.time())
                     request["end_time"] = end_time
                     results_dir = os.path.join(model_dir, "results", str(end_time))
                     os.makedirs(results_dir)
-                    post_result(image_set_dir, results_dir, predictions)
+                    collect_results(image_set_dir, results_dir, predictions, full_predictions)
                     json_io.save_json(os.path.join(results_dir, "request.json"), request)
 
                 os.remove(prediction_request_path)
@@ -740,7 +777,7 @@ def process_predict(item):
                 if results_dir is not None and os.path.exists(results_dir):
                     shutil.rmtree(results_dir)
 
-                if os.path.basename(prediction_requests_dir) == "pending":
+                if request["save_result"]:
                     request["aborted_time"] = int(time.time())
                     request["error_message"] = str(e)
                     request["error_info"] = str(trace)

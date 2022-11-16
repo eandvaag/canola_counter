@@ -56,7 +56,7 @@ TRAINING_TIME_SESSION_CEILING = 5000            # number of seconds before curre
 
 
 
-def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nms=True, score_threshold=0.5, round_scores=True):
+def post_process_sample(detections, resize_ratio, patch_coords, config, image_width, image_height, apply_nms=True, score_threshold=0.5, round_scores=True):
 
     detections = np.array(detections)
 
@@ -97,6 +97,7 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, apply_nm
     pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
 
     pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
+    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, image_height, image_width])
 
     pred_boxes = np.rint(pred_boxes).astype(np.int32)
     pred_scores = pred_scores.astype(np.float32)
@@ -366,14 +367,14 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
         
         # w, h = image.get_wh()
         # num_bytes = w * h * 3
-        w, h = image.get_wh()
+        image_width, image_height = image.get_wh()
 
         if is_ortho:
             incr = patch_size - overlap_px
-            w_covered = w - patch_size
+            w_covered = image_width - patch_size
             num_w_patches = m.ceil(w_covered / incr) + 1
 
-            h_covered = h - patch_size
+            h_covered = image_height - patch_size
             num_h_patches = m.ceil(h_covered / incr) + 1
 
             num_patches = num_w_patches * num_h_patches
@@ -406,8 +407,8 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
         while not col_covered:
             patch_max_y = patch_min_y + patch_size
             max_content_y = patch_max_y
-            if patch_max_y >= h:
-                max_content_y = h
+            if patch_max_y >= image_height:
+                max_content_y = image_height
                 col_covered = True
 
             row_covered = False
@@ -416,8 +417,8 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
 
                 patch_max_x = patch_min_x + patch_size
                 max_content_x = patch_max_x
-                if patch_max_x >= w:
-                    max_content_x = w
+                if patch_max_x >= image_width:
+                    max_content_x = image_width
                     row_covered = True
 
                 
@@ -475,7 +476,7 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
                         
 
                         pred_patch_abs_boxes, pred_patch_scores, _ = \
-                                post_process_sample(pred_bbox, ratio, patch_coords, config, score_threshold=0.001) #config["inference"]["score_thresh"])
+                                post_process_sample(pred_bbox, ratio, patch_coords, config, image_width, image_height, score_threshold=0.01) #config["inference"]["score_thresh"])
 
 
 
@@ -483,12 +484,15 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
                             predictions[image_name] = {
                                     # "image_path": image_path,
                                     "boxes": [],
-                                    "scores": []
+                                    "scores": [],
+                                    # "box_index_to_patch_index": {},
+                                    # "flattened_box_indices": []
                                     # "pred_image_abs_boxes": [],
                                     # # "pred_classes": [],
-                                    # "pred_scores": []          
+                                    # "pred_scores": []      
                             }
-                        
+                            # patch_index = 0
+                            # box_index = 0
 
 
                         pred_image_abs_boxes, pred_image_scores = \
@@ -500,6 +504,21 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
 
                         predictions[image_name]["boxes"].extend(pred_image_abs_boxes.tolist())
                         predictions[image_name]["scores"].extend(pred_image_scores.tolist())
+
+                        # predictions[image_name]["boxes"].append(pred_image_abs_boxes.tolist())
+                        # predictions[image_name]["scores"].append(pred_image_scores.tolist())
+
+                        # predictions[image_name]["flattened_box_indices"].append([x for x in range(box_index, box_index+pred_image_scores.size)]) #box_index)
+                        # for _ in range(pred_image_scores.size):
+                        #     predictions[image_name]["box_index_to_patch_index"][box_index] = patch_index
+                        #     box_index += 1
+                        # box_index += pred_image_scores.size
+
+                        # patch_index += 1
+                        
+
+
+
                         # image_predictions[image_name]["pred_classes"].extend(pred_image_classes.tolist())
 
 
@@ -512,14 +531,14 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
                         affected = drain_switch_queue(sch_ctx, cur_image_set_dir=image_set_dir)
                         if affected:
                             # end_time = int(time.time())
-                            return True, None
+                            return True, None, None
 
                     batch_index += 1
                     if is_ortho:
                         prev_percent_complete = percent_complete
-                        percent_complete = batch_index / num_batches
+                        percent_complete = round((batch_index / num_batches) * 100)
                         # print("percent_complete", percent_complete)
-                        if percent_complete > prev_percent_complete:
+                        if m.floor(percent_complete) > m.floor(prev_percent_complete):
                             isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
                                      extra_items={"percent_complete": percent_complete}) 
 
@@ -531,15 +550,42 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
 
         if not is_ortho:
             isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
-                                     extra_items={"percent_complete": (image_index+1) / len(image_names)}) #"num_processed": image_index+1, "num_images": len(image_names)}) 
+                                     extra_items={"percent_complete": round(((image_index+1) / len(image_names)) * 100)}) #"num_processed": image_index+1, "num_images": len(image_names)}) 
 
 
     print("running clip image boxes")
-    driver_utils.clip_image_boxes(image_set_dir, predictions)
+    # driver_utils.clip_image_boxes(image_set_dir, predictions)
+    # driver_utils.clip_image_boxes_fast(image_set_dir, predictions)
 
-    print("running apply_nms_to_image_boxes")
+    print("SAVING PREDICTIONS")
+    json_io.save_json(os.path.join(image_set_dir, "saved_full_predictions.json"), predictions)
+
+    # driver_utils.apply_nms_to_image_boxes(predictions, 
+    #                                       iou_thresh=config["inference"]["image_nms_iou_thresh"])
+    # print("running apply_nms_to_image_boxes")
+    # iou_thresh = config["inference"]["image_nms_iou_thresh"]
+    start_nms_time = time.time()
+    # # driver_utils.apply_nms_to_image_boxes_fast(predictions, image_set_dir, patch_size, overlap_px, iou_thresh)
     driver_utils.apply_nms_to_image_boxes(predictions, 
                                           iou_thresh=config["inference"]["image_nms_iou_thresh"])
+
+    # predictions = driver_utils.custom_nms(image_set_dir, predictions, config["inference"]["image_nms_iou_thresh"], patch_size, overlap_px)
+    end_nms_time = time.time()
+    elapsed_nms_time = end_nms_time - start_nms_time
+    print("Ran NMS in {} seconds.".format(elapsed_nms_time))
+
+    thresholded_predictions = {}
+    for image_name in predictions.keys():
+        inds = np.array(predictions[image_name]["scores"]) >= 0.25
+
+        thresholded_predictions[image_name] = {
+            "boxes": (np.array(predictions[image_name]["boxes"])[inds]).tolist(),
+            "scores": (np.array(predictions[image_name]["scores"])[inds]).tolist()
+        }
+
+
+
+
 
 
 
@@ -570,7 +616,7 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
     # elapsed_time = end_time - start_time
     # logger.info("Finished predicting. Elapsed time: {}".format(elapsed_time))
 
-    return False, predictions
+    return False, thresholded_predictions, predictions
 
 
 
@@ -1425,7 +1471,7 @@ def get_epochs_since_substantial_improvement(loss_record):
     if len(vals) <= 1:
         return 0
     # best_index = np.argmin(loss_record["training_loss"]["values"])
-    SUBSTANTIAL_IMPROVEMENT_THRESH = 0.05
+    SUBSTANTIAL_IMPROVEMENT_THRESH = 0.01
     epochs_since_improvement = 0
     val_to_improve_on = vals[0]
     for i in range(1, len(vals)):

@@ -2,6 +2,7 @@ import logging
 import argparse
 import tqdm
 import os
+import time
 import numpy as np
 from mean_average_precision import MetricBuilder
 import matplotlib.pyplot as plt
@@ -340,42 +341,58 @@ def get_f1_score(annotated_boxes, pred_boxes, iou_thresh):
     return float(f1_score)
 
 
-def collect_image_set_metrics(predictions, annotations): #, config):
+def collect_image_set_metrics(image_set_dir, full_predictions, annotations): #, config):
 
     logger = logging.getLogger(__name__)
     logger.info("Collecting image set metrics")
 
+    start_time = int(time.time())
+
     # num_classes = len(config["arch"]["class_map"].keys())
 
     # image_metrics = {}
+
+    # metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    # metadata = json_io.load_json(metadata_path)
+    # is_ortho = metadata["is_ortho"] == "yes"
+
+    # if is_ortho:
     metrics = {
-        "AP (IoU=.50:.50:.95)": {},
-        "AP (IoU=.50)": {},
-        "AP (IoU=.75)": {},
-        "F1 Score (IoU=.50)" : {},
-        "F1 Score (IoU=.75)" : {}
+    "AP (IoU=.50:.05:.95)": {},
+    "AP (IoU=.50)": {},
+    "AP (IoU=.75)": {},
+    "F1 Score (IoU=.50, conf>=.50)" : {},
+    "F1 Score (IoU=.75, conf>=.50)" : {}
     }
+    # else:
+    #     metrics = {
+    #         "AP (IoU=.50:.05:.95)": {},
+    #         "AP (IoU=.50)": {},
+    #         "AP (IoU=.75)": {},
+    #         "F1 Score (IoU=.50, conf>=.50)" : {},
+    #         "F1 Score (IoU=.75, conf>=.50)" : {}
+    #     }
 
     for image_name in annotations.keys():
 
         print("collect_image_set_metrics", image_name)
 
-        metrics["AP (IoU=.50:.50:.95)"][image_name] = {}
+        metrics["AP (IoU=.50:.05:.95)"][image_name] = {}
         metrics["AP (IoU=.50)"][image_name] = {}
         metrics["AP (IoU=.75)"][image_name] = {}
-        metrics["F1 Score (IoU=.50)"][image_name] = {}
-        metrics["F1 Score (IoU=.75)"][image_name] = {}
+        metrics["F1 Score (IoU=.50, conf>=.50)"][image_name] = {}
+        metrics["F1 Score (IoU=.75, conf>=.50)"][image_name] = {}
 
         annotated_boxes = annotations[image_name]["boxes"]
-        pred_boxes = np.array(predictions[image_name]["boxes"])
-        pred_scores = np.array(predictions[image_name]["scores"])
+        pred_boxes = np.array(full_predictions[image_name]["boxes"])
+        pred_scores = np.array(full_predictions[image_name]["scores"])
 
         for region_key in ["training_regions", "test_regions"]:
-            metrics["AP (IoU=.50:.50:.95)"][image_name][region_key] = []
+            metrics["AP (IoU=.50:.05:.95)"][image_name][region_key] = []
             metrics["AP (IoU=.50)"][image_name][region_key] = []
             metrics["AP (IoU=.75)"][image_name][region_key] = []
-            metrics["F1 Score (IoU=.50)"][image_name][region_key] = []
-            metrics["F1 Score (IoU=.75)"][image_name][region_key] = []
+            metrics["F1 Score (IoU=.50, conf>=.50)"][image_name][region_key] = []
+            metrics["F1 Score (IoU=.75, conf>=.50)"][image_name][region_key] = []
 
 
             for region in annotations[image_name][region_key]:
@@ -389,14 +406,14 @@ def collect_image_set_metrics(predictions, annotations): #, config):
                 region_pred_boxes = pred_boxes[region_pred_inds]
                 region_pred_scores = pred_scores[region_pred_inds]
                 
-                sel_region_pred_scores = region_pred_scores[region_pred_scores >= 0.50]
+                # sel_region_pred_scores = region_pred_scores[region_pred_scores >= 0.50]
                 sel_region_pred_boxes = region_pred_boxes[region_pred_scores >= 0.50]
                 # region_pred_classes = np.zeros(shape=(region_pred_boxes.shape[0]))
 
                 print("getting AP vals")
                 AP_vals = get_AP_vals(region_annotated_boxes, region_pred_boxes, region_pred_scores)
 
-                metrics["AP (IoU=.50:.50:.95)"][image_name][region_key].append(AP_vals["AP (IoU=.50:.50:.95)"])
+                metrics["AP (IoU=.50:.05:.95)"][image_name][region_key].append(AP_vals["AP (IoU=.50:.05:.95)"])
                 metrics["AP (IoU=.50)"][image_name][region_key].append(AP_vals["AP (IoU=.50)"])
                 metrics["AP (IoU=.75)"][image_name][region_key].append(AP_vals["AP (IoU=.75)"])
 
@@ -414,12 +431,15 @@ def collect_image_set_metrics(predictions, annotations): #, config):
                 # metrics["MS COCO mAP"][image_name][region_key].append(MS_COCO_mAP)
 
                 print("getting F1 scores")
-                f1_iou_05 = get_f1_score(region_annotated_boxes, region_pred_boxes, iou_thresh=0.5)
-                f1_iou_075 = get_f1_score(region_annotated_boxes, region_pred_boxes, iou_thresh=0.75)
+                f1_iou_050 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.50)
+                f1_iou_075 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.75)
                 # f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.9)
-                metrics["F1 Score (IoU=.50)"][image_name][region_key].append(f1_iou_05)
-                metrics["F1 Score (IoU=.75)"][image_name][region_key].append(f1_iou_075)
+                metrics["F1 Score (IoU=.50, conf>=.50)"][image_name][region_key].append(f1_iou_050)
+                metrics["F1 Score (IoU=.75, conf>=.50)"][image_name][region_key].append(f1_iou_075)
 
+    end_time = int(time.time())
+    elapsed_time = end_time - start_time
+    print("Finished calculating metrics. Took {} seconds.".format(elapsed_time))
 
     return metrics
 
@@ -457,33 +477,125 @@ def collect_image_set_metrics(predictions, annotations): #, config):
 
 def get_AP_vals(annotated_boxes, predicted_boxes, predicted_scores):
 
-    annotated_classes = np.zeros(shape=(annotated_boxes.shape[0]))
-    predicted_classes = np.zeros(shape=(predicted_boxes.shape[0]))
+    NUM_BOXES_THRESH = 100000
 
-    pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(
-        predicted_boxes, 
-        predicted_classes, 
-        predicted_scores,
-        annotated_boxes,
-        annotated_classes)
+    if (annotated_boxes.shape[0] * predicted_boxes.shape[0]) < (NUM_BOXES_THRESH * NUM_BOXES_THRESH):
 
-    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
-    metric_fn.add(pred_for_mAP, true_for_mAP)
+        annotated_classes = np.zeros(shape=(annotated_boxes.shape[0]))
+        predicted_classes = np.zeros(shape=(predicted_boxes.shape[0]))
 
-    ms_coco_mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
-    mAP_IoU_50 = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
-    mAP_IoU_75 = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(
+            predicted_boxes, 
+            predicted_classes, 
+            predicted_scores,
+            annotated_boxes,
+            annotated_classes)
 
-    return {
-        "AP (IoU=.50:.50:.95)": float(ms_coco_mAP) * 100,
-        "AP (IoU=.50)": float(mAP_IoU_50) * 100,
-        "AP (IoU=.75)": float(mAP_IoU_75) * 100
-    }
+        metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
+        metric_fn.add(pred_for_mAP, true_for_mAP)
 
+        ms_coco_mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        mAP_IoU_50 = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        mAP_IoU_75 = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
 
+        return {
+            "AP (IoU=.50:.05:.95)": float(ms_coco_mAP) * 100,
+            "AP (IoU=.50)": float(mAP_IoU_50) * 100,
+            "AP (IoU=.75)": float(mAP_IoU_75) * 100
+        }
     
+    else:
+
+        min_y_annotated = np.min(annotated_boxes[:, 0])
+        min_x_annotated = np.min(annotated_boxes[:, 1])
+        max_y_annotated = np.max(annotated_boxes[:, 2])
+        max_x_annotated = np.max(annotated_boxes[:, 3])
+
+        min_y_predicted = np.min(predicted_boxes[:, 0])
+        min_x_predicted = np.min(predicted_boxes[:, 1])
+        max_y_predicted = np.max(predicted_boxes[:, 2])
+        max_x_predicted = np.max(predicted_boxes[:, 3])
+
+        min_y = min(min_y_annotated, min_y_predicted)
+        min_x = min(min_x_annotated, min_x_predicted)
+        max_y = max(max_y_annotated, max_y_predicted)
+        max_x = max(max_x_annotated, max_x_predicted)
+
+        estimate_change = np.inf
+        delta = 0.01
+        ms_coco_mAP_vals = []
+        mAP_IoU_50_vals = []
+        mAP_IoU_75_vals = []
+        while len(ms_coco_mAP_vals) < 10: # estimate_change > delta:
+            point_y = random.randrange(min_y, max_y)
+            point_x = random.randrange(min_x, max_x)
+
+            sample_min_y = point_y - 1
+            sample_min_x = point_x - 1
+            sample_max_y = point_y + 1
+            sample_max_x = point_x + 1
+
+            prev_sample_region = [sample_min_y, sample_min_x, sample_max_y, sample_max_x]
+            sample_region = prev_sample_region
+            contained_annotated = get_contained_inds(annotated_boxes, [sample_region])
+            contained_predicted = get_contained_inds(predicted_boxes, [sample_region])
+            num_sample_boxes = contained_annotated * contained_predicted
+            while (num_sample_boxes < (NUM_BOXES_THRESH * NUM_BOXES_THRESH)):
+                cur_h = sample_max_y - sample_min_y
+                sample_min_y = round(sample_min_y - (cur_h / 2))
+                sample_max_y = round(sample_min_y + (cur_h / 2))
+
+                cur_w = sample_max_x - sample_min_x
+                sample_min_x = round(sample_min_x - (cur_w / 2))
+                sample_max_x = round(sample_min_x + (cur_w / 2))
+
+                prev_sample_region = sample_region
+                sample_region = [sample_min_y, sample_min_x, sample_max_y, sample_max_x]
+                contained_annotated = get_contained_inds(annotated_boxes, [sample_region])
+                contained_predicted = get_contained_inds(predicted_boxes, [sample_region])
+                num_sample_boxes = contained_annotated * contained_predicted
+
+            contained_annotated = get_contained_inds(annotated_boxes, [prev_sample_region])
+            contained_predicted = get_contained_inds(predicted_boxes, [prev_sample_region])
+
+            print("Calculating sample mAP with {} annotated boxes and {} predicted boxes".format(contained_annotated.size, contained_predicted.size))
+
+            sample_annotated_boxes = annotated_boxes[contained_annotated]
+            sample_predicted_boxes = predicted_boxes[contained_predicted]
+            sample_predicted_scores = predicted_scores[contained_predicted]
+
+            sample_annotated_classes = np.zeros(shape=(sample_annotated_boxes.shape[0]))
+            sample_predicted_classes = np.zeros(shape=(sample_predicted_boxes.shape[0]))
+
+            pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(
+                sample_predicted_boxes, 
+                sample_predicted_classes, 
+                sample_predicted_scores,
+                sample_annotated_boxes,
+                sample_annotated_classes)
+            metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
+            metric_fn.add(pred_for_mAP, true_for_mAP)
+
+            ms_coco_mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+            mAP_IoU_50 = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+            mAP_IoU_75 = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
 
 
+            ms_coco_mAP_vals.append(ms_coco_mAP)
+            mAP_IoU_50_vals.append(mAP_IoU_50)
+            mAP_IoU_75_vals.append(mAP_IoU_75)
+
+            print("ms_coco_mAP_vals", ms_coco_mAP_vals)
+            print("mAP_IoU_50_vals", mAP_IoU_50_vals)
+            print("mAP_IoU_75_vals", mAP_IoU_75_vals)
+
+
+
+        return {
+            "AP (IoU=.50:.05:.95)": float(np.mean(ms_coco_mAP_vals)) * 100,
+            "AP (IoU=.50)": float(np.mean(mAP_IoU_50_vals)) * 100,
+            "AP (IoU=.75)": float(np.mean(mAP_IoU_75_vals)) * 100
+        }
 
 def can_calculate_density(metadata, camera_specs):
 
@@ -548,21 +660,30 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, results_ti
     predictions_path = os.path.join(results_dir, "predictions.json")
     predictions = annotation_utils.load_predictions(predictions_path) #w3c_io.load_predictions(predictions_path, {"plant": 0})
 
+    full_predictions_path = os.path.join(results_dir, "full_predictions.json")
+    full_predictions = annotation_utils.load_predictions(full_predictions_path)
+
+
     if annotation_version == "preserved":
         annotations_path = os.path.join(results_dir, "annotations.json")
-        excess_green_record_path = os.path.join(results_dir, "excess_green_record.json")
+        # excess_green_record_path = os.path.join(results_dir, "excess_green_record.json")
+        vegetation_record_path = os.path.join(results_dir, "vegetation_record.json")
         metrics_path = os.path.join(results_dir, "metrics.json")
         metrics = json_io.load_json(metrics_path)
     else:
-        annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
-        excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        # excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
+        vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
 
 
     annotations = annotation_utils.load_annotations(annotations_path) #w3c_io.load_annotations(annotations_path, {"plant": 0})
-    if os.path.exists(excess_green_record_path):
-        excess_green_record = json_io.load_json(excess_green_record_path)
-    else:
-        excess_green_record = None
+    # excess_green_record = json_io.load_json(excess_green_record_path)
+    vegetation_record = json_io.load_json(vegetation_record_path)
+    # if os.path.exists(excess_green_record_path):
+    #     excess_green_record = json_io.load_json(excess_green_record_path)
+    # else:
+    #     excess_green_record = None
+
 
     args = {
         "username": username,
@@ -570,13 +691,20 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, results_ti
         "field_name": field_name,
         "mission_date": mission_date,
         "predictions": predictions,
+        "full_predictions": full_predictions,
         "annotations": annotations,
         "metadata": metadata,
-        "camera_specs": camera_specs
+        "camera_specs": camera_specs,
+        # "excess_green_record": excess_green_record,
+        "vegetation_record": vegetation_record
     }
+    if annotation_version == "preserved":
+        updated_metrics = metrics
+    else:
+        updated_metrics = collect_image_set_metrics(full_predictions, annotations)
 
-    images_df = create_images_sheet(args)
-    regions_df, metrics = create_regions_sheet(args)
+    images_df = create_images_sheet(args, updated_metrics)
+    regions_df = create_regions_sheet(args, updated_metrics)
 
     pandas.io.formats.excel.ExcelFormatter.header_style = None
 
@@ -599,8 +727,12 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, results_ti
 
     for idx, col in enumerate(images_df):  # loop through all columns
         series = images_df[col]
+        if series.size > 0:
+            max_entry_size = series.astype(str).map(len).max()
+        else:
+            max_entry_size = 0
         max_len = max((
-            series.astype(str).map(len).max(),  # len of largest item
+            max_entry_size,  # len of largest item
             len(str(series.name))  # len of column name/header
             )) + 1  # adding a little extra space
         worksheet.set_column(idx, idx, max_len)  # set column width
@@ -614,8 +746,12 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, results_ti
 
     for idx, col in enumerate(regions_df):  # loop through all columns
         series = regions_df[col]
+        if series.size > 0:
+            max_entry_size = series.astype(str).map(len).max()
+        else:
+            max_entry_size = 0
         max_len = max((
-            series.astype(str).map(len).max(),  # len of largest item
+            max_entry_size,  # len of largest item
             len(str(series.name))  # len of column name/header
             )) + 1  # adding a little extra space
         worksheet.set_column(idx, idx, max_len)  # set column width
@@ -636,21 +772,24 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, results_ti
     # df.to_csv(out_path, index=False)
     
     metrics_out_path = os.path.join(out_dir, "metrics.json")
-    json_io.save_json(metrics_out_path, metrics)
+    json_io.save_json(metrics_out_path, updated_metrics)
 
 
 
 
 
-def create_images_sheet(args):
+def create_images_sheet(args, updated_metrics):
     username = args["username"]
     farm_name = args["farm_name"]
     field_name = args["field_name"]
     mission_date = args["mission_date"]
     predictions = args["predictions"]
+    # full_predictions = args["full_predictions"]
     annotations = args["annotations"]
     metadata = args["metadata"]
     camera_specs = args["camera_specs"]
+    # excess_green_record = args["excess_green_record"]
+    vegetation_record = args["vegetation_record"]
 
 
     include_density = can_calculate_density(metadata, camera_specs)
@@ -663,10 +802,10 @@ def create_images_sheet(args):
         "field_name",
         "mission_date",
         "image_name",
-        "image_is_fully_annotated"
         "training_regions",
         "test_regions",
-        "predictions_used_as_annotations",
+        "image_is_fully_annotated",
+        "source_of_annotations",
         "annotated_plant_count",
         "predicted_plant_count"
     ]
@@ -675,9 +814,21 @@ def create_images_sheet(args):
         columns.extend(["annotated_plant_count_per_square_metre", "predicted_plant_count_per_square_metre"])
 
     # if excess_green_record is not None:
-    #     columns.append("ground_cover_percentage")
+    columns.extend([
+        "excess_green_threshold",
+        "vegetation_percentage"
+    ])
 
     # columns.append("MS_COCO_mAP")
+
+    metrics_lst = [
+        "AP (IoU=.50:.05:.95)",
+        "AP (IoU=.50)",
+        "AP (IoU=.75)",
+        "F1 Score (IoU=.50, conf>=.50)",
+        "F1 Score (IoU=.75, conf>=.50)"
+    ]
+    columns.extend(metrics_lst)
 
     d = {}
     for c in columns:
@@ -692,10 +843,11 @@ def create_images_sheet(args):
         training_regions = annotations[image_name]["training_regions"]
         test_regions = annotations[image_name]["test_regions"]
 
-        if annotations[image_name]["predictions_used_as_annotations"]:
-            predictions_used_as_annotations = "yes"
-        else:
-            predictions_used_as_annotations = "no"
+        # if annotations[image_name]["predictions_used_as_annotations"]:
+        #     predictions_used_as_annotations = "yes"
+        # else:
+        #     predictions_used_as_annotations = "no"
+        annotations_source = annotations[image_name]["source"]
 
 
         image_height_px = metadata["images"][image_name]["height_px"]
@@ -722,13 +874,11 @@ def create_images_sheet(args):
         d["farm_name"].append(farm_name)
         d["field_name"].append(field_name)
         d["mission_date"].append(mission_date)
-        # d["image_status"].append(image_status)
         d["image_name"].append(image_name)
         d["training_regions"].append(len(training_regions))
         d["test_regions"].append(len(test_regions))
-        d["predictions_used_as_annotations"] = predictions_used_as_annotations
-        d["image_is_fully_annotated"] = fully_annotated
-
+        d["image_is_fully_annotated"].append(fully_annotated)
+        d["source_of_annotations"].append(annotations_source)
         # if image_status == "unannotated":
         #     d["annotated_plant_count"].append("NA")
         # else:
@@ -747,8 +897,21 @@ def create_images_sheet(args):
             d["annotated_plant_count_per_square_metre"].append(round(annotated_count / area_m2, 2))
             d["predicted_plant_count_per_square_metre"].append(round(predicted_count / area_m2, 2))
 
+
         # if excess_green_record is not None:
-        #     d["ground_cover_percentage"].append(excess_green_record[image_name]["ground_cover_percentage"])
+        d["excess_green_threshold"].append(vegetation_record[image_name]["sel_val"])
+        d["vegetation_percentage"].append(vegetation_record[image_name]["image"])
+
+        if fully_annotated == "no":
+            for metric in metrics_lst:
+                d[metric].append("NA")
+        elif fully_annotated == "yes: for fine-tuning":
+            for metric in metrics_lst:
+                d[metric].append(round(updated_metrics[metric][image_name]["training_regions"][0], 2))
+        else:
+            for metric in metrics_lst:
+                d[metric].append(round(updated_metrics[metric][image_name]["test_regions"][0], 2))
+
 
         # if annotation_version == "preserved":
         #     if image_name in metrics:
@@ -771,12 +934,13 @@ def create_images_sheet(args):
 
 
         # d["MS_COCO_mAP"].append(ms_coco_mAP)
+    print(d)
     df = pd.DataFrame(data=d, columns=columns)
     df.sort_values(by="image_name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_name"])))
     return df
 
 
-def create_regions_sheet(args):
+def create_regions_sheet(args, updated_metrics):
     username = args["username"]
     farm_name = args["farm_name"]
     field_name = args["field_name"]
@@ -785,6 +949,7 @@ def create_regions_sheet(args):
     annotations = args["annotations"]
     metadata = args["metadata"]
     camera_specs = args["camera_specs"]
+    vegetation_record = args["vegetation_record"]
 
 
     include_density = can_calculate_density(metadata, camera_specs)
@@ -798,6 +963,7 @@ def create_regions_sheet(args):
         "mission_date",
         "image_name",
         "region_name",
+        "source_of_annotations_for_image",
         "annotated_plant_count",
         "predicted_plant_count"
     ]
@@ -806,9 +972,20 @@ def create_regions_sheet(args):
         columns.extend(["annotated_plant_count_per_square_metre", "predicted_plant_count_per_square_metre"])
 
     # if excess_green_record is not None:
-    #     columns.append("ground_cover_percentage")
+    # columns.append("ground_cover_percentage")
+    columns.extend([
+        "excess_green_threshold",
+        "vegetation_percentage"
+    ])
 
-    columns.append("MS_COCO_mAP")
+    metrics_lst = [
+        "AP (IoU=.50:.05:.95)",
+        "AP (IoU=.50)",
+        "AP (IoU=.75)",
+        "F1 Score (IoU=.50, conf>=.50)",
+        "F1 Score (IoU=.75, conf>=.50)"
+    ]
+    columns.extend(metrics_lst)
 
     d = {}
     for c in columns:
@@ -816,31 +993,26 @@ def create_regions_sheet(args):
 
 
 
-    metrics = {
-        "MS COCO mAP": {},
-        "F1 Score (IoU=0.5)" : {},
-        "F1 Score (IoU=0.7)" : {},
-        "F1 Score (IoU=0.9)" : {}
-    }
-
     for image_name in annotations.keys():
 
         annotated_boxes = annotations[image_name]["boxes"]
         predicted_boxes = predictions[image_name]["boxes"]
         predicted_scores = predictions[image_name]["scores"]
+
+        annotations_source = annotations[image_name]["source"]
         # above_thresh_predicted_boxes = predicted_boxes[predicted_scores >= 0.50]
 
-        metrics["MS COCO mAP"][image_name] = {}
-        metrics["F1 Score (IoU=0.5)"][image_name] = {}
-        metrics["F1 Score (IoU=0.7)"][image_name] = {}
-        metrics["F1 Score (IoU=0.9)"][image_name] = {}
+        # metrics["MS COCO mAP"][image_name] = {}
+        # metrics["F1 Score (IoU=0.5)"][image_name] = {}
+        # metrics["F1 Score (IoU=0.7)"][image_name] = {}
+        # metrics["F1 Score (IoU=0.9)"][image_name] = {}
 
         for region_type in ["training", "test"]:
 
-            metrics["MS COCO mAP"][image_name][region_type + "_regions"] = []
-            metrics["F1 Score (IoU=0.5)"][image_name][region_type + "_regions"] = []
-            metrics["F1 Score (IoU=0.7)"][image_name][region_type + "_regions"] = []
-            metrics["F1 Score (IoU=0.9)"][image_name][region_type + "_regions"] = []
+            # metrics["MS COCO mAP"][image_name][region_type + "_regions"] = []
+            # metrics["F1 Score (IoU=0.5)"][image_name][region_type + "_regions"] = []
+            # metrics["F1 Score (IoU=0.7)"][image_name][region_type + "_regions"] = []
+            # metrics["F1 Score (IoU=0.9)"][image_name][region_type + "_regions"] = []
 
             regions = annotations[image_name][region_type + "_regions"]
 
@@ -854,7 +1026,7 @@ def create_regions_sheet(args):
                 annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
                 region_annotated_boxes = annotated_boxes[annotated_inds]
                 predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
-                region_predicted_boxes = predicted_boxes[predicted_inds]
+                # region_predicted_boxes = predicted_boxes[predicted_inds]
                 region_predicted_scores = predicted_scores[predicted_inds]
 
 
@@ -867,6 +1039,7 @@ def create_regions_sheet(args):
                 d["mission_date"].append(mission_date)
                 d["image_name"].append(image_name)
                 d["region_name"].append(region_name)
+                d["source_of_annotations_for_image"].append(annotations_source)
                 d["annotated_plant_count"].append(annotated_count)
                 d["predicted_plant_count"].append(predicted_count)
 
@@ -877,26 +1050,30 @@ def create_regions_sheet(args):
                     d["predicted_plant_count_per_square_metre"].append(round(predicted_count / area_m2, 2))
 
 
-                MS_COCO_mAP = get_MS_COCO_mAP(region_annotated_boxes, region_predicted_boxes, region_predicted_scores)
 
-                d["MS_COCO_mAP"].append(round(MS_COCO_mAP, 2))
+                d["excess_green_threshold"].append(vegetation_record[image_name]["sel_val"])
+                d["vegetation_percentage"].append(vegetation_record[image_name][region_type + "_regions"][i])
+                # MS_COCO_mAP = get_MS_COCO_mAP(region_annotated_boxes, region_predicted_boxes, region_predicted_scores)
+                # d["MS_COCO_mAP"].append(round(MS_COCO_mAP, 2))
 
+                for metric in metrics_lst:
+                    d[metric].append(round(updated_metrics[metric][image_name][region_type + "_regions"][i], 2))
 
-                metrics["MS COCO mAP"][image_name][region_type + "_regions"].append(MS_COCO_mAP)
+                # metrics["MS COCO mAP"][image_name][region_type + "_regions"].append(MS_COCO_mAP)
 
-                sel_region_predicted_boxes = region_predicted_boxes[region_predicted_scores >= 0.50]
-                f1_iou_05 = get_f1_score(region_annotated_boxes, sel_region_predicted_boxes, iou_thresh=0.5)
-                f1_iou_07 = get_f1_score(region_annotated_boxes, sel_region_predicted_boxes, iou_thresh=0.7)
-                f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_predicted_boxes, iou_thresh=0.9)
-                metrics["F1 Score (IoU=0.5)"][image_name][region_type + "_regions"].append(f1_iou_05)
-                metrics["F1 Score (IoU=0.7)"][image_name][region_type + "_regions"].append(f1_iou_07)
-                metrics["F1 Score (IoU=0.9)"][image_name][region_type + "_regions"].append(f1_iou_09)
+                # sel_region_predicted_boxes = region_predicted_boxes[region_predicted_scores >= 0.50]
+                # f1_iou_05 = get_f1_score(region_annotated_boxes, sel_region_predicted_boxes, iou_thresh=0.5)
+                # f1_iou_07 = get_f1_score(region_annotated_boxes, sel_region_predicted_boxes, iou_thresh=0.7)
+                # f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_predicted_boxes, iou_thresh=0.9)
+                # metrics["F1 Score (IoU=0.5)"][image_name][region_type + "_regions"].append(f1_iou_05)
+                # metrics["F1 Score (IoU=0.7)"][image_name][region_type + "_regions"].append(f1_iou_07)
+                # metrics["F1 Score (IoU=0.9)"][image_name][region_type + "_regions"].append(f1_iou_09)
 
 
 
     df = pd.DataFrame(data=d, columns=columns)
     df.sort_values(by="image_name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["image_name"])))
-    return df, metrics
+    return df #, metrics
 
 # def prepare_report(out_path, farm_name, field_name, mission_date, 
 #                    image_predictions, annotations, excess_green_record, metrics):

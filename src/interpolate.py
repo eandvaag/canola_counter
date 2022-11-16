@@ -169,6 +169,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
         area_m2 = image_width_m * image_height_m
 
         fully_annotated = annotation_utils.is_fully_annotated(annotations, image_name, image_width_px, image_height_px)
+        print("is {} fully annotated? {}".format(image_name, fully_annotated))
 
         if fully_annotated: #status == "completed_for_training" or status == "completed_for_testing":
 
@@ -188,7 +189,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
                 #             v += 1
                 
                 #predicted_value = len(predictions[image_name]["annotations"]) 
-                predicted_value = np.sum(predictions[image_name]["scores"] >= 0.50) / area_m2
+                predicted_value = np.sum(np.array(predictions[image_name]["scores"]) >= 0.50) / area_m2
                 predicted_values.append(predicted_value)
 
     # print("predicted_values", predicted_values)
@@ -200,6 +201,8 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
     annotated_values = np.array(annotated_values)
 
     num_completed = annotated_values.size 
+
+    print("num_completed", num_completed)
     if num_completed < 3 and pred_path is None:
         return
 

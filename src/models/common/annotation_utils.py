@@ -12,17 +12,22 @@ from io_utils import json_io
 
 
 def is_fully_annotated(annotations, image_name, image_w, image_h):
-    return is_fully_annotated_for_training(annotations, image_name, image_w, image_h) or is_fully_annotated_for_training(annotations, image_name, image_w, image_h)
+    print("checking {}. w: {}, h: {}, training_regions: {}, test_regions: {}".format(image_name, image_w, image_h, annotations[image_name]["training_regions"], annotations[image_name]["test_regions"]))
+    return is_fully_annotated_for_training(annotations, image_name, image_w, image_h) or is_fully_annotated_for_testing(annotations, image_name, image_w, image_h)
 
 
 def is_fully_annotated_for_training(annotations, image_name, image_w, image_h):
+    if len(annotations[image_name]["training_regions"]) == 0:
+        return False
     region = annotations[image_name]["training_regions"][0]
     return (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w)
 
 def is_fully_annotated_for_testing(annotations, image_name, image_w, image_h):
-    region = annotations[image_name]["training_regions"][0]
-    return (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w)
-
+    for i in range(len(annotations[image_name]["test_regions"])):
+        region = annotations[image_name]["test_regions"][i]
+        if (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w):
+            return True
+    return False
 
 def load_annotations(annotations_path):
     annotations = json_io.load_json(annotations_path)

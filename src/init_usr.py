@@ -190,35 +190,50 @@ def update_init_cameras(replace=False):
 
 
 
-def fix_k():
+def fix_e():
 
-    for farm_path in glob.glob(os.path.join("usr", "data", "kaylie", "image_sets", "*")):
+    for farm_path in glob.glob(os.path.join("usr", "data", "erik", "image_sets", "*")):
         farm_dir = os.path.basename(farm_path)
         for field_path in glob.glob(os.path.join(farm_path, "*")):
             field_dir = os.path.basename(field_path)
             for mission_path in glob.glob(os.path.join(field_path, "*")):
                 mission_dir = os.path.basename(mission_path)
 
-                annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
-                annotations = json_io.load_json(annotations_path)
-                fully_trained = "True"
+                annotations_path = os.path.join(mission_path, "annotations", "annotations.json")
+                try:
+                    annotations = annotation_utils.load_annotations(annotations_path)
+                except Exception as e:
+                    continue
                 for image_name in annotations.keys():
-                    # annotations[image_name]["update_time"] = 0 #int(time.time())
-                    if annotations[image_name]["status"] == "completed_for_training":
-                        fully_trained = "False"
+                    if annotations[image_name]["boxes"].size > 0:
+                        annotations[image_name]["source"] = "manually_annotated_from_scratch"
+                    else:
+                        annotations[image_name]["source"] = "NA"
+                    if "predictions_used_as_annotations" in annotations[image_name]:
+                        del annotations[image_name]["predictions_used_as_annotations"]
 
-                json_io.save_json(annotations_path, annotations)
+                annotation_utils.save_annotations(annotations_path, annotations)
 
-                # status = {
-                #     "status": "idle",
-                #     "fully_trained": "True",
-                #     "update_num": 0
-                # }
-                status_path = os.path.join(mission_path, "model", "status.json")
-                status = json_io.load_json(status_path)
-                status["fully_trained"] = fully_trained
+                # annotations_path = os.path.join(mission_path, "annotations", "annotations_w3c.json")
+                # annotations = json_io.load_json(annotations_path)
+                # fully_trained = "True"
+                # for image_name in annotations.keys():
+                #     # annotations[image_name]["update_time"] = 0 #int(time.time())
+                #     if annotations[image_name]["status"] == "completed_for_training":
+                #         fully_trained = "False"
 
-                json_io.save_json(status_path, status)
+                # json_io.save_json(annotations_path, annotations)
+
+                # # status = {
+                # #     "status": "idle",
+                # #     "fully_trained": "True",
+                # #     "update_num": 0
+                # # }
+                # status_path = os.path.join(mission_path, "model", "status.json")
+                # status = json_io.load_json(status_path)
+                # status["fully_trained"] = fully_trained
+
+                # json_io.save_json(status_path, status)
 
 
 def delete_patches():
