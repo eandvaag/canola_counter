@@ -56,7 +56,7 @@ TRAINING_TIME_SESSION_CEILING = 5000            # number of seconds before curre
 
 
 
-def post_process_sample(detections, resize_ratio, patch_coords, config, image_width, image_height, apply_nms=True, score_threshold=0.5, round_scores=True):
+def post_process_sample(detections, resize_ratio, patch_coords, config, region, apply_nms=True, score_threshold=0.5): #, round_scores=True):
 
     detections = np.array(detections)
 
@@ -83,8 +83,8 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, image_wi
 
     pred_classes = np.argmax(pred_prob, axis=-1)
     pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
-    if round_scores:
-        pred_scores = np.round(pred_scores, 2)
+    # if round_scores:
+    #     pred_scores = np.round(pred_scores, 2)
     score_mask = pred_scores >= score_threshold
 
     # in_bounds_mask = np.logical_and(
@@ -96,8 +96,10 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, image_wi
     mask = score_mask #np.logical_and(score_mask, in_bounds_mask)
     pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
 
+    region_height = region[2] - region[0]
+    region_width = region[3] - region[1]
     pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
-    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, image_height, image_width])
+    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, region_height, region_width])
 
     pred_boxes = np.rint(pred_boxes).astype(np.int32)
     pred_scores = pred_scores.astype(np.float32)
@@ -233,8 +235,36 @@ def update_loss_record(loss_record, key, cur_loss):
 
 
 
+def get_number_of_prediction_batches(request, patch_size, overlap_px, config):
+    print("request is", request)
+    num_batches = 0
+    # for image_index, image_name in enumerate(request["image_names"]):
+    for i in range(len(request["image_names"])):
+        print("request[regions][i]", request["regions"][i])
+        for region in request["regions"][i]:
 
-def predict(sch_ctx, image_set_dir, image_names, save_result):
+            print("region", region)
+
+            region_width = region[3] - region[1]
+            region_height = region[2] - region[0]
+
+            incr = patch_size - overlap_px
+            w_covered = region_width - patch_size
+            num_w_patches = m.ceil(w_covered / incr) + 1
+
+            h_covered = region_height - patch_size
+            num_h_patches = m.ceil(h_covered / incr) + 1
+
+            num_patches = num_w_patches * num_h_patches
+
+            num_batches += m.ceil(num_patches / config["inference"]["batch_size"])
+    return num_batches
+        
+
+
+
+
+def predict(sch_ctx, image_set_dir, request): #, q):
 
     start_time = time.time()
 
@@ -319,246 +349,260 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
     patch_overlap_percent = 50
     overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
 
-    for image_index, image_name in enumerate(image_names):
 
-        # image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
-        # image = Image(image_path)
-        
-        # w, h = image.get_wh()
-        # num_bytes = w * h * 3
-        
-        # if num_bytes > MAX_IN_MEMORY_IMAGE_SIZE:
-        #     logger.info("Image does not fit in memory. Patches will be written out.")
-        #     image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
-        #     prediction_patches_dir = os.path.join(image_predictions_dir, "patches")
-        #     if not os.path.exists(prediction_patches_dir):
-        #         os.makedirs(prediction_patches_dir)
-        # else:
-        #     logger.info("Image fits in memory.")
-        #     prediction_patches_dir = None
-        # patch_records = ep.extract_patch_records_from_image_tiled(
-        #         image, 
-        #         model_patch_size,
-        #         image_annotations=None,
-        #         patch_overlap_percent=50, 
-        #         include_patch_arrays=(prediction_patches_dir is None),
-        #         out_dir=prediction_patches_dir)
-
-        # data_loader = data_load.InferenceDataLoader(patch_records, config)
-        # tf_dataset = data_loader.create_dataset()
-
-        # input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
-        # yolov4.build(input_shape=input_shape)
-
-        # best_weights_path = os.path.join(weights_dir, "best_weights.h5")
-        # yolov4.load_weights(best_weights_path, by_name=False)
-
-        #steps = np.sum([1 for _ in tf_dataset])
-
-        # logger.info("{} ('{}'): Running inference on {} patches.".format(config["arch"]["model_type"], 
-        #                                                                 config["model_name"], 
-        #                                                                 tf_dataset_size))
-
-        logger.info("Running inference for image {} ({}/{})".format(image_name, image_index+1, len(image_names)))
-        batch_index = 0
+    num_batches = get_number_of_prediction_batches(request, patch_size, overlap_px, config)
+    percent_complete = 0
+    batch_index = 0
+    for image_index, image_name in enumerate(request["image_names"]):
 
         image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
         image = Image(image_path)
-        
-        # w, h = image.get_wh()
-        # num_bytes = w * h * 3
-        image_width, image_height = image.get_wh()
-
-        if is_ortho:
-            incr = patch_size - overlap_px
-            w_covered = image_width - patch_size
-            num_w_patches = m.ceil(w_covered / incr) + 1
-
-            h_covered = image_height - patch_size
-            num_h_patches = m.ceil(h_covered / incr) + 1
-
-            num_patches = num_w_patches * num_h_patches
-
-            num_batches = m.ceil(num_patches / config["inference"]["batch_size"])
-
-
-        # num_patches = ((w // (patch_size - int(m.floor(patch_size * (patch_overlap_percent / 100))))) + 1) * \
-        #               ((h // (patch_size - int(m.floor(patch_size * (patch_overlap_percent / 100))))) + 1)
-
-        # num_batches = (num_patches // config["inference"]["batch_size"]) + 1
-        
-        # load_on_demand = num_bytes > MAX_IN_MEMORY_IMAGE_SIZE
-
-        # logger.info("load_on_demand?: {}".format(load_on_demand))
 
         if is_ortho:
             ds = gdal.Open(image.image_path)
         else:
             image_array = image.load_image_array()
 
-        percent_complete = 0
+        for region_index, region in enumerate(request["regions"][image_index]):
 
-        batch_patch_arrays = []
-        batch_ratios = []
-        batch_patch_coords = []
+            # logger.info("Running inference for image {} ({}/{})".format(image_name, image_index+1, len(request["image_names"])))
 
-        col_covered = False
-        patch_min_y = 0
-        while not col_covered:
-            patch_max_y = patch_min_y + patch_size
-            max_content_y = patch_max_y
-            if patch_max_y >= image_height:
-                max_content_y = image_height
-                col_covered = True
+            # image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+            # image = Image(image_path)
+            
+            # w, h = image.get_wh()
+            # num_bytes = w * h * 3
+            
+            # if num_bytes > MAX_IN_MEMORY_IMAGE_SIZE:
+            #     logger.info("Image does not fit in memory. Patches will be written out.")
+            #     image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+            #     prediction_patches_dir = os.path.join(image_predictions_dir, "patches")
+            #     if not os.path.exists(prediction_patches_dir):
+            #         os.makedirs(prediction_patches_dir)
+            # else:
+            #     logger.info("Image fits in memory.")
+            #     prediction_patches_dir = None
+            # patch_records = ep.extract_patch_records_from_image_tiled(
+            #         image, 
+            #         model_patch_size,
+            #         image_annotations=None,
+            #         patch_overlap_percent=50, 
+            #         include_patch_arrays=(prediction_patches_dir is None),
+            #         out_dir=prediction_patches_dir)
 
-            row_covered = False
-            patch_min_x = 0
-            while not row_covered:
+            # data_loader = data_load.InferenceDataLoader(patch_records, config)
+            # tf_dataset = data_loader.create_dataset()
 
-                patch_max_x = patch_min_x + patch_size
-                max_content_x = patch_max_x
-                if patch_max_x >= image_width:
-                    max_content_x = image_width
-                    row_covered = True
+            # input_shape = (config["inference"]["batch_size"], *(data_loader.get_model_input_shape()))
+            # yolov4.build(input_shape=input_shape)
 
-                
-                patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+            # best_weights_path = os.path.join(weights_dir, "best_weights.h5")
+            # yolov4.load_weights(best_weights_path, by_name=False)
 
-                
-                patch_array = np.zeros(shape=(patch_size, patch_size, 3), dtype=np.uint8)
-                if is_ortho:
-                    image_array = ds.ReadAsArray(patch_min_x, patch_min_y, (max_content_x-patch_min_x), (max_content_y-patch_min_y))
-                    image_array = np.transpose(image_array, (1, 2, 0))
-                    patch_array[0:(max_content_y-patch_min_y), 0:(max_content_x-patch_min_x)] = image_array
-                else:
-                    patch_array[0:(max_content_y-patch_min_y), 0:(max_content_x-patch_min_x)] = image_array[patch_min_y:max_content_y, patch_min_x:max_content_x]
+            #steps = np.sum([1 for _ in tf_dataset])
+
+            # logger.info("{} ('{}'): Running inference on {} patches.".format(config["arch"]["model_type"], 
+            #                                                                 config["model_name"], 
+            #                                                                 tf_dataset_size))
+
+            
+            
 
 
-                # patch_data = {}
-                
+            
+            # w, h = image.get_wh()
+            # num_bytes = w * h * 3
+            # image_width, image_height = image.get_wh()
 
-                patch_array = tf.cast(patch_array, dtype=tf.float32)
-                patch_ratio = np.array(patch_array.shape[:2]) / np.array(config["arch"]["input_image_shape"][:2])
-                patch_array = tf.image.resize(images=patch_array, size=config["arch"]["input_image_shape"][:2])
-                # patch_data["patch"] = patch_array
+            # if is_ortho:
+            #     incr = patch_size - overlap_px
+            #     w_covered = image_width - patch_size
+            #     num_w_patches = m.ceil(w_covered / incr) + 1
 
-                batch_patch_coords.append(patch_coords)
-                batch_patch_arrays.append(patch_array)
-                batch_ratios.append(patch_ratio)
+            #     h_covered = image_height - patch_size
+            #     num_h_patches = m.ceil(h_covered / incr) + 1
 
-                if len(batch_patch_arrays) == config["inference"]["batch_size"] or (row_covered and col_covered):
+            #     num_patches = num_w_patches * num_h_patches
 
-                    # print("processing batch {} / {}".format(batch_index+1, num_batches))
+            #     num_batches = m.ceil(num_patches / config["inference"]["batch_size"])
+
+
+            # num_patches = ((w // (patch_size - int(m.floor(patch_size * (patch_overlap_percent / 100))))) + 1) * \
+            #               ((h // (patch_size - int(m.floor(patch_size * (patch_overlap_percent / 100))))) + 1)
+
+            # num_batches = (num_patches // config["inference"]["batch_size"]) + 1
+            
+            # load_on_demand = num_bytes > MAX_IN_MEMORY_IMAGE_SIZE
+
+            # logger.info("load_on_demand?: {}".format(load_on_demand))
+
+
+
+
+
+            batch_patch_arrays = []
+            batch_ratios = []
+            batch_patch_coords = []
+
+            col_covered = False
+            patch_min_y = region[0] #0
+            while not col_covered:
+                patch_max_y = patch_min_y + patch_size
+                max_content_y = patch_max_y
+                if patch_max_y >= region[2]: #image_height:
+                    max_content_y = region[2] #image_height
+                    col_covered = True
+
+                row_covered = False
+                patch_min_x = region[1] #0
+                while not row_covered:
+
+                    patch_max_x = patch_min_x + patch_size
+                    max_content_x = patch_max_x
+                    if patch_max_x >= region[3]: #image_width:
+                        max_content_x = region[3] #image_width
+                        row_covered = True
+
                     
+                    patch_coords = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
                     
-                    
-                    batch_patch_arrays = tf.stack(batch_patch_arrays, axis=0)
-
-                    batch_size = batch_patch_arrays.shape[0]
-                    
-                    # batch_images = data_augment.apply_inference_transform(batch_images, transform_type)
-
-
-                    pred = yolov4(batch_patch_arrays, training=False)
-                    detections = decoder(pred)
-
-                    batch_pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
-
-                    batch_pred_bbox = tf.concat(batch_pred_bbox, axis=1)
-
-
-                    for i in range(batch_size):
-
-                        pred_bbox = batch_pred_bbox[i]
-                        ratio = batch_ratios[i]
-                        patch_coords = batch_patch_coords[i]
-
-                        
-
-                        pred_patch_abs_boxes, pred_patch_scores, _ = \
-                                post_process_sample(pred_bbox, ratio, patch_coords, config, image_width, image_height, score_threshold=0.01) #config["inference"]["score_thresh"])
-
-
-
-                        if image_name not in predictions:
-                            predictions[image_name] = {
-                                    # "image_path": image_path,
-                                    "boxes": [],
-                                    "scores": [],
-                                    # "box_index_to_patch_index": {},
-                                    # "flattened_box_indices": []
-                                    # "pred_image_abs_boxes": [],
-                                    # # "pred_classes": [],
-                                    # "pred_scores": []      
-                            }
-                            # patch_index = 0
-                            # box_index = 0
-
-
-                        pred_image_abs_boxes, pred_image_scores = \
-                            driver_utils.get_image_detections(pred_patch_abs_boxes, 
-                                                            pred_patch_scores,
-                                                            patch_coords, 
-                                                            image_path, 
-                                                            trim=True)
-
-                        predictions[image_name]["boxes"].extend(pred_image_abs_boxes.tolist())
-                        predictions[image_name]["scores"].extend(pred_image_scores.tolist())
-
-                        # predictions[image_name]["boxes"].append(pred_image_abs_boxes.tolist())
-                        # predictions[image_name]["scores"].append(pred_image_scores.tolist())
-
-                        # predictions[image_name]["flattened_box_indices"].append([x for x in range(box_index, box_index+pred_image_scores.size)]) #box_index)
-                        # for _ in range(pred_image_scores.size):
-                        #     predictions[image_name]["box_index_to_patch_index"][box_index] = patch_index
-                        #     box_index += 1
-                        # box_index += pred_image_scores.size
-
-                        # patch_index += 1
-                        
-
-
-
-                        # image_predictions[image_name]["pred_classes"].extend(pred_image_classes.tolist())
-
-
-                    batch_patch_arrays = []
-                    batch_ratios = []
-                    batch_patch_coords = []
-
-
-                    if sch_ctx["switch_queue"].size() > 0:
-                        affected = drain_switch_queue(sch_ctx, cur_image_set_dir=image_set_dir)
-                        if affected:
-                            # end_time = int(time.time())
-                            return True, None, None
-
-                    batch_index += 1
+                    patch_array = np.zeros(shape=(patch_size, patch_size, 3), dtype=np.uint8)
                     if is_ortho:
+                        image_array = ds.ReadAsArray(patch_min_x, patch_min_y, (max_content_x-patch_min_x), (max_content_y-patch_min_y))
+                        image_array = np.transpose(image_array, (1, 2, 0))
+                        patch_array[0:(max_content_y-patch_min_y), 0:(max_content_x-patch_min_x)] = image_array
+                    else:
+                        patch_array[0:(max_content_y-patch_min_y), 0:(max_content_x-patch_min_x)] = image_array[patch_min_y:max_content_y, patch_min_x:max_content_x]
+
+
+                    # patch_data = {}
+                    
+
+                    patch_array = tf.cast(patch_array, dtype=tf.float32)
+                    patch_ratio = np.array(patch_array.shape[:2]) / np.array(config["arch"]["input_image_shape"][:2])
+                    patch_array = tf.image.resize(images=patch_array, size=config["arch"]["input_image_shape"][:2])
+                    # patch_data["patch"] = patch_array
+
+                    batch_patch_coords.append(patch_coords)
+                    batch_patch_arrays.append(patch_array)
+                    batch_ratios.append(patch_ratio)
+
+                    if len(batch_patch_arrays) == config["inference"]["batch_size"] or (row_covered and col_covered):
+
+                        # print("processing batch {} / {}".format(batch_index+1, num_batches))
+                        
+                        
+                        
+                        batch_patch_arrays = tf.stack(batch_patch_arrays, axis=0)
+
+                        batch_size = batch_patch_arrays.shape[0]
+                        
+                        # batch_images = data_augment.apply_inference_transform(batch_images, transform_type)
+
+
+                        pred = yolov4(batch_patch_arrays, training=False)
+                        detections = decoder(pred)
+
+                        batch_pred_bbox = [tf.reshape(x, (batch_size, -1, tf.shape(x)[-1])) for x in detections]
+
+                        batch_pred_bbox = tf.concat(batch_pred_bbox, axis=1)
+
+
+                        for i in range(batch_size):
+
+                            pred_bbox = batch_pred_bbox[i]
+                            ratio = batch_ratios[i]
+                            patch_coords = batch_patch_coords[i]
+
+                            
+
+                            pred_patch_abs_boxes, pred_patch_scores, _ = \
+                                    post_process_sample(pred_bbox, ratio, patch_coords, config, region, score_threshold=0.01) #config["inference"]["score_thresh"])
+
+
+
+                            if image_name not in predictions:
+                                predictions[image_name] = {
+                                        # "image_path": image_path,
+                                        "boxes": [],
+                                        "scores": [],
+                                        # "box_index_to_patch_index": {},
+                                        # "flattened_box_indices": []
+                                        # "pred_image_abs_boxes": [],
+                                        # # "pred_classes": [],
+                                        # "pred_scores": []      
+                                }
+                                # patch_index = 0
+                                # box_index = 0
+
+
+                            pred_image_abs_boxes, pred_image_scores = \
+                                driver_utils.get_image_detections(pred_patch_abs_boxes, 
+                                                                pred_patch_scores,
+                                                                patch_coords, 
+                                                                region, #image_path, 
+                                                                trim=True)
+
+                            predictions[image_name]["boxes"].extend(pred_image_abs_boxes.tolist())
+                            predictions[image_name]["scores"].extend(pred_image_scores.tolist())
+
+                            # predictions[image_name]["boxes"].append(pred_image_abs_boxes.tolist())
+                            # predictions[image_name]["scores"].append(pred_image_scores.tolist())
+
+                            # predictions[image_name]["flattened_box_indices"].append([x for x in range(box_index, box_index+pred_image_scores.size)]) #box_index)
+                            # for _ in range(pred_image_scores.size):
+                            #     predictions[image_name]["box_index_to_patch_index"][box_index] = patch_index
+                            #     box_index += 1
+                            # box_index += pred_image_scores.size
+
+                            # patch_index += 1
+                            
+
+
+
+                            # image_predictions[image_name]["pred_classes"].extend(pred_image_classes.tolist())
+
+
+                        batch_patch_arrays = []
+                        batch_ratios = []
+                        batch_patch_coords = []
+
+
+                        if sch_ctx["switch_queue"].size() > 0:
+                            affected = drain_switch_queue(sch_ctx, cur_image_set_dir=image_set_dir)
+                            if affected:
+                                # end_time = int(time.time())
+                                # q.put(True)
+                                return True
+                                # return True, None, None
+
+                        batch_index += 1
+                        # if is_ortho:
                         prev_percent_complete = percent_complete
                         percent_complete = round((batch_index / num_batches) * 100)
                         # print("percent_complete", percent_complete)
                         if m.floor(percent_complete) > m.floor(prev_percent_complete):
                             isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
-                                     extra_items={"percent_complete": percent_complete}) 
+                                    extra_items={"percent_complete": percent_complete}) 
 
-            
-                patch_min_x += (patch_size - overlap_px)
+                
+                    patch_min_x += (patch_size - overlap_px)
 
-            patch_min_y += (patch_size - overlap_px)            
-
-
-        if not is_ortho:
-            isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
-                                     extra_items={"percent_complete": round(((image_index+1) / len(image_names)) * 100)}) #"num_processed": image_index+1, "num_images": len(image_names)}) 
+                patch_min_y += (patch_size - overlap_px)            
 
 
-    print("running clip image boxes")
+        # if not is_ortho:
+        #     isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
+        #                              extra_items={"percent_complete": round(((image_index+1) / len(request["image_names"])) * 100)}) #"num_processed": image_index+1, "num_images": len(image_names)}) 
+
+
+    # print("running clip image boxes")
     # driver_utils.clip_image_boxes(image_set_dir, predictions)
     # driver_utils.clip_image_boxes_fast(image_set_dir, predictions)
 
-    print("SAVING PREDICTIONS")
-    json_io.save_json(os.path.join(image_set_dir, "saved_full_predictions.json"), predictions)
+    # print("SAVING PREDICTIONS")
+    # json_io.save_json(os.path.join(image_set_dir, "saved_full_predictions.json"), predictions)
 
     # driver_utils.apply_nms_to_image_boxes(predictions, 
     #                                       iou_thresh=config["inference"]["image_nms_iou_thresh"])
@@ -572,15 +616,17 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
     # predictions = driver_utils.custom_nms(image_set_dir, predictions, config["inference"]["image_nms_iou_thresh"], patch_size, overlap_px)
     end_nms_time = time.time()
     elapsed_nms_time = end_nms_time - start_nms_time
-    print("Ran NMS in {} seconds.".format(elapsed_nms_time))
+    logger.info("Ran NMS in {} seconds.".format(elapsed_nms_time))
 
     thresholded_predictions = {}
     for image_name in predictions.keys():
-        inds = np.array(predictions[image_name]["scores"]) >= 0.25
+        scores_array = np.array(predictions[image_name]["scores"])
+        scores_array = np.round(scores_array, 2)
+        inds = scores_array >= 0.25
 
         thresholded_predictions[image_name] = {
             "boxes": (np.array(predictions[image_name]["boxes"])[inds]).tolist(),
-            "scores": (np.array(predictions[image_name]["scores"])[inds]).tolist()
+            "scores": (scores_array[inds]).tolist()
         }
 
 
@@ -616,7 +662,51 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
     # elapsed_time = end_time - start_time
     # logger.info("Finished predicting. Elapsed time: {}".format(elapsed_time))
 
-    return False, thresholded_predictions, predictions
+
+    predictions_dir = os.path.join(model_dir, "prediction")
+    for image_index, image_name in enumerate(request["image_names"]):
+        image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+        os.makedirs(image_predictions_dir, exist_ok=True)
+
+        predictions_path = os.path.join(image_predictions_dir, "predictions.json")
+        new_predictions = {
+            image_name: {
+                "boxes": [],
+                "scores": []
+            }
+        }
+        if os.path.exists(predictions_path):
+            existing_predictions = json_io.load_json(predictions_path)
+
+            existing_boxes = np.array(existing_predictions[image_name]["boxes"])
+            existing_scores = np.array(existing_predictions[image_name]["scores"])
+            inds = box_utils.get_contained_inds(existing_boxes, request["regions"][image_index])
+            existing_boxes = np.delete(existing_boxes, inds, axis=0)
+            existing_scores = np.delete(existing_scores, inds)
+            existing_scores = np.round(existing_scores, 2)
+            new_predictions[image_name]["boxes"] = existing_boxes.tolist()
+            new_predictions[image_name]["scores"] = existing_scores.tolist()
+
+        new_predictions[image_name]["boxes"].extend(thresholded_predictions[image_name]["boxes"])
+        new_predictions[image_name]["scores"].extend(thresholded_predictions[image_name]["scores"])
+
+        json_io.save_json(predictions_path, new_predictions)
+
+    if request["save_result"]:
+        results_dir = os.path.join(model_dir, "results", request["request_uuid"])
+        if not os.path.exists(results_dir):
+            os.makedirs(results_dir)
+        
+        full_predictions_path = os.path.join(results_dir, "full_predictions.json")
+        json_io.save_json(full_predictions_path, predictions)
+
+
+        predictions_path = os.path.join(results_dir, "predictions.json")
+        json_io.save_json(predictions_path, thresholded_predictions)
+
+    # q.put(False)
+    return False
+    # return False, thresholded_predictions, predictions
 
 
 
@@ -1155,7 +1245,7 @@ def predict(sch_ctx, image_set_dir, image_names, save_result):
 
 
 
-def train_baseline(root_dir, sch_ctx):
+def train_baseline(sch_ctx, root_dir):
     
     logger = logging.getLogger(__name__)
 
@@ -1265,6 +1355,7 @@ def train_baseline(root_dir, sch_ctx):
         epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
         if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
+            # q.put(True)
             return True
 
 
@@ -1372,6 +1463,7 @@ def train_baseline(root_dir, sch_ctx):
 
         #if isa.check_for_predictions():
         if sch_ctx["prediction_queue"].size() > 0: # or sch_ctx["restart_queue"].size() > 0:
+            # q.put(False)
             return False
 
         # if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
@@ -1383,6 +1475,7 @@ def train_baseline(root_dir, sch_ctx):
         cur_time = int(time.time())
         elapsed_train_time = cur_time - start_time
         if elapsed_train_time > TRAINING_TIME_SESSION_CEILING:
+            # q.put(False)
             return False
 
 
@@ -1618,7 +1711,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
 
     train_loss_metric = tf.metrics.Mean()
-    val_loss_metric = tf.metrics.Mean()
+    # val_loss_metric = tf.metrics.Mean()
 
     @tf.function
     def train_step(batch_images, batch_labels):
@@ -1656,6 +1749,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
         epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
         if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
+            # q.put((True, False))
             return (True, False)
 
 
@@ -1686,6 +1780,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
             if sch_ctx["switch_queue"].size() > 0:
                 affected = drain_switch_queue(sch_ctx, cur_image_set_dir=root_dir)
                 if affected:
+                    # q.put((False, False))
                     return (False, False)
                 isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
 
@@ -1792,9 +1887,11 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
         #if isa.check_for_predictions():
         if sch_ctx["prediction_queue"].size() > 0: # or sch_ctx["switch_queue"].size() > 0:
+            # q.put((False, True))
             return (False, True)
 
         if os.path.exists(usr_block_path) or os.path.exists(sys_block_path):
+            # q.put((False, False))
             return (False, False)
 
         # if os.path.exists(restart_req_path):
@@ -1803,6 +1900,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
         cur_time = int(time.time())
         elapsed_train_time = cur_time - start_time
         if elapsed_train_time > TRAINING_TIME_SESSION_CEILING:
+            # q.put((False, True))
             return (False, True)
 
 

@@ -103,7 +103,6 @@ rsa==4.8
 scikit-image==0.19.0
 scikit-learn==1.0.1
 scipy==1.7.3
-Shapely==1.8.5.post1
 six==1.16.0
 statsmodels==0.13.1
 tempora==5.0.0

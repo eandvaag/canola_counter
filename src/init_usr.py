@@ -136,7 +136,13 @@ def update_w3c_annotation_file(image_set_dir):
     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotation_utils.save_annotations(annotations_path, annotations)
 
-
+def default_overlay_colors():
+    return {
+        "annotation": "#0080ff",
+        "prediction": "#ff4040",
+        "training_region": "#ff51eb",
+        "test_region": "#ffae00"
+    }
 
 def init_usr(username):
 
@@ -166,6 +172,10 @@ def init_usr(username):
 
     private_image_sets_path = os.path.join(usr_dir, "private_image_sets.json")
     json_io.save_json(private_image_sets_path, {})
+
+    overlay_colors_path = os.path.join(usr_dir, "overlay_colors.json")
+    overlay_colors = default_overlay_colors()
+    json_io.save_json(overlay_colors_path, overlay_colors)
 
 
 def update_init_cameras(replace=False):

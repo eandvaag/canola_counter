@@ -128,8 +128,8 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
     image_name = list(annotations.keys())[0]
 
 
-    if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] == vegetation_record[image_name]["sel_val"]:
-        return
+    if image_name in vegetation_record and excess_green_record[image_name]["sel_val"] == vegetation_record[image_name]["sel_val"]:
+        return vegetation_record
 
 
 
@@ -137,7 +137,7 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
     image = Image(image_path)
     w, h = image.get_wh()
     
-    ds = gdal.Open(image.image_path)
+    
 
     chunk_coords_lst = []
     for i in range(0, h, chunk_size):
@@ -148,8 +148,8 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
 
     results = Parallel(10)(
         delayed(get_updated_vegetation_percentages_for_chunk)(
-            excess_green_record, annotations, ds, chunk_coords) for chunk_coords in chunk_coords_lst)
-
+            excess_green_record, annotations, image.image_path, chunk_coords) for chunk_coords in chunk_coords_lst)
+    # print("results", results)
 
     vegetation_record[image_name] = {}
     vegetation_record[image_name]["sel_val"] = excess_green_record[image_name]["sel_val"]
@@ -166,6 +166,7 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
             for i in range(len(annotations[image_name][region_key])):
                 vegetation_record[image_name][region_key][i] += result[region_key][i]
         
+    # print("vegetation_record image pixel count", vegetation_record[image_name]["image"])
     vegetation_record[image_name]["image"] = round(float((vegetation_record[image_name]["image"] / (w * h)) * 100), 2)
     for region_key in ["training_regions", "test_regions"]:
         for i, region in enumerate(annotations[image_name][region_key]):
@@ -174,13 +175,16 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
 
     return vegetation_record
 
-def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotations, ds, chunk_coords):
-
+def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotations, image_path, chunk_coords):
+    ds = gdal.Open(image_path)
     chunk_array = ds.ReadAsArray(chunk_coords[1], 
                                  chunk_coords[0], 
                                  chunk_coords[3]-chunk_coords[1], 
                                  chunk_coords[2]-chunk_coords[0])
 
+    chunk_array = np.transpose(chunk_array, (1, 2, 0))
+
+    # print("chunk_array.shape", chunk_array.shape)
     exg_array = image_utils.excess_green(chunk_array)
     image_name = list(annotations.keys())[0]
     sel_val = excess_green_record[image_name]["sel_val"]
@@ -192,16 +196,27 @@ def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotation
         "test_regions": []
     }
 
+    # print("chunk: {}, (v.c.: {} / {})".format(chunk_coords, chunk_vegetation_pixel_count, exg_array.size))
     for region_key in ["training_regions", "test_regions"]:
         for region in annotations[image_name][region_key]:
             intersects, intersect_region = box_utils.get_intersection_rect(region, chunk_coords)
-
             if not intersects:
                 result[region_key].append(0)
             else:
-                intersect_vals = exg_array[intersect_region[0]:intersect_region[2], intersect_region[1]:intersect_region[3]]
+                # index_coords = [
+                #     intersect_region[0] - chunk_coords[0],
+                #     intersect_region[2] - chunk_coords[0], 
+                #     intersect_region[1] - chunk_coords[1],
+                #     intersect_region[3] - chunk_coords[1]
+                # ]
+
+                
+                intersect_vals = exg_array[intersect_region[0] - chunk_coords[0]:intersect_region[2] - chunk_coords[0], 
+                                           intersect_region[1] - chunk_coords[1]:intersect_region[3] - chunk_coords[1]]
                 # intersect_area = (intersect_region[2] - intersect_region[0]) * (intersect_region[3] - intersect_region[1])
                 vegetation_pixel_count = int(np.sum(intersect_vals > sel_val)) # / intersect_vals.size)
+                # print("intersect_region for {}-{}: {} ({}) (v. c. {} / {}) {}".format(
+                # region, chunk_coords, intersect_region, index_coords, vegetation_pixel_count, intersect_vals.size, exg_array.size))
                 result[region_key].append(vegetation_pixel_count)
 
     return result
@@ -216,7 +231,7 @@ def update_vegetation_record_for_image_set(image_set_dir, vegetation_record, exc
     results = Parallel(10)(
         delayed(get_updated_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, image_name) for image_name in needs_update)
 
-    print("new vegetation record results", results)
+    # print("new vegetation record results", results)
 
     for result in results:
         image_name = result[0]

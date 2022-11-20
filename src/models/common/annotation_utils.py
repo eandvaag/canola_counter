@@ -23,11 +23,16 @@ def is_fully_annotated_for_training(annotations, image_name, image_w, image_h):
     return (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w)
 
 def is_fully_annotated_for_testing(annotations, image_name, image_w, image_h):
-    for i in range(len(annotations[image_name]["test_regions"])):
-        region = annotations[image_name]["test_regions"][i]
-        if (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w):
-            return True
-    return False
+    if len(annotations[image_name]["test_regions"]) == 0:
+        return False
+    region = annotations[image_name]["test_regions"][0]
+    return (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w)
+
+    # for i in range(len(annotations[image_name]["test_regions"])):
+    #     region = annotations[image_name]["test_regions"][i]
+    #     if (region[0] == 0 and region[1] == 0) and (region[2] == image_h and region[3] == image_w):
+    #         return True
+    # return False
 
 def load_annotations(annotations_path):
     annotations = json_io.load_json(annotations_path)
@@ -47,10 +52,12 @@ def load_predictions(predictions_path):
 
 
 def save_annotations(annotations_path, annotations):
+    save_annotations = {}
     for image_name in annotations.keys():
-        annotations[image_name]["boxes"] = annotations[image_name]["boxes"].tolist()
+        save_annotations[image_name] = annotations[image_name]
+        save_annotations[image_name]["boxes"] = annotations[image_name]["boxes"].tolist()
     
-    json_io.save_json(annotations_path, annotations)
+    json_io.save_json(annotations_path, save_annotations)
 
 
 def get_num_annotations(annotations, region_keys): #image_names):

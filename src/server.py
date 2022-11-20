@@ -5,8 +5,10 @@ import shutil
 import glob
 import logging
 import traceback
+import multiprocessing as mp
 import threading
 import random
+import tensorflow as tf
 import numpy as np
 
 import image_set_aux
@@ -19,6 +21,7 @@ import excess_green
 from io_utils import json_io, w3c_io, tf_record_io
 from models.yolov4 import yolov4_image_set_driver
 from models.common import annotation_utils, inference_metrics
+# from process import MyProcess
 
 from lock_queue import LockQueue
 
@@ -40,7 +43,7 @@ def add_request():
 
     if (content_type == 'application/json'):
         json_request = request.json
-        print("request", json_request)
+        logger.info("Got request: {}".format(json_request))
         if "request_type" not in json_request:
             return {"message": "bad_request"}
         req_type = json_request["request_type"]
@@ -153,6 +156,7 @@ def check_baseline(username):
 def process_baseline(item):
     logger = logging.getLogger(__name__)
     try:
+        # trace = None
         username = item["model_creator"]
 
 
@@ -344,6 +348,18 @@ def process_baseline(item):
             json_io.save_json(log_path, log)
 
 
+        # q = mp.Queue()
+        # p = MyProcess(target=yolov4_image_set_driver.train_baseline, 
+        #                 args=(sch_ctx, baseline_pending_dir, q))
+        # p.start()
+        # p.join()
+
+        # if p.exception:
+        #     exception, trace = p.exception
+        #     raise exception
+
+        # training_finished = q.get()
+
         training_finished = yolov4_image_set_driver.train_baseline(baseline_pending_dir, sch_ctx)
 
         if training_finished:
@@ -367,6 +383,7 @@ def process_baseline(item):
 
 
     except Exception as e:
+        # if trace is None:
         trace = traceback.format_exc()
         logger.error("Exception occurred in process_baseline")
         logger.error(e)
@@ -429,6 +446,7 @@ def process_train(item):
     training_dir = os.path.join(model_dir, "training")
 
     try:
+        # trace = None
 
         if not needs_training(image_set_dir):
             return False
@@ -477,8 +495,21 @@ def process_train(item):
             return False
         if os.path.exists(switch_req_path):
             return False
+
+
+        # q = mp.Queue()
+        # p = MyProcess(target=collect_results, 
+        #                 args=(sch_ctx, image_set_dir, q))
+        # p.start()
+        # p.join()
+
+        # if p.exception:
+        #     exception, trace = p.exception
+        #     raise exception
+
+        training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir) #q.get()
         
-        training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir)
+        # training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir)
         if training_finished:
 
             status_path = os.path.join(model_dir, "status.json")
@@ -497,6 +528,7 @@ def process_train(item):
         return re_enqueue
 
     except Exception as e:
+        # if trace is None:
         trace = traceback.format_exc()
         logger.error("Exception occurred in process_train")
         logger.error(e)
@@ -593,10 +625,12 @@ def update_vegetation_record(image_set_dir, annotations, excess_green_record):
 
 
 
-def collect_results(image_set_dir, results_dir, predictions, full_predictions):
-    print("running post_result")
+def collect_results(image_set_dir, results_dir):
+    # print("running post_result")
 
 
+    full_predictions_path = os.path.join(results_dir, "full_predictions.json")
+    full_predictions = json_io.load_json(full_predictions_path)
 
     # excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
     # if os.path.exists(excess_green_record_path):
@@ -606,6 +640,13 @@ def collect_results(image_set_dir, results_dir, predictions, full_predictions):
 
     annotations_src_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotations = annotation_utils.load_annotations(annotations_src_path)
+
+
+
+    metrics = inference_metrics.collect_image_set_metrics(full_predictions, annotations) #, config)
+    metrics_path = os.path.join(results_dir, "metrics.json")
+    json_io.save_json(metrics_path, metrics)
+
 
     excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
     excess_green_record = json_io.load_json(excess_green_record_src_path)
@@ -619,10 +660,8 @@ def collect_results(image_set_dir, results_dir, predictions, full_predictions):
     #     excess_green_record_path = os.path.join(results_dir, "excess_green_record.json")
     #     json_io.save_json(excess_green_record_path, excess_green_record)
 
-    print("running collect_image_set_metrics")
-    metrics = inference_metrics.collect_image_set_metrics(image_set_dir, full_predictions, annotations) #, config)
-    metrics_path = os.path.join(results_dir, "metrics.json")
-    json_io.save_json(metrics_path, metrics)
+    # print("running collect_image_set_metrics")
+
 
 
 
@@ -634,22 +673,25 @@ def collect_results(image_set_dir, results_dir, predictions, full_predictions):
     results_vegetation_record_path = os.path.join(results_dir, "vegetation_record.json")
     json_io.save_json(results_vegetation_record_path, updated_vegetation_record)
 
-    excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
-    if os.path.exists(excess_green_record_src_path):
-        excess_green_record_dst_path = os.path.join(results_dir, "excess_green_record.json")
-        shutil.copyfile(excess_green_record_src_path, excess_green_record_dst_path)
+    # excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
+    # if os.path.exists(excess_green_record_src_path):
+    excess_green_record_dst_path = os.path.join(results_dir, "excess_green_record.json")
+    # shutil.copyfile(excess_green_record_src_path, excess_green_record_dst_path)
+    json_io.save_json(excess_green_record_dst_path, excess_green_record)
     
     # annotations_src_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotations_dst_path = os.path.join(results_dir, "annotations.json")
     annotation_utils.save_annotations(annotations_dst_path, annotations)
     # shutil.copyfile(annotations_src_path, annotations_dst_path)
 
-    full_predictions_path = os.path.join(results_dir, "full_predictions.json")
-    json_io.save_json(full_predictions_path, full_predictions)
+
+    # full_predictions_path = os.path.join(results_dir, "full_predictions.json")
+    # json_io.save_json(full_predictions_path, full_predictions)
 
 
-    predictions_path = os.path.join(results_dir, "predictions.json")
-    json_io.save_json(predictions_path, predictions)
+    # predictions_path = os.path.join(results_dir, "predictions.json")
+    # json_io.save_json(predictions_path, predictions)
+
 
 
     # for image_name in predictions.keys():
@@ -664,28 +706,28 @@ def collect_results(image_set_dir, results_dir, predictions, full_predictions):
     return
 
 
-def save_predictions(image_set_dir, image_names, predictions):
-    print("Saving predictions")
+# def save_predictions(image_set_dir, image_names, predictions):
+#     # print("Saving predictions")
 
-    model_dir = os.path.join(image_set_dir, "model")
-    predictions_dir = os.path.join(model_dir, "prediction")
-    for image_name in image_names:
-        image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
-        os.makedirs(image_predictions_dir, exist_ok=True)
-        predictions_path = os.path.join(image_predictions_dir, "predictions.json")
+#     model_dir = os.path.join(image_set_dir, "model")
+#     predictions_dir = os.path.join(model_dir, "prediction")
+#     for image_name in image_names:
+#         image_predictions_dir = os.path.join(predictions_dir, "images", image_name)
+#         os.makedirs(image_predictions_dir, exist_ok=True)
+#         predictions_path = os.path.join(image_predictions_dir, "predictions.json")
 
-        # save_boxes = predictions[image_name]["boxes"]
-        # save_scores = predictions[image_name]["scores"]
-        # inds = np.array(predictions[image_name]["scores"]) >= 0.25
+#         # save_boxes = predictions[image_name]["boxes"]
+#         # save_scores = predictions[image_name]["scores"]
+#         # inds = np.array(predictions[image_name]["scores"]) >= 0.25
 
-        # print("{}: num_boxes: {} num_above_thresh_boxes: {}".format(image_name, len(save_boxes), np.sum(inds)))
-        # predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
-        # predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
+#         # print("{}: num_boxes: {} num_above_thresh_boxes: {}".format(image_name, len(save_boxes), np.sum(inds)))
+#         # predictions[image_name]["boxes"] = np.array(predictions[image_name]["boxes"])[inds].tolist()
+#         # predictions[image_name]["scores"] = np.array(predictions[image_name]["scores"])[inds].tolist()
 
-        json_io.save_json(predictions_path, {image_name: predictions[image_name]})
+#         json_io.save_json(predictions_path, {image_name: predictions[image_name]})
 
-        # predictions[image_name]["boxes"] = save_boxes
-        # predictions[image_name]["scores"] = save_scores
+#         # predictions[image_name]["boxes"] = save_boxes
+#         # predictions[image_name]["scores"] = save_scores
 
 
 
@@ -711,6 +753,7 @@ def process_predict(item):
     for prediction_requests_dir in prediction_requests_dirs:
         prediction_request_paths = glob.glob(os.path.join(prediction_requests_dir, "*.json"))
         try:
+            # trace = None
             while len(prediction_request_paths) > 0:
             
                 results_dir = None
@@ -723,12 +766,25 @@ def process_predict(item):
                                             extra_items={"percent_complete": 0})
                             
 
-     
-                interrupted, predictions, full_predictions = yolov4_image_set_driver.predict(
-                                    sch_ctx,
-                                    image_set_dir, 
-                                    image_names=request["image_names"], 
-                                    save_result=request["save_result"])
+                interrupted = yolov4_image_set_driver.predict(sch_ctx, image_set_dir, request)
+                # q = mp.Queue()
+                # p = MyProcess(target=yolov4_image_set_driver.predict, 
+                #             args=(sch_ctx, image_set_dir, request, q))
+                # p.start()
+                # p.join()
+
+                # if p.exception:
+                #     exception, trace = p.exception
+                #     raise exception
+
+                # interrupted = q.get()
+
+
+                # interrupted, predictions, full_predictions = yolov4_image_set_driver.predict(
+                #                     sch_ctx,
+                #                     image_set_dir, 
+                #                     image_names=request["image_names"], 
+                #                     save_result=request["save_result"])
                 
 
                 #end_time = predict_on_images(
@@ -739,15 +795,28 @@ def process_predict(item):
                 if interrupted:
                     return
 
-                save_predictions(image_set_dir, request["image_names"], predictions)
+                # save_predictions(image_set_dir, request["image_names"], predictions)
 
                 if request["save_result"]:
                     isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.COLLECTING_METRICS)
+                    results_dir = os.path.join(model_dir, "results", request["request_uuid"])
+                    # os.makedirs(results_dir)
+
+                    # q = mp.Queue()
+                    collect_results(image_set_dir, results_dir)
+                    # p = MyProcess(target=collect_results, 
+                    #               args=(image_set_dir, results_dir))
+                    # p.start()
+                    # p.join()
+
+                    # if p.exception:
+                    #     exception, trace = p.exception
+                    #     raise exception
+
+
+                    # collect_results(image_set_dir, results_dir, predictions, full_predictions)
                     end_time = int(time.time())
                     request["end_time"] = end_time
-                    results_dir = os.path.join(model_dir, "results", str(end_time))
-                    os.makedirs(results_dir)
-                    collect_results(image_set_dir, results_dir, predictions, full_predictions)
                     json_io.save_json(os.path.join(results_dir, "request.json"), request)
 
                 os.remove(prediction_request_path)
@@ -764,7 +833,7 @@ def process_predict(item):
 
 
         except Exception as e:
-
+            # if trace is None:
             trace = traceback.format_exc()
             logger.error("Exception occurred in process_predict")
             logger.error(e)
@@ -1075,6 +1144,22 @@ def work():
 if __name__ == "__main__":
 
     #os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+
+    # gpus = tf.config.list_physical_devices('GPU')
+    # if gpus:
+    #     try:
+    #         # Currently, memory growth needs to be the same across GPUs
+    #         for gpu in gpus:
+    #             tf.config.experimental.set_memory_growth(gpu, True)
+    #             logical_gpus = tf.config.list_logical_devices('GPU')
+    #             print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    #     except RuntimeError as e:
+    #         # Memory growth must be set before GPUs have been initialized
+    #         print(e)
+
+    # # gpus = None
+
 
     logging.basicConfig(level=logging.INFO)
 

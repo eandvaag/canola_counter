@@ -27,21 +27,21 @@ if __name__ == "__main__":
     parser.add_argument("farm_name", type=str)
     parser.add_argument("field_name", type=str)
     parser.add_argument("mission_date", type=str)
-    parser.add_argument("results_timestamp", type=str)
+    parser.add_argument("result_uuid", type=str)
     parser.add_argument("download_uuid", type=str)
-    parser.add_argument("annotation_version", type=str)
+    # parser.add_argument("annotation_version", type=str)
 
     args = parser.parse_args()
 
 
     remove_old_results(os.path.join("usr", "data", args.username,
                                     "image_sets", args.farm_name, args.field_name, args.mission_date,
-                                    "model", "results", args.results_timestamp))
+                                    "model", "results", args.result_uuid))
 
     inference_metrics.create_spreadsheet(args.username, 
                                         args.farm_name, 
                                         args.field_name, 
                                         args.mission_date, 
-                                        args.results_timestamp,
-                                        args.download_uuid,
-                                        args.annotation_version)
+                                        args.result_uuid,
+                                        args.download_uuid)
+                                        # args.annotation_version)

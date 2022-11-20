@@ -262,18 +262,18 @@ def set_active_training_params(config, seq_num):
 
 
 def get_image_detections(patch_abs_boxes, patch_scores, patch_coords, 
-                      image_path, trim=True): #, patch_border_buffer_percent=None): # buffer_pct=None):
+                         region, trim=True): #, patch_border_buffer_percent=None): # buffer_pct=None):
 
     if patch_abs_boxes.size == 0:
         image_abs_boxes = np.array([], dtype=np.int32)
         image_scores = np.array([], dtype=np.float32)
-        image_classes = np.array([], dtype=np.int32)
+        # image_classes = np.array([], dtype=np.int32)
 
     else:
         patch_height = patch_coords[2] - patch_coords[0]
         patch_width = patch_coords[3] - patch_coords[1]
 
-        image_width, image_height = Image(image_path).get_wh()
+        # image_width, image_height = Image(image_path).get_wh()
 
 
         
@@ -304,10 +304,10 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_coords,
 
             wiggle_room = 3
 
-            accept_bottom = 0 if patch_coords[0] == 0 else patch_coords[0] + round(patch_height / 4) - wiggle_room
-            accept_left = 0 if patch_coords[1] == 0 else patch_coords[1] + round(patch_width / 4) - wiggle_room
-            accept_top = image_height if patch_coords[2] >= image_height else patch_coords[2] - round(patch_height / 4) + wiggle_room
-            accept_right = image_width if patch_coords[3] >= image_width else patch_coords[3] - round(patch_width / 4) + wiggle_room
+            accept_bottom = region[0] if patch_coords[0] == region[0] else patch_coords[0] + round(patch_height / 4) - wiggle_room
+            accept_left = region[1] if patch_coords[1] == region[1] else patch_coords[1] + round(patch_width / 4) - wiggle_room
+            accept_top = region[2] if patch_coords[2] >= region[2] else patch_coords[2] - round(patch_height / 4) + wiggle_room
+            accept_right = region[3] if patch_coords[3] >= region[3] else patch_coords[3] - round(patch_width / 4) + wiggle_room
 
 
             box_centres = (image_abs_boxes[..., :2] + image_abs_boxes[..., 2:]) / 2.0
@@ -366,169 +366,169 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_coords,
 
 
 
-def clip_image_boxes_fast(image_set_dir, predictions):
-    for image_name in predictions.keys():
-        # print("num_patches (acc. boxes:): {}, num_patches: (acc. scores): {}".format(
-            # len(predictions[image_name]["boxes"]), len(predictions[image_name]["scores"])))
-        if len(predictions[image_name]["boxes"]) > 0:
-            image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
-            image = Image(image_path)
-            image_width, image_height = image.get_wh()
+# def clip_image_boxes_fast(image_set_dir, predictions):
+#     for image_name in predictions.keys():
+#         # print("num_patches (acc. boxes:): {}, num_patches: (acc. scores): {}".format(
+#             # len(predictions[image_name]["boxes"]), len(predictions[image_name]["scores"])))
+#         if len(predictions[image_name]["boxes"]) > 0:
+#             image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+#             image = Image(image_path)
+#             image_width, image_height = image.get_wh()
 
-            clipped_image_boxes = []
+#             clipped_image_boxes = []
 
-            for i in range(len(predictions[image_name]["boxes"])):
+#             for i in range(len(predictions[image_name]["boxes"])):
                 
-                patch_boxes = predictions[image_name]["boxes"][i]
-                # print("patch_boxes", patch_boxes)
-                if len(patch_boxes) == 0:
-                    clipped_image_boxes.append([])
-                else:
-                    pred_image_abs_boxes = np.array(patch_boxes)
-                    pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-                    clipped_image_boxes.append(pred_image_abs_boxes.tolist())
+#                 patch_boxes = predictions[image_name]["boxes"][i]
+#                 # print("patch_boxes", patch_boxes)
+#                 if len(patch_boxes) == 0:
+#                     clipped_image_boxes.append([])
+#                 else:
+#                     pred_image_abs_boxes = np.array(patch_boxes)
+#                     pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+#                     clipped_image_boxes.append(pred_image_abs_boxes.tolist())
 
 
             
-            predictions[image_name]["boxes"] = clipped_image_boxes
-            # print("(2) num_patches (acc. boxes:): {}, num_patches: (acc. scores): {}".format(
-            #     len(predictions[image_name]["boxes"]), len(predictions[image_name]["scores"])))
+#             predictions[image_name]["boxes"] = clipped_image_boxes
+#             # print("(2) num_patches (acc. boxes:): {}, num_patches: (acc. scores): {}".format(
+#             #     len(predictions[image_name]["boxes"]), len(predictions[image_name]["scores"])))
 
 
-def clip_image_boxes(image_set_dir, predictions):
-    for image_name in predictions.keys():
-        if len(predictions[image_name]["boxes"]) > 0:
-            pred_image_abs_boxes = np.array(predictions[image_name]["boxes"])
-            image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
-            image = Image(image_path)
-            image_width, image_height = image.get_wh()
-            pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-            predictions[image_name]["boxes"] = pred_image_abs_boxes.tolist()
+# def clip_image_boxes(image_set_dir, predictions):
+#     for image_name in predictions.keys():
+#         if len(predictions[image_name]["boxes"]) > 0:
+#             pred_image_abs_boxes = np.array(predictions[image_name]["boxes"])
+#             image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+#             image = Image(image_path)
+#             image_width, image_height = image.get_wh()
+#             pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+#             predictions[image_name]["boxes"] = pred_image_abs_boxes.tolist()
 
 
-def clip_image_boxes_org(image_predictions):
-    for image_name in image_predictions.keys():
-        for transform_type in image_predictions[image_name].keys():
-            if len(image_predictions[image_name][transform_type]["pred_image_abs_boxes"]) > 0:
-                pred_image_abs_boxes = np.array(image_predictions[image_name][transform_type]["pred_image_abs_boxes"])
-                image_width, image_height = Image(image_predictions[image_name][transform_type]["image_path"]).get_wh()
-                pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-                image_predictions[image_name][transform_type]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+# def clip_image_boxes_org(image_predictions):
+#     for image_name in image_predictions.keys():
+#         for transform_type in image_predictions[image_name].keys():
+#             if len(image_predictions[image_name][transform_type]["pred_image_abs_boxes"]) > 0:
+#                 pred_image_abs_boxes = np.array(image_predictions[image_name][transform_type]["pred_image_abs_boxes"])
+#                 image_width, image_height = Image(image_predictions[image_name][transform_type]["image_path"]).get_wh()
+#                 pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+#                 image_predictions[image_name][transform_type]["pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
 
 
-            # if len(image_predictions[image_name]["nt_pred_image_abs_boxes"]) > 0:
-            #     pred_image_abs_boxes = np.array(image_predictions[image_name]["nt_pred_image_abs_boxes"])
-            #     image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
-            #     pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
-            #     image_predictions[image_name]["nt_pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
+#             # if len(image_predictions[image_name]["nt_pred_image_abs_boxes"]) > 0:
+#             #     pred_image_abs_boxes = np.array(image_predictions[image_name]["nt_pred_image_abs_boxes"])
+#             #     image_width, image_height = Image(image_predictions[image_name]["image_path"]).get_wh()
+#             #     pred_image_abs_boxes = box_utils.clip_boxes_np(pred_image_abs_boxes, [0, 0, image_height, image_width])
+#             #     image_predictions[image_name]["nt_pred_image_abs_boxes"] = pred_image_abs_boxes.tolist()
 
-def get_surrounding_patch_indices(patch_index, num_w_patches, num_h_patches):
+# def get_surrounding_patch_indices(patch_index, num_w_patches, num_h_patches):
 
-    # incr = patch_size - overlap_px
-    # w_covered = w - patch_size
-    # num_w_patches = m.ceil(w_covered / incr) + 1
+#     # incr = patch_size - overlap_px
+#     # w_covered = w - patch_size
+#     # num_w_patches = m.ceil(w_covered / incr) + 1
 
-    # h_covered = h - patch_size
-    # num_h_patches = m.ceil(h_covered / incr) + 1
+#     # h_covered = h - patch_size
+#     # num_h_patches = m.ceil(h_covered / incr) + 1
 
-    # num_patches = num_w_patches * num_h_patches
-
-
-
-    row_index = patch_index // num_w_patches
-    col_index = patch_index % num_w_patches
-
-    neighbours = []
-    for i in [row_index-1, row_index, row_index+1]:
-        for j in [col_index-1, col_index, col_index+1]:
-
-            if i == row_index and j == col_index:
-                pass
-
-            elif (i > 0 and i < num_h_patches) and (j > 0 and j < num_w_patches):
-                flattened_index = ((i) * num_w_patches) + j
-                neighbours.append(flattened_index)
-
-    return neighbours
+#     # num_patches = num_w_patches * num_h_patches
 
 
 
-def apply_nms_to_image_boxes_fast(predictions, image_set_dir, patch_size, overlap_px, iou_thresh):
+#     row_index = patch_index // num_w_patches
+#     col_index = patch_index % num_w_patches
 
-    # kept_boxes = {}
-    # kept_scores = {}
+#     neighbours = []
+#     for i in [row_index-1, row_index, row_index+1]:
+#         for j in [col_index-1, col_index, col_index+1]:
 
-    for image_name in predictions.keys():
-        # if len(predictions[image_name]["boxes"]) > 0:
+#             if i == row_index and j == col_index:
+#                 pass
 
-        kept_boxes_for_image = []
-        kept_scores_for_image = []
+#             elif (i > 0 and i < num_h_patches) and (j > 0 and j < num_w_patches):
+#                 flattened_index = ((i) * num_w_patches) + j
+#                 neighbours.append(flattened_index)
 
-
-        image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
-        image = Image(image_path)
-
-        w, h = image.get_wh()
-
-        incr = patch_size - overlap_px
-        w_covered = w - patch_size
-        num_w_patches = m.ceil(w_covered / incr) + 1
-
-        h_covered = h - patch_size
-        num_h_patches = m.ceil(h_covered / incr) + 1
-
-        # num_patches = num_w_patches * num_h_patches
-
-        # num_batches = m.ceil(num_patches / config["inference"]["batch_size"])
+#     return neighbours
 
 
 
-        for patch_index in tqdm.trange(len(predictions[image_name]["boxes"])): #patch_boxes in enumerate(tqdm.tqdm(predictions[image_name]["boxes"])):
+# def apply_nms_to_image_boxes_fast(predictions, image_set_dir, patch_size, overlap_px, iou_thresh):
+
+#     # kept_boxes = {}
+#     # kept_scores = {}
+
+#     for image_name in predictions.keys():
+#         # if len(predictions[image_name]["boxes"]) > 0:
+
+#         kept_boxes_for_image = []
+#         kept_scores_for_image = []
+
+
+#         image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+#         image = Image(image_path)
+
+#         w, h = image.get_wh()
+
+#         incr = patch_size - overlap_px
+#         w_covered = w - patch_size
+#         num_w_patches = m.ceil(w_covered / incr) + 1
+
+#         h_covered = h - patch_size
+#         num_h_patches = m.ceil(h_covered / incr) + 1
+
+#         # num_patches = num_w_patches * num_h_patches
+
+#         # num_batches = m.ceil(num_patches / config["inference"]["batch_size"])
+
+
+
+#         for patch_index in tqdm.trange(len(predictions[image_name]["boxes"])): #patch_boxes in enumerate(tqdm.tqdm(predictions[image_name]["boxes"])):
         
         
-            # enumerate(predictions[image_name]["boxes"]):
+#             # enumerate(predictions[image_name]["boxes"]):
 
-            neighbour_indices = get_surrounding_patch_indices(patch_index, num_w_patches, num_h_patches)
+#             neighbour_indices = get_surrounding_patch_indices(patch_index, num_w_patches, num_h_patches)
 
-            involved_boxes = []
-            involved_scores = []
-            involved_boxes.extend(predictions[image_name]["boxes"][patch_index])
-            involved_scores.extend(predictions[image_name]["scores"][patch_index])
-            # print("num_patches (acc. boxes:): {}, num_patches: (acc. scores): {}, patch_index: {}, neighbour_indices: {}".format(
-            #     len(predictions[image_name]["boxes"]), len(predictions[image_name]["scores"]), patch_index, neighbour_indices))
-            for neighbour_index in neighbour_indices:
-                involved_boxes.extend(predictions[image_name]["boxes"][neighbour_index])
-                involved_scores.extend(predictions[image_name]["scores"][neighbour_index])
-
-
-            if len(involved_boxes) > 0:
-                involved_boxes = np.array(involved_boxes)
-                involved_scores = np.array(involved_scores)
-
-                # print("involved_boxes.shape", involved_boxes.shape)
-                # print("involved_scores.shape", involved_scores.shape)
-                sel_indices = box_utils.non_max_suppression_indices(
-                                                        involved_boxes,
-                                                        involved_scores,
-                                                        iou_thresh=iou_thresh)
+#             involved_boxes = []
+#             involved_scores = []
+#             involved_boxes.extend(predictions[image_name]["boxes"][patch_index])
+#             involved_scores.extend(predictions[image_name]["scores"][patch_index])
+#             # print("num_patches (acc. boxes:): {}, num_patches: (acc. scores): {}, patch_index: {}, neighbour_indices: {}".format(
+#             #     len(predictions[image_name]["boxes"]), len(predictions[image_name]["scores"]), patch_index, neighbour_indices))
+#             for neighbour_index in neighbour_indices:
+#                 involved_boxes.extend(predictions[image_name]["boxes"][neighbour_index])
+#                 involved_scores.extend(predictions[image_name]["scores"][neighbour_index])
 
 
-                # now keep only the ones that belong to current patch
+#             if len(involved_boxes) > 0:
+#                 involved_boxes = np.array(involved_boxes)
+#                 involved_scores = np.array(involved_scores)
 
-                keep_mask = np.full(involved_boxes.shape[0], False)
-                keep_mask[sel_indices] = True
-                keep_mask[len(predictions[image_name]["boxes"][patch_index]):] = False
+#                 # print("involved_boxes.shape", involved_boxes.shape)
+#                 # print("involved_scores.shape", involved_scores.shape)
+#                 sel_indices = box_utils.non_max_suppression_indices(
+#                                                         involved_boxes,
+#                                                         involved_scores,
+#                                                         iou_thresh=iou_thresh)
+
+
+#                 # now keep only the ones that belong to current patch
+
+#                 keep_mask = np.full(involved_boxes.shape[0], False)
+#                 keep_mask[sel_indices] = True
+#                 keep_mask[len(predictions[image_name]["boxes"][patch_index]):] = False
                 
-                nms_boxes = involved_boxes[keep_mask]
-                nms_scores = involved_scores[keep_mask]
+#                 nms_boxes = involved_boxes[keep_mask]
+#                 nms_scores = involved_scores[keep_mask]
 
-                # print("nms_boxes.shape", nms_boxes.shape)
-                # print("nms_scores.shape", nms_scores.shape)
-                kept_boxes_for_image.extend(nms_boxes.tolist())
-                kept_scores_for_image.extend(nms_scores.tolist())
+#                 # print("nms_boxes.shape", nms_boxes.shape)
+#                 # print("nms_scores.shape", nms_scores.shape)
+#                 kept_boxes_for_image.extend(nms_boxes.tolist())
+#                 kept_scores_for_image.extend(nms_scores.tolist())
 
-        predictions[image_name]["boxes"] = kept_boxes_for_image
-        predictions[image_name]["scores"] = kept_scores_for_image
+#         predictions[image_name]["boxes"] = kept_boxes_for_image
+#         predictions[image_name]["scores"] = kept_scores_for_image
 
 
 
@@ -549,18 +549,18 @@ def apply_nms_to_image_boxes(predictions, iou_thresh):
                 #                                         pred_scores,
                 #                                         iou_thresh=iou_thresh)
 
-                # nms_boxes, nms_scores = box_utils.non_max_suppression(
+                # nms_indices = box_utils.non_max_suppression(
                 #                                         pred_image_abs_boxes,
                 #                                         pred_scores,
                 #                                         iou_thresh=iou_thresh)
 
 
-                nms_indices = lsnms_nms.nms(pred_image_abs_boxes,
+                nms_indices = lsnms_nms.nms(box_utils.swap_xy_np(pred_image_abs_boxes),
                                                     pred_scores,
                                                     iou_threshold=iou_thresh)
 
-                # nms_boxes = pred_image_abs_boxes[nms_indices]
-                # nms_scores = pred_scores[nms_indices]
+                nms_boxes = pred_image_abs_boxes[nms_indices]
+                nms_scores = pred_scores[nms_indices]
 
 
                 # nms_boxes, nms_scores = box_utils.stolen_nms(
@@ -589,109 +589,109 @@ def apply_nms_to_image_boxes(predictions, iou_thresh):
 
 
 
-def custom_nms(image_set_dir, predictions, iou_thresh, patch_size, overlap_px): #pred_boxes, pred_scores, iou_threshold):
+# def custom_nms(image_set_dir, predictions, iou_thresh, patch_size, overlap_px): #pred_boxes, pred_scores, iou_threshold):
 
-    # if pred_boxes.size == 0:
-    #     return np.array([]), np.array([])
-    res_predictions = {}
+#     # if pred_boxes.size == 0:
+#     #     return np.array([]), np.array([])
+#     res_predictions = {}
 
-    for image_name in predictions.keys():
-        res_predictions[image_name] = {}
-        res_predictions[image_name]["boxes"] = []
-        res_predictions[image_name]["scores"] = []
+#     for image_name in predictions.keys():
+#         res_predictions[image_name] = {}
+#         res_predictions[image_name]["boxes"] = []
+#         res_predictions[image_name]["scores"] = []
 
-        if len(predictions[image_name]["boxes"]) == 0:
-            continue
-
-
-        image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
-        image = Image(image_path)
-
-        w, h = image.get_wh()
-
-        incr = patch_size - overlap_px
-        w_covered = w - patch_size
-        num_w_patches = m.ceil(w_covered / incr) + 1
-
-        h_covered = h - patch_size
-        num_h_patches = m.ceil(h_covered / incr) + 1
+#         if len(predictions[image_name]["boxes"]) == 0:
+#             continue
 
 
-        # pred_boxes = np.array(predictions[image_name]["boxes"])
-        # pred_scores = np.array(predictions[image_name]["scores"])
+#         image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+#         image = Image(image_path)
 
-        flat_pred_boxes = []
-        box_patch_indices = []
-        patch_box_index_to_flat_box_index = []
-        num_boxes = 0
+#         w, h = image.get_wh()
 
-        for i, x in enumerate(predictions[image_name]["boxes"]):
-            flat_pred_boxes.extend(x)
-            box_patch_indices.extend([i] * len(x))
-            patch_box_index_to_flat_box_index.append([z for z in range(num_boxes, num_boxes+len(x))])
-            num_boxes += len(x)
+#         incr = patch_size - overlap_px
+#         w_covered = w - patch_size
+#         num_w_patches = m.ceil(w_covered / incr) + 1
 
-        flat_pred_scores = []
-        for x in predictions[image_name]["scores"]:
-            flat_pred_scores.extend(x)
+#         h_covered = h - patch_size
+#         num_h_patches = m.ceil(h_covered / incr) + 1
 
 
-        flat_pred_boxes = np.array(flat_pred_boxes)
-        flat_pred_scores = np.array(flat_pred_scores)
+#         # pred_boxes = np.array(predictions[image_name]["boxes"])
+#         # pred_scores = np.array(predictions[image_name]["scores"])
+
+#         flat_pred_boxes = []
+#         box_patch_indices = []
+#         patch_box_index_to_flat_box_index = []
+#         num_boxes = 0
+
+#         for i, x in enumerate(predictions[image_name]["boxes"]):
+#             flat_pred_boxes.extend(x)
+#             box_patch_indices.extend([i] * len(x))
+#             patch_box_index_to_flat_box_index.append([z for z in range(num_boxes, num_boxes+len(x))])
+#             num_boxes += len(x)
+
+#         flat_pred_scores = []
+#         for x in predictions[image_name]["scores"]:
+#             flat_pred_scores.extend(x)
 
 
-        box_patch_indices = np.array(box_patch_indices)
-        # box_index_to_patch_index = predictions[image_name]["box_index_to_patch_index"]
+#         flat_pred_boxes = np.array(flat_pred_boxes)
+#         flat_pred_scores = np.array(flat_pred_scores)
 
 
-        available = np.full(flat_pred_boxes.shape[0], True)
-
-        # q = 0
-        while np.any(available):
-            num_available = np.sum(available)
-            print("image: {}. num_available: {}".format(image_name, num_available))
-            # if q > 20:
-            #     exit()
-            # q += 1
-
-            picked_ind = np.argmax(flat_pred_scores[available])
-
-            picked_box = flat_pred_boxes[available][picked_ind, :]
-            picked_score = flat_pred_scores[available][picked_ind]
-            # print("picked_ind: {}, picked_score: {}".format(picked_ind, picked_score))
+#         box_patch_indices = np.array(box_patch_indices)
+#         # box_index_to_patch_index = predictions[image_name]["box_index_to_patch_index"]
 
 
-            res_predictions[image_name]["boxes"].append(picked_box.tolist())
-            res_predictions[image_name]["scores"].append(float(picked_score))
+#         available = np.full(flat_pred_boxes.shape[0], True)
 
-            patch_ind = box_patch_indices[available][picked_ind] #box_index_to_patch_index[picked_ind]
-            # print("picked_box: {}, picked_box_patch_boxes: {}".format(picked_box, predictions[image_name]["boxes"][patch_ind]))
-            # print("patch_ind", patch_ind)
+#         # q = 0
+#         while np.any(available):
+#             num_available = np.sum(available)
+#             print("image: {}. num_available: {}".format(image_name, num_available))
+#             # if q > 20:
+#             #     exit()
+#             # q += 1
 
-            neighbour_inds = get_surrounding_patch_indices(patch_ind, num_w_patches, num_h_patches)
+#             picked_ind = np.argmax(flat_pred_scores[available])
 
-            involved_boxes = []
-            involved_inds = neighbour_inds + [patch_ind]
-            # print("involved_inds", involved_inds)
-            for ind in involved_inds:
-                involved_boxes = predictions[image_name]["boxes"][ind]
-                for i, involved_box in enumerate(involved_boxes):
-                    iou_val = box_utils.compute_iou_np(np.array([picked_box]), np.array([involved_box]))[0][0]
+#             picked_box = flat_pred_boxes[available][picked_ind, :]
+#             picked_score = flat_pred_scores[available][picked_ind]
+#             # print("picked_ind: {}, picked_score: {}".format(picked_ind, picked_score))
+
+
+#             res_predictions[image_name]["boxes"].append(picked_box.tolist())
+#             res_predictions[image_name]["scores"].append(float(picked_score))
+
+#             patch_ind = box_patch_indices[available][picked_ind] #box_index_to_patch_index[picked_ind]
+#             # print("picked_box: {}, picked_box_patch_boxes: {}".format(picked_box, predictions[image_name]["boxes"][patch_ind]))
+#             # print("patch_ind", patch_ind)
+
+#             neighbour_inds = get_surrounding_patch_indices(patch_ind, num_w_patches, num_h_patches)
+
+#             involved_boxes = []
+#             involved_inds = neighbour_inds + [patch_ind]
+#             # print("involved_inds", involved_inds)
+#             for ind in involved_inds:
+#                 involved_boxes = predictions[image_name]["boxes"][ind]
+#                 for i, involved_box in enumerate(involved_boxes):
+#                     iou_val = box_utils.compute_iou_np(np.array([picked_box]), np.array([involved_box]))[0][0]
                     
-                    flattened_box_index = patch_box_index_to_flat_box_index[ind][i]
-                    is_available = available[flattened_box_index]
+#                     flattened_box_index = patch_box_index_to_flat_box_index[ind][i]
+#                     is_available = available[flattened_box_index]
 
-                    # print("{} : {}. IoU: {} available?: {}".format(picked_box, involved_box, iou_val, is_available))
-                    if is_available and iou_val >= iou_thresh:
-                        # print("No longer available: {}".format(flattened_box_index))
-                        # flattened_box_index = predictions[image_name]["flattened_box_indices"][ind][i]
-                        # print("flattened_box_index", flattened_box_index)
-                        available[flattened_box_index] = False
+#                     # print("{} : {}. IoU: {} available?: {}".format(picked_box, involved_box, iou_val, is_available))
+#                     if is_available and iou_val >= iou_thresh:
+#                         # print("No longer available: {}".format(flattened_box_index))
+#                         # flattened_box_index = predictions[image_name]["flattened_box_indices"][ind][i]
+#                         # print("flattened_box_index", flattened_box_index)
+#                         available[flattened_box_index] = False
 
-        # res_predictions[image_name]["boxes"] = res_predictions[image_name]["boxes"].tolist()
-        # res_predictions[image_name]["scores"] = res_predictions[image_name]["scores"].tolist()
+#         # res_predictions[image_name]["boxes"] = res_predictions[image_name]["boxes"].tolist()
+#         # res_predictions[image_name]["scores"] = res_predictions[image_name]["scores"].tolist()
 
-    return res_predictions
+#     return res_predictions
 
 
 
