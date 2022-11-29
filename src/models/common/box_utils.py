@@ -253,8 +253,8 @@ def compute_iou(boxes1, boxes2, box_format="xywh"):
         #boxes1_area = boxes1[:, 2] * boxes1[:, 3]
         #boxes2_area = boxes2[:, 2] * boxes2[:, 3]
     elif box_format == "corners_yx":
-        boxes1_corners = boxes1 #swap_xy_tf(boxes1) #tf.convert_to_tensor(boxes1, dtype=tf.float32))
-        boxes2_corners = boxes2 #swap_xy_tf(boxes2) #tf.convert_to_tensor(boxes2, dtype=tf.float32))
+        boxes1_corners = swap_xy_tf(boxes1) #boxes1 #swap_xy_tf(boxes1) #tf.convert_to_tensor(boxes1, dtype=tf.float32))
+        boxes2_corners = swap_xy_tf(boxes2) #boxes2 #swap_xy_tf(boxes2) #tf.convert_to_tensor(boxes2, dtype=tf.float32))
     elif box_format == "corners_xy":
         boxes1_corners = boxes1
         boxes2_corners = boxes2
@@ -285,12 +285,8 @@ def compute_iou_np(boxes1, boxes2):
     """Computes pairwise IOU matrix for given two sets of boxes
 
     Arguments:
-      boxes1: A tensor with shape `(N, 4)` representing bounding boxes
-        where each box is of the format `[x, y, width, height]`.
-        boxes2: A tensor with shape `(M, 4)` representing bounding boxes
-        where each box is of the format `[x, y, width, height]`.
 
-      box_format: [min_y, min_x, max_y, max_x]
+      box_format: [min_x, min_y, max_x, max_y]
     Returns:
       pairwise IOU matrix with shape `(N, M)`, where the value at ith row
         jth column holds the IOU between ith box and jth box from

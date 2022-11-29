@@ -4,6 +4,7 @@ import tqdm
 import os
 import time
 import random
+import math as m
 import numpy as np
 import tensorflow as tf
 from mean_average_precision import MetricBuilder
@@ -311,131 +312,231 @@ from io_utils import json_io, w3c_io
 #     plt.ylabel("Difference in predicted count")
 #     plt.savefig(out_path)
 
-def get_f1_score(annotated_boxes, predicted_boxes, iou_thresh):
+def get_positives_and_negatives(annotated_boxes, predicted_boxes, iou_thresh):
+
+    start_time = time.time()
 
     num_annotated = annotated_boxes.shape[0]
     num_predicted = predicted_boxes.shape[0]
     # print("num_annotated", num_annotated)
     # print("num_predicted", num_predicted)
 
-    if num_annotated == 0 or num_predicted == 0:
-        return 0
+    # if num_annotated == 0 or num_predicted == 0:
+    #     return 0
 
 
     # num_true_positives: rows with at least one True
     # num_false_positives: cols with all False
     # num_false_negatives: rows with all False
 
-    true_positives = np.full(num_annotated, False)
-    false_positives = np.full(num_predicted, True)
+    # true_positives = np.full(num_annotated, False)
+    # false_positives = np.full(num_predicted, True)
+
+    annotated_boxes = box_utils.swap_xy_np(annotated_boxes)
+    predicted_boxes = box_utils.swap_xy_np(predicted_boxes)
 
 
 
     CHUNK_SIZE = 4000 #8000
     # CHUNK_SIZE = 1000000
-    for row_ind in tqdm.trange(0, num_annotated, CHUNK_SIZE):
-        for col_ind in range(0, num_predicted, CHUNK_SIZE):
+    matches = np.full(num_predicted, -1)
+    # max_iou_vals = np.full(num_predicted, 0)
+    # for row_ind in tqdm.trange(0, num_predicted, CHUNK_SIZE):
+    #     for col_ind in range(0, num_predicted, CHUNK_SIZE):
 
-            # start_time = time.time()
+    #         iou_mat = box_utils.compute_iou(
+    #                 tf.convert_to_tensor(annotated_boxes[row_ind:min(row_ind+CHUNK_SIZE, num_annotated), :], dtype=tf.float64), 
+    #                 tf.convert_to_tensor(predicted_boxes[col_ind:min(col_ind+CHUNK_SIZE, num_predicted), :], dtype=tf.float64),
+    #         box_format="corners_xy").numpy()
+    #         # print("iou_mat.shape", iou_mat.shape)
+    #         # print(iou_mat)
 
-            iou_mat = box_utils.compute_iou(
-                        tf.convert_to_tensor(annotated_boxes[row_ind:min(num_annotated, row_ind+CHUNK_SIZE), :], dtype=tf.float64), 
-                        tf.convert_to_tensor(predicted_boxes[col_ind:min(num_predicted, col_ind+CHUNK_SIZE), :], dtype=tf.float64),
-                        box_format="corners_yx")
+    #         if np.any(iou_mat):
 
-            # iou_mat2 = box_utils.compute_iou(
-            #             tf.convert_to_tensor(annotated_boxes[row_ind:min(num_annotated, row_ind+CHUNK_SIZE), :], dtype=tf.float64), 
-            #             tf.convert_to_tensor(predicted_boxes[col_ind:min(num_predicted, col_ind+CHUNK_SIZE), :], dtype=tf.float64),
-            #             box_format="corners_xy")
+    #             max_chunk_inds = np.argmax(iou_mat, axis=0)
+    #             # print("max_chunk_inds", max_chunk_inds)
+    #             # print("max_chunk_inds.shape", max_chunk_inds.shape)
+    #             max_chunk_vals = np.take_along_axis(iou_mat, np.expand_dims(max_chunk_inds, axis=0), axis=0)[0]
+    #             # num_predicted_in_chunk = min(col_ind+CHUNK_SIZE, num_predicted) - col_ind
+    #             # thresh_vals = np.full(num_predicted_in_chunk, iou_thresh)
+    #             mask = np.logical_and(max_chunk_vals >= iou_thresh, 
+    #                                 max_chunk_vals > max_iou_vals[col_ind:min(col_ind+CHUNK_SIZE, num_predicted)]
+    #             )
+    #             # print("max_chunk_inds.size: {}, np.unique(max_chunk_inds).size: {}".format(max_chunk_inds.size, np.unique(max_chunk_inds.size)))
+    #             # assert max_chunk_inds.size == np.unique(max_chunk_inds).size
+    #             matches[col_ind:min(col_ind+CHUNK_SIZE, num_predicted)][mask] = max_chunk_inds[mask] + row_ind
+    #             max_iou_vals[col_ind:min(col_ind+CHUNK_SIZE, num_predicted)][mask] = max_chunk_vals[mask]
 
-            # assert np.array_equal(iou_mat, iou_mat2)
-            # iou_mat = box_utils.compute_iou_np(annotated_boxes[row_ind:min(num_annotated, row_ind+CHUNK_SIZE), :], 
-            #                                    predicted_boxes[col_ind:min(num_predicted, col_ind+CHUNK_SIZE), :])
-            # print(iou_mat)
+    MAX_MAT_SIZE = 16000000
+    STEP_SIZE = min(num_predicted, m.floor(MAX_MAT_SIZE / num_predicted))
+    print("STEP_SIZE", STEP_SIZE)
+    # STEP_SIZE = 10
+    for i in range(0, num_predicted, STEP_SIZE): #, CHUNK_SIZE):
+        # for col_ind in range(0, num_predicted, CHUNK_SIZE):
+        iou_mat = box_utils.compute_iou(
+                    # tf.convert_to_tensor(predicted_boxes[i:i+1, :], dtype=tf.float64), 
+                    # tf.convert_to_tensor(annotated_boxes, dtype=tf.float64),
+
+                    tf.convert_to_tensor(annotated_boxes, dtype=tf.float64),
+                    tf.convert_to_tensor(predicted_boxes[i:i+STEP_SIZE, :], dtype=tf.float64), 
+                    box_format="corners_xy").numpy()
+
+
+        # iou_mat = box_utils.compute_iou_np(
+        #             annotated_boxes,
+        #             predicted_boxes[i:i+STEP_SIZE, :]) #box_format="corners_xy")
+        # max_ind = np.argmax(iou_mat)
+        # if iou_mat[0][max_ind] >= iou_thresh:
+        # if iou_mat[max_ind][0] >= iou_thresh:    
+        #     matches[i] = max_ind
+
+        max_inds = np.argmax(iou_mat, axis=0)
+        max_vals = np.take_along_axis(iou_mat, np.expand_dims(max_inds, axis=0), axis=0)[0]
+        mask = max_vals >= iou_thresh
+        matches[i:i+STEP_SIZE][mask] = max_inds[mask]
+
+
+
+
+
+    matched_elements = matches[matches > -1]
+    true_positive = np.sum(np.unique(matches) != -1)
+    false_positive = np.sum(matches == -1) + (len(matched_elements) - len(np.unique(matched_elements)))
+    false_negative = num_annotated - true_positive
+
+    # unq, unq_counts = np.unique(matches, return_counts=True)
+    # print("unique counts", unq_counts)
+
+    # print("number of matched_elements", matched_elements.size)
+    # print("number of -1s", np.sum(matches == -1))
+    # print("number of true positives", true_positive)
+    # print("number of false positives", false_positive)
+    # print("number of false negatives", false_negative)
+
+    end_time = time.time()
+    elapsed = end_time - start_time
+    print("positives_and_negatives took {} seconds.".format(elapsed))
+
+    # acc = true_positive / (true_positive + false_positive + false_negative)
+    return int(true_positive), int(false_positive), int(false_negative)
+
+    # for row_ind in tqdm.trange(0, num_annotated, CHUNK_SIZE):
+    #     for col_ind in range(0, num_predicted, CHUNK_SIZE):
+
+    #         # start_time = time.time()
+
+    #         iou_mat = box_utils.compute_iou(
+    #                     tf.convert_to_tensor(annotated_boxes[row_ind:min(num_annotated, row_ind+CHUNK_SIZE), :], dtype=tf.float64), 
+    #                     tf.convert_to_tensor(predicted_boxes[col_ind:min(num_predicted, col_ind+CHUNK_SIZE), :], dtype=tf.float64),
+    #                     box_format="corners_yx")
+
+    #         # iou_mat2 = box_utils.compute_iou(
+    #         #             tf.convert_to_tensor(annotated_boxes[row_ind:min(num_annotated, row_ind+CHUNK_SIZE), :], dtype=tf.float64), 
+    #         #             tf.convert_to_tensor(predicted_boxes[col_ind:min(num_predicted, col_ind+CHUNK_SIZE), :], dtype=tf.float64),
+    #         #             box_format="corners_xy")
+
+    #         # assert np.array_equal(iou_mat, iou_mat2)
+    #         # iou_mat = box_utils.compute_iou_np(annotated_boxes[row_ind:min(num_annotated, row_ind+CHUNK_SIZE), :], 
+    #         #                                    predicted_boxes[col_ind:min(num_predicted, col_ind+CHUNK_SIZE), :])
+    #         # print(iou_mat)
             
-            # end_time = time.time()
-            # elapsed = end_time - start_time
-            # print("took {} seconds to compute iou matrix.".format(elapsed))
-            # print(iou_mat.shape, row_ind, col_ind)
-            overlap_mat = iou_mat >= iou_thresh
-            # print(overlap_mat)
+    #         # end_time = time.time()
+    #         # elapsed = end_time - start_time
+    #         # print("took {} seconds to compute iou matrix.".format(elapsed))
+    #         # print(iou_mat.shape, row_ind, col_ind)
+    #         overlap_mat = iou_mat >= iou_thresh
+    #         # print(overlap_mat)
 
-            # start_time = time.time()
-            # true_positives_chunk = true_positives[row_ind:min(num_annotated, row_ind+CHUNK_SIZE)]
-            true_positives[row_ind:min(num_annotated, row_ind+CHUNK_SIZE)] = \
-                np.logical_or(true_positives[row_ind:min(num_annotated, row_ind+CHUNK_SIZE)], 
-                              np.any(overlap_mat, axis=1))
+    #         # start_time = time.time()
+    #         # true_positives_chunk = true_positives[row_ind:min(num_annotated, row_ind+CHUNK_SIZE)]
+    #         true_positives[row_ind:min(num_annotated, row_ind+CHUNK_SIZE)] = \
+    #             np.logical_or(true_positives[row_ind:min(num_annotated, row_ind+CHUNK_SIZE)], 
+    #                           np.any(overlap_mat, axis=1))
 
-            # print("true_positives_chunk", true_positives_chunk)
+    #         # print("true_positives_chunk", true_positives_chunk)
 
-            # end_time = time.time()
-            # elapsed = end_time - start_time
-            # print("took {} seconds to evaluate true positives chunk.".format(elapsed))                               
-            # print("row_ind: {}, col_ind: {}".format(row_ind, col_ind))
-            # print("false_positives.shape", false_positives.shape)
-            # print("false_positives_sub.shape", false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)].shape)
-            # false_positives_chunk = false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)]
-            false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)] = \
-                np.logical_and(false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)],
-                               np.all(np.logical_not(overlap_mat), axis=0))
+    #         # end_time = time.time()
+    #         # elapsed = end_time - start_time
+    #         # print("took {} seconds to evaluate true positives chunk.".format(elapsed))                               
+    #         # print("row_ind: {}, col_ind: {}".format(row_ind, col_ind))
+    #         # print("false_positives.shape", false_positives.shape)
+    #         # print("false_positives_sub.shape", false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)].shape)
+    #         # false_positives_chunk = false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)]
+    #         false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)] = \
+    #             np.logical_and(false_positives[col_ind:min(num_predicted, col_ind+CHUNK_SIZE)],
+    #                            np.all(np.logical_not(overlap_mat), axis=0))
 
-    # print("true_positives", true_positives)
-    num_true_positives = np.sum(true_positives)
-    num_false_positives = np.sum(false_positives)
-    num_false_negatives = true_positives.size - num_true_positives
-
-
-
-    # iou_mat = box_utils.compute_iou_np(annotated_boxes, predicted_boxes)
-    # overlap_mat = iou_mat >= iou_thresh
-    # num_true_positives = np.any(overlap_mat, axis=1).sum()
-    # num_false_positives = np.all(np.logical_not(overlap_mat), axis=0).sum()
-    # num_false_negatives = np.all(np.logical_not(overlap_mat), axis=1).sum()
-
-    # print("num_true_positives", num_true_positives)
-    # print("num_false_positives", num_false_positives)
-    # print("num_false_negatives", num_false_negatives)
-
-    if num_true_positives == 0 and num_false_positives == 0:
-        return 0
-
-    if num_true_positives == 0 and num_false_negatives == 0:
-        return 0
-    precision = num_true_positives / (num_true_positives + num_false_positives)
-    recall = num_true_positives / (num_true_positives + num_false_negatives)
+    # # print("true_positives", true_positives)
+    # num_true_positives = np.sum(true_positives)
+    # num_false_positives = np.sum(false_positives)
+    # num_false_negatives = true_positives.size - num_true_positives
 
 
-    if precision == 0 and recall == 0:
-        return 0
 
-    f1_score = (2 * precision * recall) / (precision + recall)
+    # # iou_mat = box_utils.compute_iou_np(annotated_boxes, predicted_boxes)
+    # # overlap_mat = iou_mat >= iou_thresh
+    # # num_true_positives = np.any(overlap_mat, axis=1).sum()
+    # # num_false_positives = np.all(np.logical_not(overlap_mat), axis=0).sum()
+    # # num_false_negatives = np.all(np.logical_not(overlap_mat), axis=1).sum()
 
-    return float(f1_score)
+    # # print("num_true_positives", num_true_positives)
+    # # print("num_false_positives", num_false_positives)
+    # # print("num_false_negatives", num_false_negatives)
+
+    # if num_true_positives == 0 and num_false_positives == 0:
+    #     return 0
+
+    # if num_true_positives == 0 and num_false_negatives == 0:
+    #     return 0
+    # precision = num_true_positives / (num_true_positives + num_false_positives)
+    # recall = num_true_positives / (num_true_positives + num_false_negatives)
 
 
-def collect_image_set_metrics(full_predictions, annotations): #, config):
+    # if precision == 0 and recall == 0:
+    #     return 0
+
+    # f1_score = (2 * precision * recall) / (precision + recall)
+
+    # return float(f1_score)
+
+
+
+
+
+
+
+def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
+
 
     logger = logging.getLogger(__name__)
-    logger.info("Started collecting image set metrics.")
+    logger.info("Started collecting fast image set metrics.")
 
-    start_time = int(time.time())
+    metrics_start_time = time.time()
 
     # num_classes = len(config["arch"]["class_map"].keys())
 
     # image_metrics = {}
 
-    # metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
-    # metadata = json_io.load_json(metadata_path)
+    metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    metadata = json_io.load_json(metadata_path)
     # is_ortho = metadata["is_ortho"] == "yes"
 
     # if is_ortho:
-    metrics = {
-        "AP (IoU=.50:.05:.95)": {},
-        "AP (IoU=.50)": {},
-        "AP (IoU=.75)": {},
-        "F1 Score (IoU=.50, conf>=.50)" : {},
-        "F1 Score (IoU=.75, conf>=.50)" : {}
-    }
+    metrics = {}
+    metric_keys = [
+        "True Positives (IoU=.50, conf>.50)",
+        "False Positives (IoU=.50, conf>.50)",
+        "False Negatives (IoU=.50, conf>.50)",
+        "Precision (IoU=.50, conf>.50)",
+        "Recall (IoU=.50, conf>.50)",
+        "Accuracy (IoU=.50, conf>.50)",
+        "F1 Score (IoU=.50, conf>.50)",
+        "AP (IoU=.50:.05:.95)",
+        "AP (IoU=.50)",
+        "AP (IoU=.75)"
+    ]
+    for metric_key in metric_keys:
+        metrics[metric_key] = {}
     # else:
     #     metrics = {
     #         "AP (IoU=.50:.05:.95)": {},
@@ -445,45 +546,61 @@ def collect_image_set_metrics(full_predictions, annotations): #, config):
     #         "F1 Score (IoU=.75, conf>=.50)" : {}
     #     }
 
-    for image_name in annotations.keys():
+
+    # num_regions = 0
+    # for image_name in annotations.keys():
+    #     for metric_key in metric_keys:
+
+    for image_name in tqdm.tqdm(annotations.keys(), desc="Calculating Metrics"):
 
         # print("collect_image_set_metrics", image_name)
+        for metric_key in metric_keys:
+            metrics[metric_key][image_name] = {}
 
-        metrics["AP (IoU=.50:.05:.95)"][image_name] = {}
-        metrics["AP (IoU=.50)"][image_name] = {}
-        metrics["AP (IoU=.75)"][image_name] = {}
-        metrics["F1 Score (IoU=.50, conf>=.50)"][image_name] = {}
-        metrics["F1 Score (IoU=.75, conf>=.50)"][image_name] = {}
+        # metrics["F1 Score (IoU=.75, conf>.50)"][image_name] = {}
+
 
         annotated_boxes = annotations[image_name]["boxes"]
         pred_boxes = np.array(full_predictions[image_name]["boxes"])
         pred_scores = np.array(full_predictions[image_name]["scores"])
 
-        for region_key in ["training_regions", "test_regions"]:
-            metrics["AP (IoU=.50:.05:.95)"][image_name][region_key] = []
-            metrics["AP (IoU=.50)"][image_name][region_key] = []
-            metrics["AP (IoU=.75)"][image_name][region_key] = []
-            metrics["F1 Score (IoU=.50, conf>=.50)"][image_name][region_key] = []
-            metrics["F1 Score (IoU=.75, conf>=.50)"][image_name][region_key] = []
 
+        image_w = metadata["images"][image_name]["width_px"]
+        image_h = metadata["images"][image_name]["height_px"]
+
+        fully_annotated = annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h)
+
+
+
+        for region_key in ["training_regions", "test_regions"]:
+            for metric_key in metric_keys:
+                metrics[metric_key][image_name][region_key] = []
 
             for region in annotations[image_name][region_key]:
+                if fully_annotated:
+                    region_annotated_boxes = annotated_boxes
+                    region_pred_boxes = pred_boxes
+                    region_pred_scores = pred_scores
+                else:
+                    region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                    region_annotated_boxes = annotated_boxes[region_annotated_inds]
+                    # region_annotated_classes = np.zeros(shape=(region_annotated_boxes.shape[0]))
+                    
 
-                
-                region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
-                region_annotated_boxes = annotated_boxes[region_annotated_inds]
-                # region_annotated_classes = np.zeros(shape=(region_annotated_boxes.shape[0]))
-                
-                region_pred_inds = box_utils.get_contained_inds(pred_boxes, [region])
-                region_pred_boxes = pred_boxes[region_pred_inds]
-                region_pred_scores = pred_scores[region_pred_inds]
+                    region_pred_inds = box_utils.get_contained_inds(pred_boxes, [region])
+                    region_pred_boxes = pred_boxes[region_pred_inds]
+                    region_pred_scores = pred_scores[region_pred_inds]
                 
                 # sel_region_pred_scores = region_pred_scores[region_pred_scores >= 0.50]
                 
                 # region_pred_classes = np.zeros(shape=(region_pred_boxes.shape[0]))
 
-                # print("getting AP vals")
+                print("getting AP vals")
+                start_time = time.time()
                 AP_vals = get_AP_vals(region_annotated_boxes, region_pred_boxes, region_pred_scores)
+                end_time = time.time()
+                elapsed = end_time - start_time
+                print("Calculated AP vals in {} seconds.".format(elapsed))
 
                 metrics["AP (IoU=.50:.05:.95)"][image_name][region_key].append(AP_vals["AP (IoU=.50:.05:.95)"])
                 metrics["AP (IoU=.50)"][image_name][region_key].append(AP_vals["AP (IoU=.50)"])
@@ -503,16 +620,75 @@ def collect_image_set_metrics(full_predictions, annotations): #, config):
                 # metrics["MS COCO mAP"][image_name][region_key].append(MS_COCO_mAP)
 
                 # print("getting F1 scores")
-                sel_region_pred_boxes = region_pred_boxes[region_pred_scores >= 0.50]
-                f1_iou_050 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.50)
-                f1_iou_075 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.75)
-                # f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.9)
-                metrics["F1 Score (IoU=.50, conf>=.50)"][image_name][region_key].append(f1_iou_050)
-                metrics["F1 Score (IoU=.75, conf>=.50)"][image_name][region_key].append(f1_iou_075)
+                sel_region_pred_boxes = region_pred_boxes[region_pred_scores > 0.50]
+                
+                num_predicted = sel_region_pred_boxes.shape[0]
+                num_annotated = region_annotated_boxes.shape[0]
 
-    end_time = int(time.time())
-    elapsed_time = end_time - start_time
-    logger.info("Finished calculating metrics. Took {} seconds.".format(elapsed_time))
+                if num_predicted > 0:
+                    if num_annotated > 0:
+                        true_positive, false_positive, false_negative = get_positives_and_negatives(annotated_boxes, sel_region_pred_boxes, 0.50)
+                        print(true_positive, false_positive, false_negative)
+                        precision_050 = true_positive / (true_positive + false_positive)
+                        recall_050 = true_positive / (true_positive + false_negative)
+                        if precision_050 == 0 and recall_050 == 0:
+                            f1_iou_050 = 0
+                        else:
+                            f1_iou_050 = (2 * precision_050 * recall_050) / (precision_050 + recall_050)
+                        acc_050 = true_positive / (true_positive + false_positive + false_negative)
+                        # true_positive, false_positive, false_negative = get_positives_and_negatives(annotated_boxes, sel_region_pred_boxes, 0.75)
+                        # precision = true_positive / (true_positive + false_positive)
+                        # recall = true_positive / (true_positive + false_negative)
+                        # f1_iou_075 = (2 * precision * recall) / (precision + recall)                        
+
+                        
+                    
+                    else:
+                        true_positive = 0
+                        false_positive = num_predicted
+                        false_negative = 0
+
+                        precision_050 = 0.0
+                        recall_050 = 0.0
+                        f1_iou_050 = 0.0
+                        acc_050 = 0.0
+                else:
+                    if num_annotated > 0:
+                        true_positive = 0
+                        false_positive = 0
+                        false_negative = num_annotated
+
+                        precision_050 = 0.0
+                        recall_050 = 0.0
+                        f1_iou_050 = 0.0
+                        acc_050 = 0.0
+                    else:
+                        true_positive = 0
+                        false_positive = 0
+                        false_negative = 0
+
+                        precision_050 = 1.0
+                        recall_050 = 1.0
+                        f1_iou_050 = 1.0
+                        acc_050 = 1.0
+                        
+                
+                
+                # f1_iou_050 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.50)
+                # f1_iou_075 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.75)
+                # f1_iou_09 = get_f1_score(region_annotated_boxes, sel_region_pred_boxes, iou_thresh=0.9)
+                
+                # metrics["F1 Score (IoU=.75, conf>.50)"][image_name][region_key].append(f1_iou_075)
+                metrics["True Positives (IoU=.50, conf>.50)"][image_name][region_key].append(true_positive)
+                metrics["False Positives (IoU=.50, conf>.50)"][image_name][region_key].append(false_positive)
+                metrics["False Negatives (IoU=.50, conf>.50)"][image_name][region_key].append(false_negative)
+                metrics["Precision (IoU=.50, conf>.50)"][image_name][region_key].append(precision_050)
+                metrics["Recall (IoU=.50, conf>.50)"][image_name][region_key].append(recall_050)
+                metrics["Accuracy (IoU=.50, conf>.50)"][image_name][region_key].append(acc_050)
+                metrics["F1 Score (IoU=.50, conf>.50)"][image_name][region_key].append(f1_iou_050)
+    metrics_end_time = time.time()
+    metrics_elapsed_time = metrics_end_time - metrics_start_time
+    logger.info("Finished calculating fast metrics. Took {} seconds.".format(metrics_elapsed_time))
 
     return metrics
 
@@ -549,6 +725,10 @@ def collect_image_set_metrics(full_predictions, annotations): #, config):
 
 
 def get_AP_vals(annotated_boxes, predicted_boxes, predicted_scores):
+    
+
+    print("AP: num_annotated_boxes: {}, num_predicted_boxes: {}".format(
+        annotated_boxes.shape[0], predicted_boxes.shape[0]))
 
     NUM_BOXES_THRESH = 10000
 
@@ -790,6 +970,7 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, result_uui
 
     images_df = create_images_sheet(args, updated_metrics)
     regions_df = create_regions_sheet(args, updated_metrics)
+    stats_df = create_stats_sheet(args, regions_df)
 
     pandas.io.formats.excel.ExcelFormatter.header_style = None
 
@@ -800,46 +981,54 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, result_uui
     # with pd.ExcelWriter(out_path) as writer:
     #     images_df.to_excel(writer, sheet_name="Images")
 
-
+    sheet_name_to_df = {
+        "Images": images_df,
+        "Regions": regions_df,
+        "Stats": stats_df
+    }
     writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
     fmt = writer.book.add_format({"font_name": "Courier New"})
 
-    images_df.to_excel(writer, index=False, sheet_name="Images", na_rep='NA')  # send df to writer
-    worksheet = writer.sheets["Images"]  # pull worksheet object
+    for sheet_name in sheet_name_to_df.keys():
 
-    worksheet.set_column('A:Z', None, fmt)
-    worksheet.set_row(0, None, fmt)
+        df = sheet_name_to_df[sheet_name]
 
-    for idx, col in enumerate(images_df):  # loop through all columns
-        series = images_df[col]
-        if series.size > 0:
-            max_entry_size = series.astype(str).map(len).max()
-        else:
-            max_entry_size = 0
-        max_len = max((
-            max_entry_size,  # len of largest item
-            len(str(series.name))  # len of column name/header
-            )) + 1  # adding a little extra space
-        worksheet.set_column(idx, idx, max_len)  # set column width
+        df.to_excel(writer, index=False, sheet_name=sheet_name, na_rep='NA')  # send df to writer
+        worksheet = writer.sheets[sheet_name]  # pull worksheet object
+
+        worksheet.set_column('A:Z', None, fmt)
+        worksheet.set_row(0, None, fmt)
+
+        for idx, col in enumerate(df):  # loop through all columns
+            series = df[col]
+            if series.size > 0:
+                max_entry_size = series.astype(str).map(len).max()
+            else:
+                max_entry_size = 0
+            max_len = max((
+                max_entry_size,  # len of largest item
+                len(str(series.name))  # len of column name/header
+                )) + 1  # adding a little extra space
+            worksheet.set_column(idx, idx, max_len)  # set column width
 
 
-    regions_df.to_excel(writer, index=False, sheet_name="Regions", na_rep='NA')  # send df to writer
-    worksheet = writer.sheets["Regions"]  # pull worksheet object
+    # regions_df.to_excel(writer, index=False, sheet_name="Regions", na_rep='NA')  # send df to writer
+    # worksheet = writer.sheets["Regions"]  # pull worksheet object
 
-    worksheet.set_column('A:Z', None, fmt)
-    worksheet.set_row(0, None, fmt)
+    # worksheet.set_column('A:Z', None, fmt)
+    # worksheet.set_row(0, None, fmt)
 
-    for idx, col in enumerate(regions_df):  # loop through all columns
-        series = regions_df[col]
-        if series.size > 0:
-            max_entry_size = series.astype(str).map(len).max()
-        else:
-            max_entry_size = 0
-        max_len = max((
-            max_entry_size,  # len of largest item
-            len(str(series.name))  # len of column name/header
-            )) + 1  # adding a little extra space
-        worksheet.set_column(idx, idx, max_len)  # set column width
+    # for idx, col in enumerate(regions_df):  # loop through all columns
+    #     series = regions_df[col]
+    #     if series.size > 0:
+    #         max_entry_size = series.astype(str).map(len).max()
+    #     else:
+    #         max_entry_size = 0
+    #     max_len = max((
+    #         max_entry_size,  # len of largest item
+    #         len(str(series.name))  # len of column name/header
+    #         )) + 1  # adding a little extra space
+    #     worksheet.set_column(idx, idx, max_len)  # set column width
 
 
 
@@ -909,12 +1098,25 @@ def create_images_sheet(args, updated_metrics):
     # columns.append("MS_COCO_mAP")
 
     metrics_lst = [
+        "True Positives (IoU=.50, conf>.50)",
+        "False Positives (IoU=.50, conf>.50)",
+        "False Negatives (IoU=.50, conf>.50)",
+        "Precision (IoU=.50, conf>.50)",
+        "Recall (IoU=.50, conf>.50)",
+        "Accuracy (IoU=.50, conf>.50)",
+        "F1 Score (IoU=.50, conf>.50)",
         "AP (IoU=.50:.05:.95)",
         "AP (IoU=.50)",
-        "AP (IoU=.75)",
-        "F1 Score (IoU=.50, conf>=.50)",
-        "F1 Score (IoU=.75, conf>=.50)"
+        "AP (IoU=.75)"
     ]
+
+    # metrics_lst = [
+    #     "AP (IoU=.50:.05:.95)",
+    #     "AP (IoU=.50)",
+    #     "AP (IoU=.75)",
+    #     "F1 Score (IoU=.50, conf>.50)",
+    #     "F1 Score (IoU=.75, conf>.50)"
+    # ]
     columns.extend(metrics_lst)
 
     d = {}
@@ -955,7 +1157,7 @@ def create_images_sheet(args, updated_metrics):
         # print(pred_image_scores)
 
         annotated_count = image_abs_boxes.shape[0]
-        predicted_count = np.sum(pred_image_scores >= 0.50)
+        predicted_count = np.sum(pred_image_scores > 0.50)
 
         if fully_annotated == "no":
             percent_count_error = "NA"
@@ -1088,11 +1290,16 @@ def create_regions_sheet(args, updated_metrics):
     ])
 
     metrics_lst = [
+        "True Positives (IoU=.50, conf>.50)",
+        "False Positives (IoU=.50, conf>.50)",
+        "False Negatives (IoU=.50, conf>.50)",
+        "Precision (IoU=.50, conf>.50)",
+        "Recall (IoU=.50, conf>.50)",
+        "Accuracy (IoU=.50, conf>.50)",
+        "F1 Score (IoU=.50, conf>.50)",
         "AP (IoU=.50:.05:.95)",
         "AP (IoU=.50)",
-        "AP (IoU=.75)",
-        "F1 Score (IoU=.50, conf>=.50)",
-        "F1 Score (IoU=.75, conf>=.50)"
+        "AP (IoU=.75)"
     ]
     columns.extend(metrics_lst)
 
@@ -1140,7 +1347,7 @@ def create_regions_sheet(args, updated_metrics):
 
 
                 annotated_count = region_annotated_boxes.shape[0]
-                predicted_count = np.sum(region_predicted_scores >= 0.50)
+                predicted_count = np.sum(region_predicted_scores > 0.50)
 
                 if annotated_count > 0:
                     percent_count_error = round(abs((predicted_count - annotated_count) / (annotated_count)) * 100, 2)
@@ -1191,6 +1398,118 @@ def create_regions_sheet(args, updated_metrics):
     df = pd.DataFrame(data=d, columns=columns)
     df.sort_values(by="Image Name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["Image Name"])))
     return df #, metrics
+
+
+
+def create_stats_sheet(args, regions_df):
+    username = args["username"]
+    farm_name = args["farm_name"]
+    field_name = args["field_name"]
+    mission_date = args["mission_date"]
+    # predictions = args["predictions"]
+    # annotations = args["annotations"]
+    # metadata = args["metadata"]
+    # camera_specs = args["camera_specs"]
+    # vegetation_record = args["vegetation_record"]
+    columns = [
+        "Username",
+        "Farm Name", 
+        "Field Name", 
+        "Mission Date", 
+        "Region Type", 
+        "Mean Absolute Difference In Count", 
+        "Mean Squared Difference In Count",
+        "Pearson's r: Annotated Count v. Predicted Count",
+        "Pearson's r: Annotated Count v. Vegetation Percentage"
+
+    ]
+ 
+    averaged_metrics = [
+        "Precision (IoU=.50, conf>.50)",
+        "Recall (IoU=.50, conf>.50)",
+        "Accuracy (IoU=.50, conf>.50)",
+        "F1 Score (IoU=.50, conf>.50)",
+        "AP (IoU=.50:.05:.95)",
+        "AP (IoU=.50)",
+        "AP (IoU=.75)"
+    ]
+
+    columns.extend(averaged_metrics)
+
+    d = {}
+    for c in columns:
+        d[c] = []
+
+    for region_type in ["training", "test"]:
+
+        # data[region_type] = {}
+        if region_type == "training":
+            disp_region_type = "fine_tuning"
+        else:
+            disp_region_type = "test"
+
+        sub_df = regions_df[regions_df["Region Name"].str.contains(disp_region_type)]
+
+        print(sub_df)
+
+        if len(sub_df) > 0:
+
+            d["Username"].append(username)
+            d["Farm Name"].append(farm_name)
+            d["Field Name"].append(field_name)
+            d["Mission Date"].append(mission_date)
+            d["Region Type"].append(disp_region_type)
+
+
+            
+            # mean_abs_diff_in_count = round(np.mean(abs(sub_df["Annotated Count"] - sub_df["Predicted Count"])), 2)
+            d["Mean Absolute Difference In Count"].append(
+                round(float(np.mean(abs(sub_df["Annotated Count"] - sub_df["Predicted Count"]))), 2)
+            )
+            # mean_squared_diff_in_count = round(np.mean((sub_df["Annotated Count"] - sub_df["Predicted Count"]) ** 2), 2)
+            d["Mean Squared Difference In Count"].append(
+                round(float(np.mean((sub_df["Annotated Count"] - sub_df["Predicted Count"]) ** 2)), 2)
+            )
+
+            d["Pearson's r: Annotated Count v. Predicted Count"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Predicted Count"])[0][1]), 2)
+            d["Pearson's r: Annotated Count v. Vegetation Percentage"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Vegetation Percentage"])[0][1]), 2)
+
+
+            for metric in averaged_metrics:
+                # metric_val = updated_metrics[metric][image_name][region_type + "_regions"][i]
+                try:
+                    # if isinstance(metric_val, float):
+                    metric_val = round(float(np.mean(sub_df[metric])), 2)
+                except Exception:
+                    metric_val = "unable_to_calculate"
+                
+                d[metric].append(metric_val)
+                # d[metric].append(round(float(np.mean(sub_df[metric])), 2))
+
+    df = pd.DataFrame(data=d, columns=columns)
+        # df.sort_values(by="Image Name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["Image Name"])))
+    return df #, metrics
+
+        # d["Annotated Count"]
+
+        # for image_name in annotations.keys():
+
+        #     annotated_boxes = annotations[image_name]["boxes"]
+        #     predicted_boxes = predictions[image_name]["boxes"]
+        #     predicted_scores = predictions[image_name]["scores"]
+
+
+
+            
+        #     for region in annotations[image_name][region_type]:
+
+
+
+
+
+
+
+
 
 # def prepare_report(out_path, farm_name, field_name, mission_date, 
 #                    image_predictions, annotations, excess_green_record, metrics):

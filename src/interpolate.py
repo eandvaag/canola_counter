@@ -189,7 +189,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date, anno
                 #             v += 1
                 
                 #predicted_value = len(predictions[image_name]["annotations"]) 
-                predicted_value = np.sum(np.array(predictions[image_name]["scores"]) >= 0.50) / area_m2
+                predicted_value = np.sum(np.array(predictions[image_name]["scores"]) > 0.50) / area_m2
                 predicted_values.append(predicted_value)
 
     # print("predicted_values", predicted_values)

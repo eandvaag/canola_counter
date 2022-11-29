@@ -16,7 +16,7 @@ import image_set_actions as isa
 import extract_patches as ep
 from image_set import Image
 import excess_green
-
+import model_descriptor
 
 from io_utils import json_io, w3c_io, tf_record_io
 from models.yolov4 import yolov4_image_set_driver
@@ -360,10 +360,13 @@ def process_baseline(item):
 
         # training_finished = q.get()
 
-        training_finished = yolov4_image_set_driver.train_baseline(baseline_pending_dir, sch_ctx)
+        training_finished = yolov4_image_set_driver.train_baseline(sch_ctx, baseline_pending_dir)
 
         if training_finished:
             # log = json_io.load_json(log_path)
+
+            model_descriptor.create_model_descriptors(baseline_pending_dir)
+
             log["training_end_time"] = int(time.time())
             json_io.save_json(log_path, log)
             
@@ -431,6 +434,7 @@ def process_baseline(item):
     # json_io.save_json(baseline_log_path, baseline_log)
 
 
+ 
 
 def process_train(item):
 
@@ -625,7 +629,7 @@ def update_vegetation_record(image_set_dir, annotations, excess_green_record):
 
 
 
-def collect_results(image_set_dir, results_dir):
+def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     # print("running post_result")
 
 
@@ -642,8 +646,17 @@ def collect_results(image_set_dir, results_dir):
     annotations = annotation_utils.load_annotations(annotations_src_path)
 
 
+    metrics = inference_metrics.collect_image_set_metrics(image_set_dir, full_predictions, annotations) #, config)
+    # metrics = fast_metrics #{}
+    # metric_keys = list(fast_metrics.keys()) + list(slow_metrics.keys())
+    
+    # for metric_key in slow_metrics.keys():
+    #     for image_name in annotations.keys():
+    #         for region_key in ["training_regions", "test_regions"]:
+    #             metrics[metric_key][image_name][region_key] = slow_metrics[metric_key][image_name][region_key]
+                
 
-    metrics = inference_metrics.collect_image_set_metrics(full_predictions, annotations) #, config)
+    
     metrics_path = os.path.join(results_dir, "metrics.json")
     json_io.save_json(metrics_path, metrics)
 
@@ -730,6 +743,14 @@ def collect_results(image_set_dir, results_dir):
 #         # predictions[image_name]["scores"] = save_scores
 
 
+# def update_progress(image_set_dir, predictions, annotations):
+
+#     fast_metrics = inference_metrics.collect_fast_image_set_metrics(image_set_dir, predictions, annotations)
+
+
+
+#     return fast_metrics
+
 
 def process_predict(item):
 
@@ -797,13 +818,16 @@ def process_predict(item):
 
                 # save_predictions(image_set_dir, request["image_names"], predictions)
 
+
+                # fast_metrics = update_progress(image_set_dir, predictions, annotations)
+
                 if request["save_result"]:
                     isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.COLLECTING_METRICS)
                     results_dir = os.path.join(model_dir, "results", request["request_uuid"])
                     # os.makedirs(results_dir)
 
                     # q = mp.Queue()
-                    collect_results(image_set_dir, results_dir)
+                    collect_results(image_set_dir, results_dir) #, fast_metrics, annotations)
                     # p = MyProcess(target=collect_results, 
                     #               args=(image_set_dir, results_dir))
                     # p.start()

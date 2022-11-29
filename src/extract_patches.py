@@ -660,6 +660,32 @@ def round_to_multiple(num, multiple):
 #     if is_ortho:
 #         regions = annotations[ortho_region_type]
 
+def extract_box_patches(image_path, boxes, is_ortho):
+
+    image = Image(image_path)
+
+    if is_ortho:
+        ds = gdal.Open(image.image_path)
+    else:
+        image_array = image.load_image_array()
+
+    box_arrays = []
+    for box in boxes:
+        if is_ortho:
+            box_array = ds.ReadAsArray(box[1], box[0], (box[3]-box[1]), (box[2]-box[0]))
+            box_array = np.transpose(box_array, (1, 2, 0))
+        else:
+            box_array = image_array[box[0]:box[2], box[1]:box[3]]
+
+        box_arrays.append(box_array)
+
+    return box_arrays
+
+
+    
+
+
+
 
 
 def extract_patch_records_from_image_tiled(image, 

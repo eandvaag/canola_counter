@@ -128,20 +128,29 @@ def update_w3c_annotation_file(image_set_dir):
             "test_regions": []
         }
         annotations[image_name]["boxes"] = annotations_w3c[image_name]["boxes"]
-        if annotations_w3c[image_name]["status"] == "completed_for_training":
-            annotations[image_name]["training_regions"].append([0, 0, h, w])
-        elif annotations_w3c[image_name]["status"] == "completed_for_testing":
+        # if annotations_w3c[image_name]["status"] == "completed_for_training":
+        #     annotations[image_name]["training_regions"].append([0, 0, h, w])
+        if annotations_w3c[image_name]["status"] == "completed_for_testing" or annotations_w3c[image_name]["status"] == "completed_for_training":
             annotations[image_name]["test_regions"].append([0, 0, h, w])
 
     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotation_utils.save_annotations(annotations_path, annotations)
 
-def default_overlay_colors():
+def default_overlay_appearance():
     return {
-        "annotation": "#0080ff",
-        "prediction": "#ff4040",
-        "training_region": "#ff51eb",
-        "test_region": "#ffae00"
+        "draw_order": ["training_region", "test_region", "annotation", "prediction"],
+        "style": {
+            "annotation": "strokeRect",
+            "prediction": "strokeRect",
+            "training_region": "strokeRect",
+            "test_region": "strokeRect"
+        },
+        "colors": {
+            "annotation": "#0080ff",
+            "prediction": "#ff4040",
+            "training_region": "#ff51eb",
+            "test_region": "#ffae00"
+        }
     }
 
 def init_usr(username):
@@ -173,9 +182,9 @@ def init_usr(username):
     private_image_sets_path = os.path.join(usr_dir, "private_image_sets.json")
     json_io.save_json(private_image_sets_path, {})
 
-    overlay_colors_path = os.path.join(usr_dir, "overlay_colors.json")
-    overlay_colors = default_overlay_colors()
-    json_io.save_json(overlay_colors_path, overlay_colors)
+    overlay_appearance_path = os.path.join(usr_dir, "overlay_appearance.json")
+    overlay_appearance = default_overlay_appearance()
+    json_io.save_json(overlay_appearance_path, overlay_appearance)
 
 
 def update_init_cameras(replace=False):

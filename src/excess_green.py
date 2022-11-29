@@ -128,9 +128,19 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
     image_name = list(annotations.keys())[0]
 
 
-    if image_name in vegetation_record and excess_green_record[image_name]["sel_val"] == vegetation_record[image_name]["sel_val"]:
+    # if image_name in vegetation_record and excess_green_record[image_name]["sel_val"] == vegetation_record[image_name]["sel_val"]:
+    #     return vegetation_record
+    needs_update = False
+    if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
+        needs_update = True
+    elif not np.array_equal(np.array(vegetation_record[image_name]["training_regions_coordinates"]), 
+                            np.array(annotations[image_name]["training_regions"])):
+        needs_update = True
+    elif not np.array_equal(np.array(vegetation_record[image_name]["test_regions_coordinates"]), 
+                            np.array(annotations[image_name]["test_regions"])):
+        needs_update = True
+    if not needs_update:
         return vegetation_record
-
 
 
     image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
@@ -156,6 +166,7 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
     vegetation_record[image_name]["image"] = 0
     for region_key in ["training_regions", "test_regions"]:
         vegetation_record[image_name][region_key] = []
+        vegetation_record[image_name][region_key + "_coordinates"] = annotations[image_name][region_key]
         for i in range(len(annotations[image_name][region_key])):
             vegetation_record[image_name][region_key].append(0)
 
@@ -227,6 +238,14 @@ def update_vegetation_record_for_image_set(image_set_dir, vegetation_record, exc
     for image_name in annotations.keys():
         if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
             needs_update.append(image_name)
+        elif not np.array_equal(np.array(vegetation_record[image_name]["training_regions_coordinates"]), 
+                                np.array(annotations[image_name]["training_regions"])):
+            needs_update.append(image_name)
+        elif not np.array_equal(np.array(vegetation_record[image_name]["test_regions_coordinates"]), 
+                                np.array(annotations[image_name]["test_regions"])):
+            needs_update.append(image_name)
+
+        
 
     results = Parallel(10)(
         delayed(get_updated_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, image_name) for image_name in needs_update)
@@ -239,7 +258,9 @@ def update_vegetation_record_for_image_set(image_set_dir, vegetation_record, exc
         vegetation_record[image_name] = {}
         vegetation_record[image_name]["sel_val"] = excess_green_record[image_name]["sel_val"]
         vegetation_record[image_name]["image"] = vegetation_results["image"]
+        vegetation_record[image_name]["training_regions_coordinates"] = annotations[image_name]["training_regions"]
         vegetation_record[image_name]["training_regions"] = vegetation_results["training_regions"]
+        vegetation_record[image_name]["test_regions_coordinates"] = annotations[image_name]["test_regions"]
         vegetation_record[image_name]["test_regions"] = vegetation_results["test_regions"]
 
     return vegetation_record

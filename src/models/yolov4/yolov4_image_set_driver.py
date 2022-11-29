@@ -74,8 +74,7 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, region, 
     ], axis=-1)
 
 
-    invalid_mask = np.logical_or((pred_boxes[:, 0] > pred_boxes[:, 2]), (pred_boxes[:, 1] > pred_boxes[:, 3]))
-    pred_boxes[invalid_mask] = 0
+
 
     # # (4) discard some invalid boxes
     #bboxes_scale = np.sqrt(np.multiply.reduce(pred_coor[:, 2:4] - pred_coor[:, 0:2], axis=-1))
@@ -85,7 +84,7 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, region, 
     pred_scores = pred_conf * pred_prob[np.arange(len(pred_boxes)), pred_classes]
     # if round_scores:
     #     pred_scores = np.round(pred_scores, 2)
-    score_mask = pred_scores >= score_threshold
+    score_mask = pred_scores > score_threshold
 
     # in_bounds_mask = np.logical_and(
     #     np.logical_and(pred_boxes[:, 0] > 0, pred_boxes[:, 1] > 0),
@@ -96,14 +95,26 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, region, 
     mask = score_mask #np.logical_and(score_mask, in_bounds_mask)
     pred_boxes, pred_scores, pred_classes = pred_boxes[mask], pred_scores[mask], pred_classes[mask]
 
-    region_height = region[2] - region[0]
-    region_width = region[3] - region[1]
+    # region_height = region[2] - region[0]
+    # region_width = region[3] - region[1]
     pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
-    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, region_height, region_width])
+    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [region[0] - patch_coords[0], region[1] - patch_coords[1],
+                                                      region[2] - patch_coords[0], region[3] - patch_coords[1]]) #[0, 0, region_height, region_width])
 
     pred_boxes = np.rint(pred_boxes).astype(np.int32)
     pred_scores = pred_scores.astype(np.float32)
     pred_classes = pred_classes.astype(np.int32)
+
+    valid_mask = np.logical_not(
+                    np.logical_or((pred_boxes[:, 0] >= pred_boxes[:, 2]), (pred_boxes[:, 1] >= pred_boxes[:, 3]))
+    )
+    # pred_boxes[invalid_mask] = 0
+
+    pred_boxes = pred_boxes[valid_mask]
+    pred_scores = pred_scores[valid_mask]
+    pred_classes = pred_classes[valid_mask]
+
+
 
     if apply_nms:
         pred_boxes, pred_classes, pred_scores = box_utils.non_max_suppression_with_classes(
@@ -236,14 +247,14 @@ def update_loss_record(loss_record, key, cur_loss):
 
 
 def get_number_of_prediction_batches(request, patch_size, overlap_px, config):
-    print("request is", request)
+    # print("request is", request)
     num_batches = 0
     # for image_index, image_name in enumerate(request["image_names"]):
     for i in range(len(request["image_names"])):
-        print("request[regions][i]", request["regions"][i])
+        # print("request[regions][i]", request["regions"][i])
         for region in request["regions"][i]:
 
-            print("region", region)
+            # print("region", region)
 
             region_width = region[3] - region[1]
             region_height = region[2] - region[0]
@@ -621,8 +632,8 @@ def predict(sch_ctx, image_set_dir, request): #, q):
     thresholded_predictions = {}
     for image_name in predictions.keys():
         scores_array = np.array(predictions[image_name]["scores"])
-        scores_array = np.round(scores_array, 2)
-        inds = scores_array >= 0.25
+        # scores_array = np.round(scores_array, 2)
+        inds = scores_array > 0.25
 
         thresholded_predictions[image_name] = {
             "boxes": (np.array(predictions[image_name]["boxes"])[inds]).tolist(),
@@ -683,7 +694,7 @@ def predict(sch_ctx, image_set_dir, request): #, q):
             inds = box_utils.get_contained_inds(existing_boxes, request["regions"][image_index])
             existing_boxes = np.delete(existing_boxes, inds, axis=0)
             existing_scores = np.delete(existing_scores, inds)
-            existing_scores = np.round(existing_scores, 2)
+            # existing_scores = np.round(existing_scores, 2)
             new_predictions[image_name]["boxes"] = existing_boxes.tolist()
             new_predictions[image_name]["scores"] = existing_scores.tolist()
 

@@ -12,7 +12,7 @@ from io_utils import json_io
 
 
 def is_fully_annotated(annotations, image_name, image_w, image_h):
-    print("checking {}. w: {}, h: {}, training_regions: {}, test_regions: {}".format(image_name, image_w, image_h, annotations[image_name]["training_regions"], annotations[image_name]["test_regions"]))
+    # print("checking {}. w: {}, h: {}, training_regions: {}, test_regions: {}".format(image_name, image_w, image_h, annotations[image_name]["training_regions"], annotations[image_name]["test_regions"]))
     return is_fully_annotated_for_training(annotations, image_name, image_w, image_h) or is_fully_annotated_for_testing(annotations, image_name, image_w, image_h)
 
 
@@ -208,6 +208,8 @@ def get_average_box_dim(dim, annotations, region_keys, measure):
         return np.mean(box_dims)
     elif measure == "median":
         return np.median(box_dims)
+    elif measure == "std":
+        return np.std(box_dims)
     else:
         raise RuntimeError("Unknown measure")
 
