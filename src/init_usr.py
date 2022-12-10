@@ -17,26 +17,34 @@ init_cameras = {
         "HERO9 Black": {
             "sensor_width": 6.17,
             "sensor_height": 4.55,
-            "focal_length": 3
+            "focal_length": 3,
+            "image_width_px": 4000,
+            "image_height_px": 3000
         },
         "HERO6 Black": {
             "sensor_width": 6.17,
             "sensor_height": 4.55,
-            "focal_length": 3
+            "focal_length": 3,
+            "image_width_px": 4000,
+            "image_height_px": 3000
         }
     },
     "Hasselblad": {
         "L1D-20c": {
             "sensor_width": 13.2,
             "sensor_height": 8.8,
-            "focal_length": 10.3
+            "focal_length": 10.3,
+            "image_width_px": 5472,
+            "image_height_px": 3648
         }
     },
     "Phase One": {
         "iXU1000": {
             "sensor_width": 53.4,
             "sensor_height": 40.0,
-            "focal_length": 55.0
+            "focal_length": 55.0,
+            "image_width_px": 11608,
+            "image_height_px": 8708
         }
     }
 }
@@ -125,13 +133,15 @@ def update_w3c_annotation_file(image_set_dir):
         annotations[image_name] = {
             "boxes": [],
             "training_regions": [],
-            "test_regions": []
+            "test_regions": [],
+            "source": "NA"
         }
         annotations[image_name]["boxes"] = annotations_w3c[image_name]["boxes"]
         # if annotations_w3c[image_name]["status"] == "completed_for_training":
         #     annotations[image_name]["training_regions"].append([0, 0, h, w])
         if annotations_w3c[image_name]["status"] == "completed_for_testing" or annotations_w3c[image_name]["status"] == "completed_for_training":
             annotations[image_name]["test_regions"].append([0, 0, h, w])
+            annotations[image_name]["source"] = "manually_annotated_from_scratch"
 
     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotation_utils.save_annotations(annotations_path, annotations)

@@ -98,8 +98,9 @@ def post_process_sample(detections, resize_ratio, patch_coords, config, region, 
     # region_height = region[2] - region[0]
     # region_width = region[3] - region[1]
     pred_boxes = box_utils.clip_boxes_np(pred_boxes, [0, 0, patch_coords[2] - patch_coords[0], patch_coords[3] - patch_coords[1]])
-    pred_boxes = box_utils.clip_boxes_np(pred_boxes, [region[0] - patch_coords[0], region[1] - patch_coords[1],
-                                                      region[2] - patch_coords[0], region[3] - patch_coords[1]]) #[0, 0, region_height, region_width])
+    if region is not None:
+        pred_boxes = box_utils.clip_boxes_np(pred_boxes, [region[0] - patch_coords[0], region[1] - patch_coords[1],
+                                                          region[2] - patch_coords[0], region[3] - patch_coords[1]]) #[0, 0, region_height, region_width])
 
     pred_boxes = np.rint(pred_boxes).astype(np.int32)
     pred_scores = pred_scores.astype(np.float32)
@@ -260,10 +261,10 @@ def get_number_of_prediction_batches(request, patch_size, overlap_px, config):
             region_height = region[2] - region[0]
 
             incr = patch_size - overlap_px
-            w_covered = region_width - patch_size
+            w_covered = max(region_width - patch_size, 0)
             num_w_patches = m.ceil(w_covered / incr) + 1
 
-            h_covered = region_height - patch_size
+            h_covered = max(region_height - patch_size, 0)
             num_h_patches = m.ceil(h_covered / incr) + 1
 
             num_patches = num_w_patches * num_h_patches

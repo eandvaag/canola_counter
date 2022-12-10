@@ -660,7 +660,9 @@ def round_to_multiple(num, multiple):
 #     if is_ortho:
 #         regions = annotations[ortho_region_type]
 
-def extract_box_patches(image_path, boxes, is_ortho):
+
+
+def extract_random_patches(image_path, num_patches, patch_size, is_ortho):
 
     image = Image(image_path)
 
@@ -669,17 +671,83 @@ def extract_box_patches(image_path, boxes, is_ortho):
     else:
         image_array = image.load_image_array()
 
-    box_arrays = []
-    for box in boxes:
+    w, h = image.get_wh()
+
+    patches = []
+    for _ in range(num_patches):
+
+        min_y = random.randrange(0, h - patch_size)
+        min_x = random.randrange(0, w - patch_size)
+
+        max_y = min_y + patch_size
+        max_x = min_x + patch_size
+
+        patch_data = {}
+        patch_data["patch_coords"] = [min_y, min_x, max_y, max_x]
+
         if is_ortho:
-            box_array = ds.ReadAsArray(box[1], box[0], (box[3]-box[1]), (box[2]-box[0]))
+            # box_array = ds.ReadAsArray(box[1], box[0], (box[3]-box[1]), (box[2]-box[0]))
+            patch_array = ds.ReadAsArray(min_x, min_y, (max_x-min_x), (max_y-min_y))
+            patch_array = np.transpose(patch_array, (1, 2, 0))
+        else:
+            # box_array = image_array[box[0]:box[2], box[1]:box[3]]
+            patch_array = image_array[min_y:max_y, min_x:max_x]
+
+        patch_data["patch"] = patch_array
+        patches.append(patch_data)
+
+    return patches
+
+
+
+
+def extract_box_patches(image_path, boxes, patch_size, is_ortho):
+
+    image = Image(image_path)
+
+    if is_ortho:
+        ds = gdal.Open(image.image_path)
+    else:
+        image_array = image.load_image_array()
+
+    # w, h = image.get_wh()
+
+    patches = []
+    for box in boxes:
+        centre_y = round((box[0] + box[2]) / 2)
+        centre_x = round((box[1] + box[3]) / 2)
+
+        min_y = max(centre_y - round((patch_size / 2)), 0)
+        min_x = max(centre_x - round((patch_size / 2)), 0)
+        max_y = min_y + patch_size
+        max_x = min_x + patch_size
+
+        # min_y = max(box[0] - 20, 0)
+        # min_x = max(box[1] - 20, 0)
+        # max_y = min(box[2] + 20, h)
+        # max_x = min(box[3] + 20, w)
+
+        patch_data = {}
+        # patch_data["image_name"] = image.image_name
+        # patch_data["image_path"] = image.image_path
+        # patch_data["patch_name"] = username + "-" + farm_name + "-" + field_name + "-" + mission_date + "-" + \
+                                # image.image_name + "-" + str(patch_num).zfill(7) + ".png"
+        patch_data["patch_coords"] = [min_y, min_x, max_y, max_x]
+        # patch_data["patch_content_coords"] = [min_y, min_x, max_y, max_x]
+
+        if is_ortho:
+            # box_array = ds.ReadAsArray(box[1], box[0], (box[3]-box[1]), (box[2]-box[0]))
+            box_array = ds.ReadAsArray(min_x, min_y, (max_x-min_x), (max_y-min_y))
             box_array = np.transpose(box_array, (1, 2, 0))
         else:
-            box_array = image_array[box[0]:box[2], box[1]:box[3]]
+            # box_array = image_array[box[0]:box[2], box[1]:box[3]]
+            box_array = image_array[min_y:max_y, min_x:max_x]
 
-        box_arrays.append(box_array)
+        patch_data["box"] = box
+        patch_data["patch"] = box_array
+        patches.append(patch_data)
 
-    return box_arrays
+    return patches
 
 
     
@@ -818,12 +886,6 @@ def extract_patch_records_from_image_tiled(image,
 
 
 
-# def get_contained_inds(centres, patch_coords):
-#     return np.where(np.logical_and(
-#                         np.logical_and(centres[:,0] > patch_coords[0], 
-#                                         centres[:,0] < patch_coords[2]),
-#                         np.logical_and(centres[:,1] > patch_coords[1], 
-#                                         centres[:,1] < patch_coords[3])))[0]
 
 
 

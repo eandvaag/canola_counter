@@ -168,12 +168,16 @@ def get_average_box_dim(dim, annotations, region_keys, measure):
     for image_name in annotations.keys():
         boxes = annotations[image_name]["boxes"]
         regions = []
-        for region_key in region_keys:
-            regions.extend(annotations[image_name][region_key])
+        if region_keys is not None:
+            for region_key in region_keys:
+                regions.extend(annotations[image_name][region_key])
         # regions = annotations[image_name]["training_regions"] + annotations[image_name]["test_regions"]
-        inds = box_utils.get_contained_inds(boxes, regions)
-        if inds.size > 0:
+            inds = box_utils.get_contained_inds(boxes, regions)
             region_boxes = boxes[inds]
+        else:
+            region_boxes = boxes
+        if region_boxes.size > 0:
+            
             if dim == "area":
                 img_box_dims = ((region_boxes[:, 3] - region_boxes[:, 1]) * (region_boxes[:, 2] - region_boxes[:, 0])).tolist()
             elif dim == "height":

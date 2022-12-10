@@ -8,6 +8,7 @@ import traceback
 
 from io_utils import json_io
 from models.common import annotation_utils
+import auto_select
 #import image_set_model as ism
 
 base_url = "https://" + os.environ.get("CC_IP") + ":" + os.environ.get("CC_PORT") + os.environ.get("CC_PATH")
@@ -27,6 +28,9 @@ COLLECTING_METRICS = "Collecting Metrics"
 
 SWITCHING_MODELS = "Switching Models"
 FINISHED_SWITCHING_MODELS = "Finished Switching Models"
+
+SELECTING_MODEL = "Selecting Model"
+FINISHED_SELECTING_MODEL = "Finished Selecting Model"
 # RESTARTING = "Restarting"
 # FINISHED_RESTARTING = "Finished Restarting"
 # DETERMINING_PATCH_SIZE = "Determining Patch Size"
@@ -261,8 +265,6 @@ def emit(url, data):
 
 
 
-
-
 def process_switch(item):
 
     logger = logging.getLogger(__name__)
@@ -274,18 +276,23 @@ def process_switch(item):
 
     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
     model_dir = os.path.join(image_set_dir, "model")
-
     switch_req_path = os.path.join(model_dir, "switch_request.json")
     if os.path.exists(switch_req_path):
         try:
 
             switch_req = json_io.load_json(switch_req_path)
 
+            # if switch_req["auto"]:
+            # set_scheduler_status(username, farm_name, field_name, mission_date, SELECTING_MODEL)
+            # model_creator, model_name = auto_select.auto_select_model(item)
+            # else:
+            model_creator = switch_req["model_creator"]
+            model_name = switch_req["model_name"]
+
             logger.info("Switching {}".format(item))
             set_scheduler_status(username, farm_name, field_name, mission_date, SWITCHING_MODELS)
 
-            model_creator = switch_req["model_creator"]
-            model_name = switch_req["model_name"]
+
 
             model_path = os.path.join("usr", "data", model_creator, "models")
             public_model_path = os.path.join(model_path, "available", "public", model_name) #, "weights.h5")
@@ -422,6 +429,11 @@ def process_switch(item):
                 os.remove(sys_block_path)
 
 
+            auto_select_path = os.path.join(model_dir, "auto_select_request.json")
+            if os.path.exists(auto_select_path):
+                os.remove(auto_select_path)
+
+
 
             os.remove(switch_req_path)
 
@@ -436,7 +448,7 @@ def process_switch(item):
             logger.error(trace)
             try:
                 set_scheduler_status(username, farm_name, field_name, mission_date, FINISHED_SWITCHING_MODELS, 
-                                extra_items={"error_setting": "model_switching", "error_message": str(e)})
+                                extra_items={"error_setting": "model switching", "error_message": str(e)})
             except:
                 trace = traceback.format_exc()
                 logger.error("Exception occurred while handling original exception")

@@ -509,7 +509,7 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
 
 
     logger = logging.getLogger(__name__)
-    logger.info("Started collecting fast image set metrics.")
+    logger.info("Started collecting image set metrics.")
 
     metrics_start_time = time.time()
 
@@ -688,7 +688,7 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
                 metrics["F1 Score (IoU=.50, conf>.50)"][image_name][region_key].append(f1_iou_050)
     metrics_end_time = time.time()
     metrics_elapsed_time = metrics_end_time - metrics_start_time
-    logger.info("Finished calculating fast metrics. Took {} seconds.".format(metrics_elapsed_time))
+    logger.info("Finished calculating metrics. Took {} seconds.".format(metrics_elapsed_time))
 
     return metrics
 
@@ -899,14 +899,19 @@ def calculate_area_m2(camera_specs, metadata, image_name):
     
 
 
-def create_spreadsheet(username, farm_name, field_name, mission_date, result_uuid, download_uuid): #, annotation_version):
+def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_date, result_uuid, download_uuid): #, annotation_version):
 
+    path_pieces = results_dir.split("/")
+    username = path_pieces[2]
+    farm_name = path_pieces[4]
+    field_name = path_pieces[5]
+    mission_date = path_pieces[6]
+    image_set_dir = os.path.join(*path_pieces[:len(path_pieces)-3])
 
+    # image_set_dir = os.path.join("usr", "data", username, "image_sets",
+    #                              farm_name, field_name, mission_date)
 
-    image_set_dir = os.path.join("usr", "data", username, "image_sets",
-                                 farm_name, field_name, mission_date)
-
-    results_dir = os.path.join(image_set_dir, "model", "results", result_uuid)
+    # results_dir = os.path.join(image_set_dir, "model", "results", result_uuid)
 
     metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
     metadata = json_io.load_json(metadata_path)
@@ -974,10 +979,10 @@ def create_spreadsheet(username, farm_name, field_name, mission_date, result_uui
 
     pandas.io.formats.excel.ExcelFormatter.header_style = None
 
-    out_dir = os.path.join(results_dir, "retrieval", download_uuid)
-    os.makedirs(out_dir)
+    # out_dir = os.path.join(results_dir, "retrieval", download_uuid)
+    # os.makedirs(out_dir)
 
-    out_path = os.path.join(out_dir, "results.xlsx")
+    out_path = os.path.join(results_dir, "metrics.xlsx") #os.path.join(out_dir, "results.xlsx")
     # with pd.ExcelWriter(out_path) as writer:
     #     images_df.to_excel(writer, sheet_name="Images")
 
@@ -1418,9 +1423,9 @@ def create_stats_sheet(args, regions_df):
         "Mission Date", 
         "Region Type", 
         "Mean Absolute Difference In Count", 
-        "Mean Squared Difference In Count",
-        "Pearson's r: Annotated Count v. Predicted Count",
-        "Pearson's r: Annotated Count v. Vegetation Percentage"
+        "Mean Squared Difference In Count"
+        # "Pearson's r: Annotated Count v. Predicted Count",
+        # "Pearson's r: Annotated Count v. Vegetation Percentage"
 
     ]
  
@@ -1440,51 +1445,53 @@ def create_stats_sheet(args, regions_df):
     for c in columns:
         d[c] = []
 
-    for region_type in ["training", "test"]:
+    if len(regions_df.index) > 0:
 
-        # data[region_type] = {}
-        if region_type == "training":
-            disp_region_type = "fine_tuning"
-        else:
-            disp_region_type = "test"
+        for region_type in ["training", "test"]:
 
-        sub_df = regions_df[regions_df["Region Name"].str.contains(disp_region_type)]
+            # data[region_type] = {}
+            if region_type == "training":
+                disp_region_type = "fine_tuning"
+            else:
+                disp_region_type = "test"
 
-        print(sub_df)
+            sub_df = regions_df[regions_df["Region Name"].str.contains(disp_region_type)]
 
-        if len(sub_df) > 0:
+            # print(sub_df)
 
-            d["Username"].append(username)
-            d["Farm Name"].append(farm_name)
-            d["Field Name"].append(field_name)
-            d["Mission Date"].append(mission_date)
-            d["Region Type"].append(disp_region_type)
+            if len(sub_df) > 0:
 
-
-            
-            # mean_abs_diff_in_count = round(np.mean(abs(sub_df["Annotated Count"] - sub_df["Predicted Count"])), 2)
-            d["Mean Absolute Difference In Count"].append(
-                round(float(np.mean(abs(sub_df["Annotated Count"] - sub_df["Predicted Count"]))), 2)
-            )
-            # mean_squared_diff_in_count = round(np.mean((sub_df["Annotated Count"] - sub_df["Predicted Count"]) ** 2), 2)
-            d["Mean Squared Difference In Count"].append(
-                round(float(np.mean((sub_df["Annotated Count"] - sub_df["Predicted Count"]) ** 2)), 2)
-            )
-
-            d["Pearson's r: Annotated Count v. Predicted Count"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Predicted Count"])[0][1]), 2)
-            d["Pearson's r: Annotated Count v. Vegetation Percentage"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Vegetation Percentage"])[0][1]), 2)
+                d["Username"].append(username)
+                d["Farm Name"].append(farm_name)
+                d["Field Name"].append(field_name)
+                d["Mission Date"].append(mission_date)
+                d["Region Type"].append(disp_region_type)
 
 
-            for metric in averaged_metrics:
-                # metric_val = updated_metrics[metric][image_name][region_type + "_regions"][i]
-                try:
-                    # if isinstance(metric_val, float):
-                    metric_val = round(float(np.mean(sub_df[metric])), 2)
-                except Exception:
-                    metric_val = "unable_to_calculate"
                 
-                d[metric].append(metric_val)
-                # d[metric].append(round(float(np.mean(sub_df[metric])), 2))
+                # mean_abs_diff_in_count = round(np.mean(abs(sub_df["Annotated Count"] - sub_df["Predicted Count"])), 2)
+                d["Mean Absolute Difference In Count"].append(
+                    round(float(np.mean(abs(sub_df["Annotated Count"] - sub_df["Predicted Count"]))), 2)
+                )
+                # mean_squared_diff_in_count = round(np.mean((sub_df["Annotated Count"] - sub_df["Predicted Count"]) ** 2), 2)
+                d["Mean Squared Difference In Count"].append(
+                    round(float(np.mean((sub_df["Annotated Count"] - sub_df["Predicted Count"]) ** 2)), 2)
+                )
+
+                # d["Pearson's r: Annotated Count v. Predicted Count"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Predicted Count"])[0][1]), 2)
+                # d["Pearson's r: Annotated Count v. Vegetation Percentage"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Vegetation Percentage"])[0][1]), 2)
+
+
+                for metric in averaged_metrics:
+                    # metric_val = updated_metrics[metric][image_name][region_type + "_regions"][i]
+                    try:
+                        # if isinstance(metric_val, float):
+                        metric_val = round(float(np.mean(sub_df[metric])), 2)
+                    except Exception:
+                        metric_val = "unable_to_calculate"
+                    
+                    d[metric].append(metric_val)
+                    # d[metric].append(round(float(np.mean(sub_df[metric])), 2))
 
     df = pd.DataFrame(data=d, columns=columns)
         # df.sort_values(by="Image Name", inplace=True, key=lambda x: np.argsort(index_natsorted(df["Image Name"])))

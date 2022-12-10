@@ -16,11 +16,12 @@ import image_set_actions as isa
 import extract_patches as ep
 from image_set import Image
 import excess_green
-import model_descriptor
 
 from io_utils import json_io, w3c_io, tf_record_io
 from models.yolov4 import yolov4_image_set_driver
 from models.common import annotation_utils, inference_metrics
+import auto_select
+import interpolate
 # from process import MyProcess
 
 from lock_queue import LockQueue
@@ -56,6 +57,8 @@ def add_request():
         ok = True
         if req_type == "switch":
             sch_ctx["switch_queue"].enqueue(json_request)
+        elif req_type == "auto_select":
+            sch_ctx["auto_select_queue"].enqueue(json_request)
         elif req_type == "prediction":
             sch_ctx["prediction_queue"].enqueue(json_request)
         elif req_type == "training":
@@ -365,8 +368,6 @@ def process_baseline(item):
         if training_finished:
             # log = json_io.load_json(log_path)
 
-            model_descriptor.create_model_descriptors(baseline_pending_dir)
-
             log["training_end_time"] = int(time.time())
             json_io.save_json(log_path, log)
             
@@ -628,9 +629,33 @@ def update_vegetation_record(image_set_dir, annotations, excess_green_record):
     return updated_vegetation_record
 
 
+def create_maps(results_dir):
+
+
+    path_pieces = results_dir.split("/")
+    username = path_pieces[2]
+    farm_name = path_pieces[4]
+    field_name = path_pieces[5]
+    mission_date = path_pieces[6]
+    # image_set_dir = os.path.join(*path_pieces[:len(path_pieces)-3])
+    predictions_path = os.path.join(results_dir, "predictions.json")
+    out_dir = os.path.join(results_dir, "maps")
+    for interpolation in ["linear", "nearest"]:
+        interpolate.create_interpolation_map(username,
+                            farm_name,
+                            field_name,
+                            mission_date,
+                            predictions_path, #annotations_path,
+                            out_dir, 
+                            # args.map_download_uuid,
+                            interpolation=interpolation)
+
 
 def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     # print("running post_result")
+
+    create_maps(results_dir)
+
 
 
     full_predictions_path = os.path.join(results_dir, "full_predictions.json")
@@ -696,6 +721,60 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     annotations_dst_path = os.path.join(results_dir, "annotations.json")
     annotation_utils.save_annotations(annotations_dst_path, annotations)
     # shutil.copyfile(annotations_src_path, annotations_dst_path)
+
+    inference_metrics.create_spreadsheet(results_dir)
+
+    raw_outputs_dir = os.path.join(results_dir, "raw_outputs")
+    os.makedirs(raw_outputs_dir)
+    # shutil.copyfile(annotations_dst_path, os.path.join(raw_outputs_dir, "annotations.json"))
+    # shutil.copyfile(full_predictions_path, os.path.join(raw_outputs_dir, "predictions.json"))
+    downloadable_annotations = {}
+    int_to_ext_annotation_keys = {
+        "boxes": "annotations",
+        "training_regions": "fine_tuning_regions",
+        "test_regions": "test_regions"
+    }
+    for image_name in annotations.keys():
+        downloadable_annotations[image_name] = {}
+        for key in int_to_ext_annotation_keys.keys():
+            downloadable_annotations[image_name][int_to_ext_annotation_keys[key]] = []
+            for box in annotations[image_name][key]:
+                download_box = [
+                    int(box[1]),
+                    int(box[0]),
+                    int(box[3]),
+                    int(box[2])
+                ]
+                downloadable_annotations[image_name][int_to_ext_annotation_keys[key]].append(download_box)
+    
+    json_io.save_json(os.path.join(raw_outputs_dir, "annotations.json"), downloadable_annotations)
+
+
+    downloadable_predictions = {}
+    for image_name in full_predictions.keys():
+        downloadable_predictions[image_name] = {}
+
+        downloadable_predictions[image_name]["predictions"] = []
+        for box in full_predictions[image_name]["boxes"]:
+            download_box = [
+                int(box[1]),
+                int(box[0]),
+                int(box[3]),
+                int(box[2])
+            ]
+            downloadable_predictions[image_name]["predictions"].append(download_box)
+
+        downloadable_predictions[image_name]["confidence_scores"] = []
+        for score in full_predictions[image_name]["scores"]:
+            downloadable_predictions[image_name]["confidence_scores"].append(float(score))
+
+    json_io.save_json(os.path.join(raw_outputs_dir, "predictions.json"), downloadable_predictions)
+
+
+
+
+    shutil.make_archive(os.path.join(results_dir, "raw_outputs"), 'zip', raw_outputs_dir)
+    shutil.rmtree(raw_outputs_dir)
 
 
     # full_predictions_path = os.path.join(results_dir, "full_predictions.json")
@@ -903,9 +982,21 @@ def process_predict(item):
 def check_switch(username, farm_name, field_name, mission_date):
 
     image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
-    restart_req_path = os.path.join(image_set_dir, "model", "switch_request.json")
-    if os.path.exists(restart_req_path):
+    switch_req_path = os.path.join(image_set_dir, "model", "switch_request.json")
+    if os.path.exists(switch_req_path):
         sch_ctx["switch_queue"].enqueue({
+            "username": username,
+            "farm_name": farm_name,
+            "field_name": field_name,
+            "mission_date": mission_date
+        })
+
+def check_auto_select(username, farm_name, field_name, mission_date):
+
+    image_set_dir = os.path.join("usr", "data", username, "image_sets", farm_name, field_name, mission_date)
+    auto_select_req_path = os.path.join(image_set_dir, "model", "auto_select_request.json")
+    if os.path.exists(auto_select_req_path):
+        sch_ctx["auto_select_queue"].enqueue({
             "username": username,
             "farm_name": farm_name,
             "field_name": field_name,
@@ -1036,9 +1127,17 @@ def one_pass():
                                 check_switch(username, farm_name, field_name, mission_date)
                             except Exception as e:
                                 trace = traceback.format_exc()
-                                logger.error("Exception occurred while performing pass (check_restart)")
+                                logger.error("Exception occurred while performing pass (check_switch)")
                                 logger.error(e)
                                 logger.error(trace)
+                            try:
+                                check_auto_select(username, farm_name, field_name, mission_date)
+                            except Exception as e:
+                                trace = traceback.format_exc()
+                                logger.error("Exception occurred while performing pass (check_auto_select)")
+                                logger.error(e)
+                                logger.error(trace)
+
                             try:
                                 check_predict(username, farm_name, field_name, mission_date)
                             except Exception as e:
@@ -1100,6 +1199,12 @@ def drain():
                 isa.process_switch(item)
                 switch_queue_size = sch_ctx["switch_queue"].size()
 
+            auto_select_queue_size = sch_ctx["auto_select_queue"].size()
+            while auto_select_queue_size > 0:
+                item = sch_ctx["auto_select_queue"].dequeue()
+                auto_select.process_auto_select(item, sch_ctx)
+                auto_select_queue_size = sch_ctx["auto_select_queue"].size()
+
 
             pred_queue_size = sch_ctx["prediction_queue"].size()
             while pred_queue_size  > 0:
@@ -1145,8 +1250,14 @@ def drain():
 
              
 def an_item_is_available():
-    return ((sch_ctx["switch_queue"].size() > 0 or sch_ctx["prediction_queue"].size() > 0)
-             or sch_ctx["training_queue"].size() > 0) or sch_ctx["baseline_queue"].size() > 0
+    queue_names = ["switch_queue", "auto_select_queue", "prediction_queue", "training_queue", "baseline_queue"]
+
+    for queue_name in queue_names:
+        if sch_ctx[queue_name].size() > 0:
+            return True
+    return False
+    # return ((sch_ctx["switch_queue"].size() > 0 or sch_ctx["prediction_queue"].size() > 0)
+    #          or sch_ctx["training_queue"].size() > 0) or sch_ctx["baseline_queue"].size() > 0
 
 
 def work():
@@ -1188,6 +1299,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     sch_ctx["switch_queue"] = LockQueue()
+    sch_ctx["auto_select_queue"] = LockQueue()
     sch_ctx["prediction_queue"] = LockQueue()
     sch_ctx["training_queue"] = LockQueue()
     sch_ctx["baseline_queue"] = LockQueue()

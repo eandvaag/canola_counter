@@ -312,6 +312,23 @@ def compute_iou_np(boxes1, boxes2):
     return res
 
 
+def get_contained_inds_for_points(points, regions):
+    if points.size == 0:
+        return np.array([], dtype=np.int64)
+
+    mask = np.full(points.shape[0], False)
+
+    for region in regions:
+
+
+        region_mask = np.logical_and(
+                        np.logical_and(points[:,0] > region[0], points[:,0] < region[2]),
+                        np.logical_and(points[:,1] > region[1], points[:,1] < region[3]))
+        mask = np.logical_or(mask, region_mask)
+
+    return np.where(mask)[0]
+
+
 
 
 def get_contained_inds(boxes, regions):

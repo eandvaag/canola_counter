@@ -4,17 +4,23 @@ import random
 import math as m
 import numpy as np
 import tensorflow as tf
+#from tensorflow.keras.applications.vgg16 import preprocess_input
 import cv2
 
 from io_utils import json_io
 from models.common import annotation_utils, box_utils
-import extract_patches
+import extract_patches as ep
 
 
 IMAGE_SET_SAMPLE_SIZE = 1 # 1024
 
 
-
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0: 
+        norm = 1e-20
+    # return v
+    return v / norm
 
 
 
@@ -25,9 +31,7 @@ def create_model_descriptors(baseline_pending_dir):
     log_path = os.path.join(baseline_pending_dir, "log.json")
     log = json_io.load_json(log_path)
 
-    feature_vectors = {
-        "feature_vectors": []
-    }
+    feature_vectors = []
 
     model, model_input_shape = get_feature_vector_model()
 
@@ -57,27 +61,43 @@ def create_model_descriptors(baseline_pending_dir):
 
         annotations = annotation_utils.load_annotations(annotations_path)
 
-        image_set_vectors = create_image_set_vectors(model, model_input_shape, image_set_dir, annotations) #, baseline_pending_dir)
+        image_set_vectors = create_image_set_vectors(model, model_input_shape, 
+        image_set_dir, annotations, sample_rate=0.2) #0.01) #, baseline_pending_dir)
 
-        feature_vectors["feature_vectors"].extend(image_set_vectors)
+        feature_vectors.extend(image_set_vectors)
 
-    feature_vectors_path = os.path.join(baseline_pending_dir, "feature_vectors.json")
-    json_io.save_json(feature_vectors_path, feature_vectors)
+    feature_vectors_path = os.path.join(baseline_pending_dir, "feature_vectors.npy")
+    np.save(feature_vectors_path, np.array(feature_vectors))
+    # json_io.save_json(feature_vectors_path, feature_vectors)
 
 
 def get_feature_vector_model():
-    model_input_shape = np.array([150, 150, 3])
+    model_input_shape = np.array([416, 416, 3]) #[150, 150, 3]) #150, 150, 3])
     weights = 'imagenet'
-    model = tf.keras.applications.ResNet50( #101( #ResNet50(
+    # model = tf.keras.applications.ResNet50( #101( #ResNet50(
+    #     weights=weights,
+    #     include_top=False, 
+    #     input_shape=[None, None, 3],
+    #     pooling="max"
+    # )
+    b_model = tf.keras.applications.VGG16( #101( #ResNet50(
         weights=weights,
-        include_top=False, 
+        include_top=False,
         input_shape=[None, None, 3],
-        pooling="max"
+        pooling="max" #"max"
     )
-    return model, model_input_shape
+    # new_top_layer = tf.keras.layers.GlobalMaxPooling2D()(b_model.get_layer('block5_pool').output)
+    # model = tf.keras.models.Model(inputs=b_model.input, outputs=new_top_layer)
+
+    # f = tf.keras.layers.GlobalMaxPooling2D()(f)
+    
+    return b_model, model_input_shape
 
 
-def get_sample_box_patches(image_set_dir, annotations, sample_rate=0.01):
+def get_sample_box_patches(image_set_dir, annotations, sample_rate=0.01, max_num_samples=None):
+
+    if sample_rate > 1 or sample_rate < 0:
+        raise RuntimeError("Illegal sample rate specified")
 
     metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
     metadata = json_io.load_json(metadata_path)
@@ -104,11 +124,14 @@ def get_sample_box_patches(image_set_dir, annotations, sample_rate=0.01):
                 image_set_candidates = image_candidates
             else:
                 image_set_candidates = np.concatenate([image_set_candidates, image_candidates])
-        
+    
+    num_samples = max(1, round(image_set_candidates.shape[0] * sample_rate))
+    if max_num_samples is not None:
+        if max_num_samples < 1:
+            raise RuntimeError("max_num_samples must be greater than or equal to 1.")
+        num_samples = min(max_num_samples, num_samples)
 
-
-    sample_inds = random.sample(range(image_set_candidates.shape[0]), 
-                    m.ceil(image_set_candidates.shape[0] * sample_rate))
+    sample_inds = random.sample(range(image_set_candidates.shape[0]), num_samples)
     # min(image_set_candidates.shape[0], IMAGE_SET_SAMPLE_SIZE))
 
     # for i in range(0, IMAGE_SET_SAMPLE_SIZE):
@@ -123,9 +146,17 @@ def get_sample_box_patches(image_set_dir, annotations, sample_rate=0.01):
         sample_image_candidates = sample_candidates[sample_image_candidate_inds][:, 1:]
         image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
 
-        image_box_arrays = extract_patches.extract_box_patches(
+        # image = Image(image)
+        # w, h = image.get_wh()
+
+        patch_size = annotation_utils.get_patch_size(annotations, None)
+        # image_box_arrays = ep.extract_random_patches(image_path, 1, patch_size, is_ortho) #sample_image_candidates.size, patch_size, is_ortho)
+
+
+        image_box_arrays = ep.extract_box_patches(
             image_path, 
             sample_image_candidates, 
+            patch_size,
             is_ortho
         )
 
@@ -165,7 +196,8 @@ def create_image_set_vector_2(model, model_input_shape, image_set_dir, annotatio
     return feature_vector
 
 
-def create_image_set_vectors(model, model_input_shape, image_set_dir, annotations, sample_rate=0.01): #, model_dir):
+def create_image_set_vectors(model, model_input_shape, image_set_dir, annotations, 
+                             sample_rate=0.01, max_num_samples=None): #, model_dir):
     # username = image_set["username"]
     # farm_name = image_set["farm_name"]
     # field_name = image_set["field_name"]
@@ -193,7 +225,8 @@ def create_image_set_vectors(model, model_input_shape, image_set_dir, annotation
 
 
 
-    image_set_box_arrays = get_sample_box_patches(image_set_dir, annotations)
+    image_set_box_arrays = get_sample_box_patches(image_set_dir, annotations, 
+                            sample_rate=sample_rate, max_num_samples=max_num_samples)
     # sample_dir = os.path.join(model_dir, "samples")
     # os.makedirs(sample_dir)
     # for i, box_array in enumerate(image_set_box_arrays):
@@ -203,7 +236,7 @@ def create_image_set_vectors(model, model_input_shape, image_set_dir, annotation
 
     num_box_arrays = len(image_set_box_arrays)
     features_lst = []
-    batch_size = 1024
+    batch_size = 256 #1024
     for i in range(0, num_box_arrays, batch_size):
         batch_patches = []
         # batch_patches = []
@@ -214,16 +247,25 @@ def create_image_set_vectors(model, model_input_shape, image_set_dir, annotation
         batch_patches = tf.stack(values=batch_patches, axis=0)
 
 
+        batch_patches = tf.keras.applications.vgg16.preprocess_input(batch_patches)
         features = model.predict(batch_patches)
+        # max_pool_2d = 
         for j, f in enumerate(features):
-            f = f.flatten()
+            # print(f.shape)
+            # # f = np.apply_over_axes(np.sum, f, [0, 1]).flatten()
+            
+            # print(f.shape)
+            # exit()
+            # f = f.flatten()
 
             patch = image_set_box_arrays[i+j]
             height = patch.shape[0]
             width = patch.shape[1]
             ratio = max(height, width) / min(height, width)
 
-            feature = [height, width, ratio]
+            f = normalize(f)
+
+            feature = [] #[height, width, ratio]
             feature.extend(f.tolist())
 
             features_lst.append(feature)
