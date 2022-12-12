@@ -14,7 +14,9 @@ RESULT_LIFETIME = 2 * 60 #2 * 3600
 
 from sklearn.metrics import pairwise_distances
 from models.common import annotation_utils, box_utils
-import jig
+# import jig
+
+MAX_NUM_TILES = 75000
 
 
 # from image_set import DataSet
@@ -95,7 +97,7 @@ def create_plot(grid_z0, extent, vmin, vmax, cmap, out_path):
 
 
 def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_date, 
-                    predictions_path, out_dir, interpolation):
+                    predictions_path, out_dir, interpolation, tile_size):
 
     # annotations = annotation_utils.load_annotations(annotations_path)
 
@@ -173,32 +175,116 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
     predicted_values = []
     all_points = []
 
-    TOTAL_NUM_POINTS = 10000
-    res = jig.jig(image_width_px, image_height_px, TOTAL_NUM_POINTS)
-    num_x_tiles = res["num_x_tiles"]
-    num_y_tiles = res["num_y_tiles"]
-    tile_x_width = image_width_px / num_x_tiles
-    tile_y_width = image_height_px / num_y_tiles
+    # TOTAL_NUM_POINTS = 10000
+    # res = jig.jig(image_width_px, image_height_px, TOTAL_NUM_POINTS)
+    # num_x_tiles = res["num_x_tiles"]
+    # num_y_tiles = res["num_y_tiles"]
+    tile_width_m = tile_size #1 #0.5
+    tile_height_m = tile_size #1 #0.5
+
+    num_x_tiles = round(image_width_m / tile_width_m)
+    num_y_tiles = round(image_height_m / tile_height_m)
+
+
+
+    tile_width = image_width_px / num_x_tiles
+    tile_height = image_height_px / num_y_tiles
+
+    if num_x_tiles * num_y_tiles > MAX_NUM_TILES:
+        raise RuntimeError("Unable to create density map: too many tiles requested.")
 
     print("num_x_tiles", num_x_tiles)
     print("num_y_tiles", num_y_tiles)
-    print("tile_x_width", tile_x_width)
-    print("tile_y_width", tile_y_width)
+    print("tile_x_width", tile_width)
+    print("tile_y_width", tile_height)
 
-    area_m2_per_tile = (tile_x_width * gsd) * (tile_y_width * gsd)
+    area_m2_per_tile = (tile_width * gsd) * (tile_height * gsd)
     box_centres = np.rint((pred_boxes[..., :2] + pred_boxes[..., 2:]) / 2.0).astype(np.int64)
 
     for i in range(num_y_tiles):
         for j in range(num_x_tiles):
 
-            region = [i * tile_y_width, j * tile_x_width, (i+1) * tile_y_width, (j+1) * tile_x_width]
-            print(region)
+            region = [i * tile_height, j * tile_width, (i+1) * tile_height, (j+1) * tile_width]
+            # print(region)
 
             contained_box_centres = box_utils.get_contained_inds_for_points(box_centres, [region])
-            predicted_values.append(contained_box_centres.shape[0] / area_m2_per_tile)
-            point = [round((region[1] + region[3]) / 2), round((region[0] + region[2]) / 2)]
-            print("\t{}".format(point))
+            val = contained_box_centres.shape[0] / area_m2_per_tile
+            predicted_values.append(val)
+            # if i == 0:
+            #     point_y = round(region[0]) # + (tile_height / 4))
+            # elif i == num_y_tiles - 1:
+            #     point_y = round(region[2]) # - (tile_height / 4))
+            # else:
+            point_y = round(region[0] + (tile_height / 2))
+            # if j == 0:
+            #     point_x = round(region[1]) # + (tile_width / 4))
+            # elif j == num_x_tiles - 1:
+            #     point_x = round(region[3]) # - (tile_width / 4))
+            # else:
+            point_x = round(region[1] + (tile_width / 2))
+
+            point = [point_x, point_y]
             all_points.append(point)
+            if i == 0:
+                add_point = [point_x, 0]
+                predicted_values.append(val)
+                all_points.append(add_point)
+            if j == 0:
+                add_point = [0, point_y]
+                predicted_values.append(val)
+                all_points.append(add_point)
+            if i == num_y_tiles - 1:
+                add_point = [point_x, round(region[2])]
+                predicted_values.append(val)
+                all_points.append(add_point)
+            if j  == num_x_tiles - 1:
+                add_point = [round(region[3]), point_y]
+                predicted_values.append(val)
+                all_points.append(add_point)
+
+            if i == 0 and j == 0:
+                add_point = [0, 0]
+                predicted_values.append(val)
+                all_points.append(add_point)
+            if i == num_y_tiles - 1 and j == 0:
+                add_point = [0, round(region[2])]
+                predicted_values.append(val)
+                all_points.append(add_point)
+            if i == num_y_tiles - 1 and j == num_x_tiles - 1:
+                add_point = [round(region[3]), round(region[2])]
+                predicted_values.append(val)
+                all_points.append(add_point)
+            if i == 0 and j == num_x_tiles - 1:
+                add_point = [round(region[3]), 0]
+                predicted_values.append(val)
+                all_points.append(add_point)
+        
+
+            # if i == 0 or j == 0 or i == num_y_tiles - 1 or j == num_x_tiles - 1:
+
+
+
+            #     if i == 0:
+            #         add_point_y = 0
+            #     elif i == num_y_tiles - 1:
+            #         add_point_y = image_height_px
+            #     else:
+            #         add_point_y = round(region[0] + (tile_height / 2))
+
+            #     if j == 0:
+            #         add_point_x = 0
+            #     elif j == num_x_tiles - 1:
+            #         add_point_x = image_width_px
+            #     else:
+            #         add_point_x = round(region[1] + (tile_width / 2))
+
+            #     add_point = [add_point_x, add_point_y]
+            #     all_points.append(add_point)
+            #     predicted_values.append(val)
+            # point = [round((region[1] + region[3]) / 2), round((region[0] + region[2]) / 2)]
+            # point = [round(region[1]), round(region[0])]
+            # print("\t{}".format(point))
+
 
     # print("predicted_values", predicted_values)
     # print("all_points", all_points)
@@ -350,7 +436,7 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
 
 
 def create_interpolation_map(username, farm_name, field_name, mission_date, 
-                             predictions_path, out_dir, interpolation):
+                             predictions_path, out_dir, interpolation, tile_size):
 
     # farm_name = dataset.farm_name
     # field_name = dataset.field_name
@@ -375,7 +461,7 @@ def create_interpolation_map(username, farm_name, field_name, mission_date,
 
     if metadata["is_ortho"] == "yes":
         create_interpolation_map_for_ortho(username, farm_name, field_name, mission_date, 
-                    predictions_path, out_dir, interpolation)
+                    predictions_path, out_dir, interpolation, tile_size)
     else:
         create_interpolation_map_for_image_set(username, farm_name, field_name, mission_date, 
                     predictions_path, out_dir, interpolation)
@@ -639,7 +725,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-nearest', action='store_true')
     # parser.add_argument('-completed_only', action='store_true')
-    # parser.add_argument('-pred_path', type=str)
+    parser.add_argument('-tile_size', type=float)
     # parser.add_argument('-diff', action='store_true')
     args = parser.parse_args()
     
@@ -685,7 +771,8 @@ if __name__ == "__main__":
                             args.predictions_path, #annotations_path,
                             args.out_dir, 
                             # args.map_download_uuid,
-                            interpolation=interpolation)
+                            interpolation=interpolation,
+                            tile_size=args.tile_size)
                             # completed_only=args.completed_only,
                             #pred_path=args.pred_path,
                             # value=value)

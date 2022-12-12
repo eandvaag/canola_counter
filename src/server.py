@@ -629,32 +629,35 @@ def update_vegetation_record(image_set_dir, annotations, excess_green_record):
     return updated_vegetation_record
 
 
-def create_maps(results_dir):
+# def create_maps(results_dir):
+#     logger = logging.getLogger(__name__)
 
-
-    path_pieces = results_dir.split("/")
-    username = path_pieces[2]
-    farm_name = path_pieces[4]
-    field_name = path_pieces[5]
-    mission_date = path_pieces[6]
-    # image_set_dir = os.path.join(*path_pieces[:len(path_pieces)-3])
-    predictions_path = os.path.join(results_dir, "predictions.json")
-    out_dir = os.path.join(results_dir, "maps")
-    for interpolation in ["linear", "nearest"]:
-        interpolate.create_interpolation_map(username,
-                            farm_name,
-                            field_name,
-                            mission_date,
-                            predictions_path, #annotations_path,
-                            out_dir, 
-                            # args.map_download_uuid,
-                            interpolation=interpolation)
+#     path_pieces = results_dir.split("/")
+#     username = path_pieces[2]
+#     farm_name = path_pieces[4]
+#     field_name = path_pieces[5]
+#     mission_date = path_pieces[6]
+#     # image_set_dir = os.path.join(*path_pieces[:len(path_pieces)-3])
+#     predictions_path = os.path.join(results_dir, "predictions.json")
+#     out_dir = os.path.join(results_dir, "maps")
+#     try:
+#         for interpolation in ["linear", "nearest"]:
+#             interpolate.create_interpolation_map(username,
+#                                 farm_name,
+#                                 field_name,
+#                                 mission_date,
+#                                 predictions_path, #annotations_path,
+#                                 out_dir, 
+#                                 # args.map_download_uuid,
+#                                 interpolation=interpolation)
+#     except Exception as e:
+#         logger.info("Unable to produce density maps.")
 
 
 def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     # print("running post_result")
 
-    create_maps(results_dir)
+    # create_maps(results_dir)
 
 
 
