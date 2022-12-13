@@ -36,6 +36,13 @@ sch_ctx = {}
 app = Flask(__name__)
 
 
+
+
+@app.route(os.environ.get("CC_PATH") + '/health_request', methods=['POST'])
+def health_request():
+    return {"message": "alive"}
+
+
 @app.route(os.environ.get("CC_PATH") + '/add_request', methods=['POST'])
 def add_request():
     logger = logging.getLogger(__name__)
@@ -465,8 +472,8 @@ def process_train(item):
         if os.path.exists(switch_req_path):
             return False
 
-        logging.info("Starting to train {}".format(item))
-        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
+        # logging.info("Starting to train {}".format(item))
+        # isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
 
         # annotations_path = os.path.join(image_set_dir, "annotations", "annotations_w3c.json")
         # annotations = w3c_io.load_annotations(annotations_path, {"plant": 0})

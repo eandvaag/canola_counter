@@ -46,7 +46,9 @@ def set_scheduler_status(username, farm_name, field_name, mission_date, status, 
     scheduler_status_path = os.path.join("usr", "shared", "scheduler_status.json")
     scheduler_status = json_io.load_json(scheduler_status_path)
         
+    current_update_timestamp = int(time.time())
     update_num = scheduler_status["update_num"] + 1
+    # seconds_since_last_update = current_update_timestamp - scheduler_status["timestamp"]
     scheduler_status = {
         "update_num": update_num,
         "username": username,
@@ -54,7 +56,8 @@ def set_scheduler_status(username, farm_name, field_name, mission_date, status, 
         "field_name": field_name,
         "mission_date": mission_date,
         "status": status,
-        "timestamp": int(time.time())
+        "timestamp": current_update_timestamp
+        # "seconds_since_last_update": seconds_since_last_update
     }
 
     for k, v in extra_items.items():

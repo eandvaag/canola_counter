@@ -192,6 +192,9 @@ def process_auto_select(item, sch_ctx):
 
         except Exception as e:
 
+            if os.path.exists(auto_select_path):
+                os.remove(auto_select_path)
+
             trace = traceback.format_exc()
             logger.error("Exception occurred in process_auto_select")
             logger.error(e)
@@ -263,7 +266,16 @@ def auto_select_model(item, sch_ctx):
         for model_dir in model_dirs:
             log_path = os.path.join(model_dir, "log.json")
             log = json_io.load_json(log_path)
-            if log["model_object"] == object_name:
+            valid = True
+            for image_set in log["image_sets"]:
+                if image_set["username"] == username and \
+                    image_set["farm_name"] == farm_name and \
+                    image_set["field_name"] == field_name and \
+                    image_set["mission_date"] == mission_date:
+                    valid = False
+                    break
+
+            if valid and log["model_object"] == object_name:
                 models[model_dir] = {
                     "num_detected": 0,
                     "score": 0,

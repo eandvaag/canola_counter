@@ -1349,7 +1349,7 @@ def train_baseline(sch_ctx, root_dir):
         optimizer.apply_gradients(grads_and_vars=zip(gradients, yolov4.trainable_variables))
         train_loss_metric.update_state(values=loss_value)
 
-    train_steps_per_epoch = np.sum([1 for _ in train_dataset])
+    # train_steps_per_epoch = np.sum([1 for _ in train_dataset])
     # val_steps_per_epoch = np.sum([1 for _ in val_dataset])
 
     # logger.info("{} ('{}'): Starting to train with {} training patches and {} validation patches.".format(
@@ -1365,17 +1365,23 @@ def train_baseline(sch_ctx, root_dir):
         loss_record = json_io.load_json(loss_record_path)
 
         epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
+
+        isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING,
+                                    extra_items={"epochs_since_improvement": epochs_since_substantial_improvement}) 
+
+
+        logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
+
         if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
             # q.put(True)
             return True
 
 
-        logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
         # logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
 
-        train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
-        for batch_data in train_bar:
+        # train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
+        for batch_data in train_dataset: #train_bar:
 
             # optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
             optimizer.lr.assign(config["training"]["active"]["learning_rate_schedule"]["learning_rate"])
@@ -1385,13 +1391,14 @@ def train_baseline(sch_ctx, root_dir):
             train_step(batch_images, batch_labels)
             if np.isnan(train_loss_metric.result()):
                 raise RuntimeError("NaN loss has occurred (training dataset).")
-            train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
-                                        train_loss_metric.result(), 
-                                        loss_record["training_loss"]["best"]))
+            # train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
+            #                             train_loss_metric.result(), 
+            #                             loss_record["training_loss"]["best"]))
 
             if sch_ctx["switch_queue"].size() > 0:
                 drain_switch_queue(sch_ctx)
-                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
+                isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING,
+                                        extra_items={"epochs_since_improvement": epochs_since_substantial_improvement})
             # steps_taken += 1
 
 
@@ -1745,7 +1752,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
     # epochs_since_substantial_improvement = 0
 
     while True:
-        train_steps_per_epoch = np.sum([1 for _ in train_dataset])
+        # train_steps_per_epoch = np.sum([1 for _ in train_dataset])
         # val_steps_per_epoch = np.sum([1 for _ in val_dataset])
 
         logger.info("{} ('{}'): Starting to train with {} training patches.".format(
@@ -1759,6 +1766,13 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
         loss_record = json_io.load_json(loss_record_path)
 
         epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
+
+        logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
+
+        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING,
+                                    extra_items={"epochs_since_improvement": epochs_since_substantial_improvement}) 
+
+
         if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
             shutil.copyfile(best_weights_path, cur_weights_path)
             # q.put((True, False))
@@ -1766,11 +1780,11 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
 
         # logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
-        logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
 
 
-        train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
-        for batch_data in train_bar:
+
+        # train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
+        for batch_data in train_dataset: #train_bar:
 
             # optimizer.lr.assign(driver_utils.get_learning_rate(steps_taken, train_steps_per_epoch, config))
             optimizer.lr.assign(config["training"]["active"]["learning_rate_schedule"]["learning_rate"])
@@ -1780,9 +1794,10 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
             train_step(batch_images, batch_labels)
             if np.isnan(train_loss_metric.result()):
                 raise RuntimeError("NaN loss has occurred (training dataset).")
-            train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
-                                        train_loss_metric.result(), 
-                                        loss_record["training_loss"]["best"]))
+
+            # train_bar.set_description("t. loss: {:.4f} | best: {:.4f}".format(
+            #                             train_loss_metric.result(), 
+            #                             loss_record["training_loss"]["best"]))
             # steps_taken += 1
 
 
@@ -1794,7 +1809,8 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
                 if affected:
                     # q.put((False, False))
                     return (False, False)
-                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING)
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING,
+                                         extra_items={"epochs_since_improvement": epochs_since_substantial_improvement})
 
 
         cur_training_loss = float(train_loss_metric.result())
