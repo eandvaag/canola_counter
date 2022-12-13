@@ -210,7 +210,7 @@ def process_baseline(item):
             return False #raise RuntimeError("A baseline with the same name already exists!")
 
         logging.info("Starting to train baseline {}".format(item))
-        isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
+        # isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
 
         patches_dir = os.path.join(baseline_pending_dir, "patches")
         annotations_dir = os.path.join(baseline_pending_dir, "annotations")
