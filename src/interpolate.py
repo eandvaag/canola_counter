@@ -200,6 +200,10 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
 
     area_m2_per_tile = (tile_width * gsd) * (tile_height * gsd)
     box_centres = np.rint((pred_boxes[..., :2] + pred_boxes[..., 2:]) / 2.0).astype(np.int64)
+    # box centres (y, x) format
+
+    y_regions = np.round(box_centres[:, 0] / tile_height).astype(np.int64)
+    x_regions = np.round(box_centres[:, 1] / tile_width).astype(np.int64)
 
     for i in range(num_y_tiles):
         for j in range(num_x_tiles):
@@ -207,8 +211,13 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
             region = [i * tile_height, j * tile_width, (i+1) * tile_height, (j+1) * tile_width]
             # print(region)
 
-            contained_box_centres = box_utils.get_contained_inds_for_points(box_centres, [region])
-            val = contained_box_centres.shape[0] / area_m2_per_tile
+            # contained_box_centres = box_utils.get_contained_inds_for_points(box_centres, [region])
+            # num_boxes_in_region = contained_box_centres.shape[0]
+            y_mask = i == y_regions
+            x_mask = j == x_regions
+            mask = np.logical_and(y_mask, x_mask)
+            num_boxes_in_region = np.sum(mask)
+            val = num_boxes_in_region / area_m2_per_tile
             predicted_values.append(val)
             # if i == 0:
             #     point_y = round(region[0]) # + (tile_height / 4))
