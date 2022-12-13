@@ -1809,7 +1809,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
                 if affected:
                     # q.put((False, False))
                     return (False, False)
-                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING,
+                isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.TRAINING,
                                          extra_items={"epochs_since_improvement": epochs_since_substantial_improvement})
 
 
