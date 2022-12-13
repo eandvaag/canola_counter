@@ -431,7 +431,7 @@ def auto_select_model(item, sch_ctx):
     #         best_score = models[model_dir]["score"]
     logger.info("All models:")
     for model_tuple in model_tuples:
-        logger.info(model_tuple[0], model_tuple[1])
+        logger.info("{}: {}".format(model_tuple[0], str(model_tuple[1])))
     
     logger.info("Choosing: {}".format(best_model_dir))
 
