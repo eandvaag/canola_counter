@@ -1,3 +1,4 @@
+import urllib3
 from flask import Flask, request
 import time
 import os
@@ -1304,6 +1305,9 @@ if __name__ == "__main__":
     #         print(e)
 
     # # gpus = None
+
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
     logging.basicConfig(level=logging.INFO)

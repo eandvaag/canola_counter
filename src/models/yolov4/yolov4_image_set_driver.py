@@ -1732,7 +1732,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
     train_loss_metric = tf.metrics.Mean()
     # val_loss_metric = tf.metrics.Mean()
 
-    @tf.function
+    @tf.function #(jit_compile=True)
     def train_step(batch_images, batch_labels):
         with tf.GradientTape() as tape:
             conv = yolov4(batch_images, training=True)
@@ -1782,7 +1782,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
         # logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
 
 
-
+        start_epoch_time = time.time()
         # train_bar = tqdm.tqdm(train_dataset, total=train_steps_per_epoch)
         for batch_data in train_dataset: #train_bar:
 
@@ -1812,10 +1812,13 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
                 isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING,
                                          extra_items={"epochs_since_improvement": epochs_since_substantial_improvement})
 
-
+        end_epoch_time = time.time()
         cur_training_loss = float(train_loss_metric.result())
 
         # update_loss_record(loss_record, "training_loss", cur_training_loss)
+        elapsed_epoch_time = round(end_epoch_time - start_epoch_time, 4)
+
+        logger.info("Epoch finished. Elapsed time (s): {}.".format(elapsed_epoch_time))
 
         cur_training_loss_is_best = update_loss_record(loss_record, "training_loss", cur_training_loss)
         yolov4.save_weights(filepath=cur_weights_path, save_format="h5")

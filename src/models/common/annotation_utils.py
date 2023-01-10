@@ -146,6 +146,7 @@ def get_patch_size(annotations, region_keys):
 def average_box_area_to_patch_size(average_box_area):
     patch_area = average_box_area * (90000 / 2296)
     patch_size = round(m.sqrt(patch_area))
+    patch_size = max(416, patch_size)
     return patch_size 
 
 
