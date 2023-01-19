@@ -190,7 +190,7 @@ def create_default_config():
                 #         "brightness_limit": [-0.2, 0.2], 
                 #         "contrast_limit": [-0.2, 0.2]
                 #     }
-                # }
+                # },
                 # {
                 #     "type": "affine",
                 #     "parameters": {
@@ -302,6 +302,10 @@ def predict(sch_ctx, image_set_dir, request): #, q):
     is_ortho = metadata["is_ortho"] == "yes"
 
 
+    status_path = os.path.join(model_dir, "status.json")
+    status = json_io.load_json(status_path)
+
+
     # training_image_names = []
     # for image_name in annotations.keys():
     #     if annotations[image_name]["status"] == "completed_for_training":
@@ -355,8 +359,7 @@ def predict(sch_ctx, image_set_dir, request): #, q):
     # if len(loss_record["training_loss"]["values"]) == 0:
     # updated_patch_size = ep.get_updated_patch_size(annotations, training_image_names)
 
-    status_path = os.path.join(model_dir, "status.json")
-    status = json_io.load_json(status_path)
+
     patch_size = status["patch_size"]
     patch_overlap_percent = 50
     overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
@@ -620,6 +623,9 @@ def predict(sch_ctx, image_set_dir, request): #, q):
     #                                       iou_thresh=config["inference"]["image_nms_iou_thresh"])
     # print("running apply_nms_to_image_boxes")
     # iou_thresh = config["inference"]["image_nms_iou_thresh"]
+    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
+                                    extra_items={"Saving Predictions": "yes"}) 
+
     start_nms_time = time.time()
     # # driver_utils.apply_nms_to_image_boxes_fast(predictions, image_set_dir, patch_size, overlap_px, iou_thresh)
     driver_utils.apply_nms_to_image_boxes(predictions, 
@@ -633,7 +639,11 @@ def predict(sch_ctx, image_set_dir, request): #, q):
     thresholded_predictions = {}
     for image_name in predictions.keys():
         scores_array = np.array(predictions[image_name]["scores"])
-        # scores_array = np.round(scores_array, 2)
+
+        # if np.logical_and(np.all(scores_array > 0.25), np.all(scores_array < 0.26)):
+        #     inds = np.array([])
+        # else:
+            # scores_array = np.round(scores_array, 2)
         inds = scores_array > 0.25
 
         thresholded_predictions[image_name] = {

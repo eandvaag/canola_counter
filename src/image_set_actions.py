@@ -6,6 +6,7 @@ import logging
 import time
 import traceback
 
+
 from io_utils import json_io
 from models.common import annotation_utils
 import auto_select
@@ -295,18 +296,20 @@ def process_switch(item):
             logger.info("Switching {}".format(item))
             set_scheduler_status(username, farm_name, field_name, mission_date, SWITCHING_MODELS)
 
-
-
-            model_path = os.path.join("usr", "data", model_creator, "models")
-            public_model_path = os.path.join(model_path, "available", "public", model_name) #, "weights.h5")
-            private_model_path = os.path.join(model_path, "available", "private", model_name) #, "weights.h5")
-
-            if os.path.exists(public_model_path):
-                model_path = public_model_path
-            elif os.path.exists(private_model_path):
-                model_path = private_model_path
+            if model_name == "random_weights" and model_creator == "":
+                model_path = os.path.join("usr", "shared", "weights", model_name)
             else:
-                raise RuntimeError("Model weights could not be located.")
+
+                model_path = os.path.join("usr", "data", model_creator, "models")
+                public_model_path = os.path.join(model_path, "available", "public", model_name) #, "weights.h5")
+                private_model_path = os.path.join(model_path, "available", "private", model_name) #, "weights.h5")
+
+                if os.path.exists(public_model_path):
+                    model_path = public_model_path
+                elif os.path.exists(private_model_path):
+                    model_path = private_model_path
+                else:
+                    raise RuntimeError("Model weights could not be located.")
 
             weights_path = os.path.join(model_path, "weights.h5")
             log_path = os.path.join(model_path, "log.json")

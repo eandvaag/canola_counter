@@ -1,4 +1,4 @@
-import urllib3
+# import urllib3
 from flask import Flask, request
 import time
 import os
@@ -106,6 +106,7 @@ def needs_training(image_set_dir):
 
     if status["model_name"] == "---" or status["model_creator"] == "---":
         return False
+
 
     # is_ortho = "training_regions" in annotations[list(annotations.keys())[0]]
     # if is_ortho:
@@ -488,6 +489,8 @@ def process_train(item):
         #     if annotations[image_name]["status"] == "completed_for_training":
         #         training_image_names.append(image_name) 
         num_training_regions = annotation_utils.get_num_training_regions(annotations)
+
+        logger.info("num_training_regions {}".format(num_training_regions))
         # 0
         # for image_name in annotations.keys():
         #     num_training_regions += len(annotations[image_name]["training_regions"])
@@ -1307,7 +1310,7 @@ if __name__ == "__main__":
     # # gpus = None
 
 
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    # urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
     logging.basicConfig(level=logging.INFO)

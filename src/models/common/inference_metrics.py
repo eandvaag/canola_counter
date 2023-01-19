@@ -314,7 +314,7 @@ from io_utils import json_io, w3c_io
 
 def get_positives_and_negatives(annotated_boxes, predicted_boxes, iou_thresh):
 
-    start_time = time.time()
+    # start_time = time.time()
 
     num_annotated = annotated_boxes.shape[0]
     num_predicted = predicted_boxes.shape[0]
@@ -369,7 +369,7 @@ def get_positives_and_negatives(annotated_boxes, predicted_boxes, iou_thresh):
 
     MAX_MAT_SIZE = 16000000
     STEP_SIZE = min(num_predicted, m.floor(MAX_MAT_SIZE / num_predicted))
-    print("STEP_SIZE", STEP_SIZE)
+    # print("STEP_SIZE", STEP_SIZE)
     # STEP_SIZE = 10
     for i in range(0, num_predicted, STEP_SIZE): #, CHUNK_SIZE):
         # for col_ind in range(0, num_predicted, CHUNK_SIZE):
@@ -413,9 +413,9 @@ def get_positives_and_negatives(annotated_boxes, predicted_boxes, iou_thresh):
     # print("number of false positives", false_positive)
     # print("number of false negatives", false_negative)
 
-    end_time = time.time()
-    elapsed = end_time - start_time
-    print("positives_and_negatives took {} seconds.".format(elapsed))
+    # end_time = time.time()
+    # elapsed = end_time - start_time
+    # print("positives_and_negatives took {} seconds.".format(elapsed))
 
     # acc = true_positive / (true_positive + false_positive + false_negative)
     return int(true_positive), int(false_positive), int(false_negative)
@@ -531,9 +531,9 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
         "Recall (IoU=.50, conf>.50)",
         "Accuracy (IoU=.50, conf>.50)",
         "F1 Score (IoU=.50, conf>.50)",
-        "AP (IoU=.50:.05:.95)",
-        "AP (IoU=.50)",
-        "AP (IoU=.75)"
+        # "AP (IoU=.50:.05:.95)",
+        # "AP (IoU=.50)",
+        # "AP (IoU=.75)"
     ]
     for metric_key in metric_keys:
         metrics[metric_key] = {}
@@ -595,16 +595,16 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
                 
                 # region_pred_classes = np.zeros(shape=(region_pred_boxes.shape[0]))
 
-                print("getting AP vals")
-                start_time = time.time()
-                AP_vals = get_AP_vals(region_annotated_boxes, region_pred_boxes, region_pred_scores)
-                end_time = time.time()
-                elapsed = end_time - start_time
-                print("Calculated AP vals in {} seconds.".format(elapsed))
+                # print("getting AP vals")
+                # start_time = time.time()
+                # AP_vals = get_AP_vals(region_annotated_boxes, region_pred_boxes, region_pred_scores)
+                # end_time = time.time()
+                # elapsed = end_time - start_time
+                # print("Calculated AP vals in {} seconds.".format(elapsed))
 
-                metrics["AP (IoU=.50:.05:.95)"][image_name][region_key].append(AP_vals["AP (IoU=.50:.05:.95)"])
-                metrics["AP (IoU=.50)"][image_name][region_key].append(AP_vals["AP (IoU=.50)"])
-                metrics["AP (IoU=.75)"][image_name][region_key].append(AP_vals["AP (IoU=.75)"])
+                # metrics["AP (IoU=.50:.05:.95)"][image_name][region_key].append(AP_vals["AP (IoU=.50:.05:.95)"])
+                # metrics["AP (IoU=.50)"][image_name][region_key].append(AP_vals["AP (IoU=.50)"])
+                # metrics["AP (IoU=.75)"][image_name][region_key].append(AP_vals["AP (IoU=.75)"])
 
                 # pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(
                 #     region_pred_boxes, region_pred_classes, region_pred_scores,
@@ -1110,9 +1110,9 @@ def create_images_sheet(args, updated_metrics):
         "Recall (IoU=.50, conf>.50)",
         "Accuracy (IoU=.50, conf>.50)",
         "F1 Score (IoU=.50, conf>.50)",
-        "AP (IoU=.50:.05:.95)",
-        "AP (IoU=.50)",
-        "AP (IoU=.75)"
+        # "AP (IoU=.50:.05:.95)",
+        # "AP (IoU=.50)",
+        # "AP (IoU=.75)"
     ]
 
     # metrics_lst = [
@@ -1302,9 +1302,9 @@ def create_regions_sheet(args, updated_metrics):
         "Recall (IoU=.50, conf>.50)",
         "Accuracy (IoU=.50, conf>.50)",
         "F1 Score (IoU=.50, conf>.50)",
-        "AP (IoU=.50:.05:.95)",
-        "AP (IoU=.50)",
-        "AP (IoU=.75)"
+        # "AP (IoU=.50:.05:.95)",
+        # "AP (IoU=.50)",
+        # "AP (IoU=.75)"
     ]
     columns.extend(metrics_lst)
 
@@ -1434,9 +1434,9 @@ def create_stats_sheet(args, regions_df):
         "Recall (IoU=.50, conf>.50)",
         "Accuracy (IoU=.50, conf>.50)",
         "F1 Score (IoU=.50, conf>.50)",
-        "AP (IoU=.50:.05:.95)",
-        "AP (IoU=.50)",
-        "AP (IoU=.75)"
+        # "AP (IoU=.50:.05:.95)",
+        # "AP (IoU=.50)",
+        # "AP (IoU=.75)"
     ]
 
     columns.extend(averaged_metrics)
