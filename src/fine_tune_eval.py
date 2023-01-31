@@ -31,7 +31,7 @@ from natsort import natsorted
 # import auto_select
 from io_utils import json_io
 from models.common import annotation_utils, box_utils, inference_metrics
-from fine_tune_dist_select import get_selected_order_for_image_set
+# from fine_tune_dist_select import get_selected_order_for_image_set
 
 # from server import process_train, process_predict
 
