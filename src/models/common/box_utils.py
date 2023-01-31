@@ -330,6 +330,21 @@ def get_contained_inds_for_points(points, regions):
 
 
 
+def get_fully_contained_inds(boxes, regions):
+
+    if boxes.size == 0:
+        return np.array([], dtype=np.int64)
+
+    mask = np.full(boxes.shape[0], False)
+
+    for region in regions:
+        region_mask = np.logical_and(
+                        np.logical_and(boxes[:,3] <= region[3], boxes[:,1] >= region[1]),
+                        np.logical_and(boxes[:,2] <= region[2], boxes[:,0] >= region[0])
+                      )
+        mask = np.logical_or(mask, region_mask)
+        
+    return np.where(mask)[0]
 
 def get_contained_inds(boxes, regions):
 
