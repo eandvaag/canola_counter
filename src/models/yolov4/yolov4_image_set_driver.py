@@ -48,7 +48,7 @@ from models.yolov4.encode import Decoder
 
 # VALIDATION_IMPROVEMENT_TOLERANCE = 10
 EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10
-TRAINING_TIME_SESSION_CEILING = 5000            # number of seconds before current session is stopped in order to give others a chance
+TRAINING_TIME_SESSION_CEILING = 5000000           # number of seconds before current session is stopped in order to give others a chance
 
 # MAX_IN_MEMORY_IMAGE_SIZE = 5e+8     # 500 megabytes
 
@@ -1614,7 +1614,7 @@ def get_epochs_since_substantial_improvement(loss_record):
 
 
 
-
+NUM_EPOCHS_TO_TRAIN = 30
 
 def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
     
@@ -1760,6 +1760,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
     # steps_taken = 0
     # epochs_since_substantial_improvement = 0
+    num_epochs_trained = 0
 
     while True:
         # train_steps_per_epoch = np.sum([1 for _ in train_dataset])
@@ -1784,6 +1785,9 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
 
         if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
+            # print("num_epochs_trained: {}. NUM_EPOCHS_TO_TRAIN: {}".format(num_epochs_trained, NUM_EPOCHS_TO_TRAIN))
+            # print("done?: {}".format(num_epochs_trained > NUM_EPOCHS_TO_TRAIN))
+            # if num_epochs_trained > NUM_EPOCHS_TO_TRAIN:
             shutil.copyfile(best_weights_path, cur_weights_path)
             # q.put((True, False))
             return (True, False)
@@ -1840,6 +1844,8 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
         #json_io.save_json(loss_record_path, loss_record)
 
         train_loss_metric.reset_states()
+
+        num_epochs_trained += 1
 
 
         # val_bar = tqdm.tqdm(val_dataset, total=val_steps_per_epoch)
