@@ -323,8 +323,9 @@ def random_region(annotations, min_num_contained_objects, image_name, image_h, i
     #     for x in range(int(STEP_SIZE/2), image_w, STEP_SIZE):
     #         start_pts.append([y, x])
 
-    random.shuffle(start_pts)
-    start_pts = np.array(start_pts)
+    # random.shuffle(start_pts)
+    # start_pts = np.array(start_pts)
+    np.random.shuffle(start_pts)
     for i in tqdm.trange(start_pts.shape[0]):
         start_pt = start_pts[i, :]
         # print("start_pt", start_pt)
@@ -433,6 +434,7 @@ def get_confidence_quality(pred_scores):
             confidence_score += prob * (1 / (1 + (m.e ** (-30 * (conf_val - 0.80)))))
             # confidence_score += prob * (2 ** (30 * (conf_val-1))) #( (2**7) * ((conf_val - 0.5) ** 7) )
     return confidence_score
+
 
 def get_dics(annotations, full_predictions, assessment_images):
     dics = []
@@ -544,6 +546,97 @@ def get_global_accuracy(annotations, full_predictions, assessment_images):
     global_accuracy = total_true_positives / (total_true_positives + total_false_positives + total_false_negatives)
     return global_accuracy
 
+def get_accuracy(annotated_boxes, sel_pred_boxes):
+
+    num_predicted = sel_pred_boxes.shape[0]
+    num_annotated = annotated_boxes.shape[0]
+
+    if num_predicted > 0:
+        if num_annotated > 0:
+            true_positive, false_positive, false_negative = inference_metrics.get_positives_and_negatives(annotated_boxes, sel_pred_boxes, 0.50)
+            # print(true_positive, false_positive, false_negative)
+            precision_050 = true_positive / (true_positive + false_positive)
+            recall_050 = true_positive / (true_positive + false_negative)
+            if precision_050 == 0 and recall_050 == 0:
+                f1_iou_050 = 0
+            else:
+                f1_iou_050 = (2 * precision_050 * recall_050) / (precision_050 + recall_050)
+            acc_050 = true_positive / (true_positive + false_positive + false_negative)
+            # true_positive, false_positive, false_negative = get_positives_and_negatives(annotated_boxes, sel_region_pred_boxes, 0.75)
+            # precision = true_positive / (true_positive + false_positive)
+            # recall = true_positive / (true_positive + false_negative)
+            # f1_iou_075 = (2 * precision * recall) / (precision + recall)                        
+
+            
+        
+        else:
+            true_positive = 0
+            false_positive = num_predicted
+            false_negative = 0
+
+            precision_050 = 0.0
+            recall_050 = 0.0
+            f1_iou_050 = 0.0
+            acc_050 = 0.0
+    else:
+        if num_annotated > 0:
+            true_positive = 0
+            false_positive = 0
+            false_negative = num_annotated
+
+            precision_050 = 0.0
+            recall_050 = 0.0
+            f1_iou_050 = 0.0
+            acc_050 = 0.0
+        else:
+            true_positive = 0
+            false_positive = 0
+            false_negative = 0
+
+            precision_050 = 1.0
+            recall_050 = 1.0
+            f1_iou_050 = 1.0
+            acc_050 = 1.0
+
+    return acc_050
+
+def get_positives_and_negatives(annotations, full_predictions, assessment_images):
+    tot_true_positives = 0
+    tot_false_positives = 0
+    tot_false_negatives = 0
+    for image_name in assessment_images:
+        annotated_boxes = annotations[image_name]["boxes"]
+        pred_boxes = np.array(full_predictions[image_name]["boxes"])
+        pred_scores = np.array(full_predictions[image_name]["scores"])
+
+        sel_pred_boxes = pred_boxes[pred_scores > 0.50]
+
+        num_predicted = sel_pred_boxes.shape[0]
+        num_annotated = annotated_boxes.shape[0]
+
+        if num_predicted > 0:
+            if num_annotated > 0:
+                true_positive, false_positive, false_negative = inference_metrics.get_positives_and_negatives(annotated_boxes, sel_pred_boxes, 0.50)
+            else:
+                true_positive = 0
+                false_positive = num_predicted
+                false_negative = 0
+        else:
+            if num_annotated > 0:
+                true_positive = 0
+                false_positive = 0
+                false_negative = num_annotated
+            else:
+                true_positive = 0
+                false_positive = 0
+                false_negative = 0
+
+        tot_true_positives += true_positive
+        tot_false_positives += false_positive
+        tot_false_negatives += false_negative
+    return tot_true_positives, tot_false_positives, tot_false_negatives
+
+
 
 def get_accuracies(annotations, full_predictions, assessment_images):
     accuracies = []
@@ -607,6 +700,153 @@ def get_accuracies(annotations, full_predictions, assessment_images):
 
         accuracies.append(acc_050)
     return accuracies
+
+# (image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations")
+# def global_plot(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations"):
+
+#     chart_data = []
+#     for rep_num in range(num_replications):
+#         all_training_regions = {}
+#         for method in methods:
+
+
+#             method_label = method["method_label"]
+#             image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+#                                         image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
+#                                         image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
+#                                         image_set["mission_date"])
+
+#             method_image_set = {
+#                 "username": image_set["username"],
+#                 "farm_name": image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
+#                 "field_name": image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
+#                 "mission_date": image_set["mission_date"]
+#             }
+
+
+#             recent_result_dir = get_most_recent_result_dir(method_image_set)
+
+#             annotations_path = os.path.join(recent_result_dir, "annotations.json")
+#             annotations = annotation_utils.load_annotations(annotations_path)
+#             for image_name in annotations.keys():
+#                 if image_name not in all_training_regions:
+#                     all_training_regions[image_name] = []
+#                 all_training_regions[image_name].extend(annotations[image_name]["training_regions"])
+
+#         print("all_training_regions", all_training_regions)
+#         for method in methods:
+
+#             chart_entry = {}
+#             chart_entry["method_label"] = method["method_label"]
+#             chart_entry["vals"] = []
+#             image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+#                             image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
+#                             image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
+#                             image_set["mission_date"])
+
+#             annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+#             annotations = annotation_utils.load_annotations(annotations_path)
+#             results_dir = os.path.join(image_set_dir, "model", "results")
+#             if os.path.exists(results_dir):
+#                 result_dirs = glob.glob(os.path.join(results_dir, "*"))
+
+#                 result_tuples = []
+#                 for result_dir in result_dirs:
+                    
+#                     request_path = os.path.join(result_dir, "request.json")
+#                     request = json_io.load_json(request_path)
+#                     end_time = request["end_time"]
+
+#                     result_tuples.append((result_dir, end_time))
+#                 result_tuples.sort(key=lambda x: x[1])
+#                 sorted_result_dirs = [x[0] for x in result_tuples]
+#                 for result_dir in sorted_result_dirs:
+
+
+#                     total_true_positives = 0
+#                     total_false_positives = 0
+#                     total_false_negatives = 0
+
+
+
+#                     predictions_path = os.path.join(result_dir, "predictions.json")
+#                     predictions = annotation_utils.load_predictions(predictions_path)
+
+#                     for image_name in annotations.keys():
+#                         pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+
+#                         sel_pred_boxes = pred_boxes
+#                         annotated_boxes = annotations[image_name]["boxes"]
+
+#                         # annotation_inds = box_utils.get_fully_contained_inds(annotations[image_name]["boxes"], all_training_regions[image_name])
+#                         # prediction_inds = box_utils.get_fully_contained_inds(pred_boxes, all_training_regions[image_name])
+                        
+#                         # annotation_mask = np.full(annotations[image_name]["boxes"].shape[0], True)
+#                         # annotation_mask[annotation_inds] = False
+                        
+#                         # pred_mask = np.full(pred_boxes.shape[0], True)
+#                         # pred_mask[prediction_inds] = False
+
+
+#                         # annotated_boxes = annotations[image_name]["boxes"][annotation_mask]
+#                         # sel_pred_boxes = pred_boxes[pred_mask]
+#                         # acc = get_accuracy(annotated_boxes, sel_pred_boxes)
+#                         num_predicted = sel_pred_boxes.shape[0]
+#                         num_annotated = annotated_boxes.shape[0]
+
+#                         if num_predicted > 0:
+#                             if num_annotated > 0:
+#                                 true_positive, false_positive, false_negative = inference_metrics.get_positives_and_negatives(annotated_boxes, sel_pred_boxes, 0.50)
+#                             else:
+#                                 true_positive = 0
+#                                 false_positive = num_predicted
+#                                 false_negative = 0
+#                         else:
+#                             if num_annotated > 0:
+#                                 true_positive = 0
+#                                 false_positive = 0
+#                                 false_negative = num_annotated
+#                             else:
+#                                 true_positive = 0
+#                                 false_positive = 0
+#                                 false_negative = 0
+#                         total_true_positives += true_positive
+#                         total_false_positives += false_positive
+#                         total_false_negatives += false_negative
+
+#                     if metric == "accuracy":
+#                         global_accuracy = total_true_positives / (total_true_positives + total_false_positives + total_false_negatives)
+#                         chart_entry["vals"].append(global_accuracy)
+#                     elif metric == "true_positives":
+#                         chart_entry["vals"].append(total_true_positives)
+
+#             chart_data.append(chart_entry)
+
+
+#         fig = plt.figure(figsize=(16, 8))
+#         ax = fig.add_subplot(111)
+#         colors = ["red", "blue", "green", "purple", "grey", "pink", "yellow"]
+#         for i, chart_entry in enumerate(chart_data):
+#             method_label = chart_entry["method_label"]
+#             color = colors[i]
+#             ax.plot([x for x in range(len(chart_entry["vals"]))], chart_entry["vals"], color=color, marker="x", label=method_label)
+
+
+#         ax.set_ylabel(metric) #"Accuracy") # Accuracy")
+#         # if metric == "accuracy": # or metric == "global_accuracy":
+#         ax.set_ylim((0, 1))
+
+
+#         ax.set_xlabel("Iterations") #Number of Annotations Used For Fine-Tuning")
+
+#         ax.legend()
+#         plt.tight_layout()
+#         if not os.path.exists(os.path.dirname(out_path)):
+#             os.makedirs(os.path.dirname(out_path))
+#         fig.savefig(out_path) #"artificial_ft_1_fine_tuning_method_comparison.svg")
+
+
+
 
 
 def create_eval_chart_annotations(image_set, methods, metric, num_replications, out_path):
@@ -1157,6 +1397,147 @@ def create_boxplot_comparison(image_set, methods, metric, num_replications, out_
 
 
 
+def create_global_comparison(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations"):
+
+    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+    chart_data = {}
+    for rep_num in range(num_replications):
+        chart_data[rep_num] = []
+        for method in methods:
+        
+            chart_entry = {}
+            print("processing", method["method_name"])
+            method_label = method["method_label"]
+            image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+                                        image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
+                                        image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
+                                        image_set["mission_date"])
+
+            chart_entry["method_label"] = method_label
+            chart_entry["rep_num"] = rep_num
+
+            results_dir = os.path.join(image_set_dir, "model", "results")
+            if os.path.exists(results_dir):
+                result_dirs = glob.glob(os.path.join(results_dir, "*"))
+
+                chart_entry["vals"] = []
+                chart_entry["num_annotations"] = []
+                for result_dir in result_dirs:
+                    print("\tprocessing", os.path.basename(result_dir))
+
+                    annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
+                    # num_training_images = 0
+                    num_annotations = 0
+                    for image_name in annotations.keys():
+                        if len(annotations[image_name]["training_regions"]) > 0:
+                            num_annotations += (box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"])).size
+
+
+                    full_predictions_path = os.path.join(result_dir, "predictions.json")
+                    full_predictions = json_io.load_json(full_predictions_path)
+
+                    num_true_positives, num_false_positives, num_false_negatives = get_positives_and_negatives(annotations, full_predictions, list(annotations.keys()))
+
+                    if metric == "accuracy":
+                        val = num_true_positives / (num_true_positives + num_false_positives + num_false_negatives)
+                        # vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
+                    elif metric == "true_positives":
+                        val = num_true_positives
+                    #     vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
+
+                    # else:
+                    #     vals = get_dics(annotations, full_predictions, list(annotations.keys()))
+                    # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
+
+                    # included_rows = [x for x in range(0, len(df[df.keys()[0]])) if x not in excluded]
+                    # subset_df = df.iloc[included_rows]
+
+                    # mean_accuracy = np.mean(subset_df["Accuracy (IoU=.50, conf>.50)"])
+                    # mean_accuracy = np.mean(df["Accuracy (IoU=.50, conf>.50)"])
+
+                    # chart_entry["mean_vals"].append(np.mean(vals))
+                    # chart_entry["min_vals"].append(np.min(vals))
+                    # chart_entry["max_vals"].append(np.max(vals))
+                    chart_entry["vals"].append(val)
+                    chart_entry["num_annotations"].append(num_annotations)
+
+                order = np.argsort(chart_entry["num_annotations"])
+                chart_entry["vals"] = (np.array(chart_entry["vals"])[order]).tolist()
+                chart_entry["num_annotations"] = (np.array(chart_entry["num_annotations"])[order]).tolist()
+
+                chart_data[rep_num].append(chart_entry)
+
+    fig = plt.figure(figsize=(16, 8))
+    # ax = fig.add_subplot(111)
+    min_val =  10000000 #np.inf
+    max_val = -10000000 #(-1) * np.inf
+    # print("len chart_data", len(chart_data))
+    for rep_num in chart_data.keys():
+        for i, chart_entry in enumerate(chart_data[rep_num]):
+            # print("len num_annotations", len(chart_entry["num_annotations"]))
+            # print("len chart_entry vals", len(chart_entry["vals"]))
+            # if i == 0:
+            #     widths = 0.8
+            # else:
+            
+            if xpositions == "num_annotations":
+                positions = chart_entry["num_annotations"]
+            else:
+                positions = [i for i in range(len(chart_entry["vals"]))]
+            # for col in range(len(chart_entry["vals"][0])):
+            #     # if col == 0:
+                    
+            #     # else:
+            #     #     label = None
+            #     plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3) #, label=label)
+            # label = chart_entry["method_label"]
+            if rep_num == 0:
+                label = chart_entry["method_label"]
+            else:
+                label = None
+            plt.plot(positions, chart_entry["vals"], color=colors[i], linewidth=1, label=label, marker="o")
+            # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
+            # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
+
+            # cur_min = np.min(chart_entry["vals"])
+            # if cur_min < min_val:
+            #     min_val = cur_min
+
+            # cur_max = np.max(chart_entry["vals"])
+            # if cur_max > max_val:
+            #     max_val = cur_max
+
+
+
+            # ticks = np.arange(0, len(methods[0]["accuracies"]))
+            # set the x label values
+            # plt.xticks(np.arange(0, len(ticks) * 2, 2), ticks)
+            
+            # set the limit for x axis
+            # plt.xlim(-2, len(ticks)*2)
+            
+            # set the limit for y axis
+    # if metric == "accuracy":
+    #     plt.ylim(0, 1.0)
+    # if metric == "dic":
+    #     plt.axhline(0, color="black", linestyle="dashed", linewidth=1)
+    #     ext_val = max(abs(max_val), abs(min_val))
+    #     plt.ylim(-ext_val, ext_val)
+    
+    plt.legend()
+    plt.xlabel(xpositions)
+    plt.ylabel(metric)
+    # set the title
+    #plt.title('Grouped boxplot using matplotlib')
+    chart_out_dir = os.path.join(out_dir, metric, xpositions)
+    os.makedirs(chart_out_dir, exist_ok=True)
+    plt.savefig(os.path.join(chart_out_dir, "all_replications.svg"))
+
+
+
+
+
+
 
 def create_thinline_comparison(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations"):
 
@@ -1235,6 +1616,7 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
                         vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
                     elif metric == "percent_count_error":
                         vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
+
                     else:
                         vals = get_dics(annotations, full_predictions, list(annotations.keys()))
                     # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
@@ -1276,12 +1658,13 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
                 positions = [i for i in range(len(chart_entry["vals"]))]
                 widths = 0.1
             for col in range(len(chart_entry["vals"][0])):
-                if col == 0:
-                    label = chart_entry["method_label"]
-                else:
-                    label = None
-                plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.6, label=label)
-
+                # if col == 0:
+                    
+                # else:
+                #     label = None
+                plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3) #, label=label)
+            label = chart_entry["method_label"]
+            plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2, label=label)
             # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
             # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
 
@@ -1392,8 +1775,8 @@ def select_training_images(image_set, method, num):
 
 def add_training_annotations(image_set, method):
 
-    image_based_methods = ["rand_img", "sel_img"]
-    region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg", "img_split", "quartile", "regions_match_image_anno_count"]
+    image_based_methods = ["rand_img", "sel_img", "sel_worst_img"]
+    region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg", "img_split", "quartile", "regions_match_image_anno_count", "low_quality_regions_match_image_anno_count"]
 
     image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
         image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
@@ -1421,13 +1804,16 @@ def add_training_annotations(image_set, method):
 
         if method["method_name"] == "rand_img":
             chosen_images = random.sample(candidates, num_images)
-        elif method["method_name"] == "sel_img":
+        elif method["method_name"] == "sel_img" or method["method_name"] == "sel_worst_img":
             quality_tuples = []
             for image_name in candidates:
                 quality = get_confidence_quality(np.array(predictions[image_name]["scores"]))
                 quality_tuples.append((quality, image_name))
             quality_tuples.sort(key=lambda x: x[0])
-            chosen_images = [x[1] for x in quality_tuples[:num_images]]
+            if method["method_name"] == "sel_img":
+                chosen_images = [x[1] for x in quality_tuples[:num_images]]
+            else:
+                chosen_images = [x[1] for x in quality_tuples[-num_images:]]
 
         for image_name in chosen_images:
             annotations[image_name]["training_regions"].append([
@@ -1584,7 +1970,7 @@ def add_training_annotations(image_set, method):
             else:
                 raise RuntimeError("Specified number of regions is not supported")
 
-        elif method["method_name"] == "regions_match_image_anno_count":
+        elif method["method_name"] == "regions_match_image_anno_count" or method["method_name"] == "low_quality_regions_match_image_anno_count":
 
             num_annotations_per_region = method["num_annotations_per_region"]
             matched_image_set = method["matched_image_set"]
@@ -1660,35 +2046,69 @@ def add_training_annotations(image_set, method):
 
             num_remaining = num_annotations_to_add
             # index = 0
-            while num_remaining > 0:
-                num_to_add = min(num_remaining, num_annotations_per_region)
-                # if index > len(image_names):
-                #     raise RuntimeError("Ran out of choices")
-                image_names = list(annotations.keys())
-                random.shuffle(image_names)
+            if method["method_name"] == "regions_match_image_anno_count":
+                while num_remaining > 0:
+                    num_to_add = min(num_remaining, num_annotations_per_region)
+                    # if index > len(image_names):
+                    #     raise RuntimeError("Ran out of choices")
+                    image_names = list(annotations.keys())
+                    random.shuffle(image_names)
 
-                image_name = image_names[0] #[index] #random.choice(annotations.keys())
-                image_h = metadata["images"][image_name]["height_px"]
-                image_w = metadata["images"][image_name]["width_px"]
-                print("Adding region with {} annotations to  image {}.".format(num_to_add, image_name))
-                new_region = random_region(annotations, num_to_add, image_name, image_h, image_w)
-                if new_region is not None:
-                    
-                    num_actually_added = box_utils.get_contained_inds(annotations[image_name]["boxes"], [new_region]).size
-                    
-                    if num_remaining <= num_annotations_per_region and num_actually_added != num_to_add:
-                        pass
-                    else:
-                        print("Actually added {} annotations".format(num_actually_added))
-                        annotations[image_name]["training_regions"].append(new_region)
-                        # num_added += 1
-                        num_remaining = num_remaining - num_actually_added #num_to_add
-                        # index += 1
+                    image_name = image_names[0] #[index] #random.choice(annotations.keys())
+                    image_h = metadata["images"][image_name]["height_px"]
+                    image_w = metadata["images"][image_name]["width_px"]
+                    print("Adding region with {} annotations to  image {}.".format(num_to_add, image_name))
+                    new_region = random_region(annotations, num_to_add, image_name, image_h, image_w)
+                    if new_region is not None:
+                        
+                        num_actually_added = box_utils.get_contained_inds(annotations[image_name]["boxes"], [new_region]).size
+                        
+                        if num_remaining <= num_annotations_per_region and num_actually_added != num_to_add:
+                            pass
+                        else:
+                            print("Actually added {} annotations".format(num_actually_added))
+                            annotations[image_name]["training_regions"].append(new_region)
+                            # num_added += 1
+                            num_remaining = num_remaining - num_actually_added #num_to_add
+                            # index += 1
+
+
+            else:
+                quality_tuples = []
+                for image_name in annotations.keys():
+                    quality = get_confidence_quality(np.array(predictions[image_name]["scores"]))
+                    quality_tuples.append((quality, image_name))
+                quality_tuples.sort(key=lambda x: x[0])
+                image_names = [x[1] for x in quality_tuples]
+
+                index = 0
+                while num_remaining > 0:
+                    num_to_add = min(num_remaining, num_annotations_per_region)
+                    if index > len(image_names):
+                        raise RuntimeError("Ran out of choices")
+                    # image_names = list(annotations.keys())
+                    # random.shuffle(image_names)
+
+                    image_name = image_names[index] #[index] #random.choice(annotations.keys())
+                    image_h = metadata["images"][image_name]["height_px"]
+                    image_w = metadata["images"][image_name]["width_px"]
+                    print("Adding region with {} annotations to  image {}.".format(num_to_add, image_name))
+                    new_region = random_region(annotations, num_to_add, image_name, image_h, image_w)
+                    if new_region is not None:
+                        
+                        num_actually_added = box_utils.get_contained_inds(annotations[image_name]["boxes"], [new_region]).size
+                        
+                        if num_remaining <= num_annotations_per_region and num_actually_added != num_to_add:
+                            pass
+                        else:
+                            print("Actually added {} annotations".format(num_actually_added))
+                            annotations[image_name]["training_regions"].append(new_region)
+                            # num_added += 1
+                            num_remaining = num_remaining - num_actually_added #num_to_add
+                            # index += 1
+                    index += 1
 
             print("Done adding annotations.")
-
-
-
 
             # last_matched_result_dir = get_most_recent_result_dir(matched_image_set)
             
@@ -2226,11 +2646,18 @@ def run():
     # image_based_methods = ["rand_img", "sel_img"]
     # region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg"]
 
+    # org_image_set = {
+    #     "username": "erik",
+    #     "farm_name": "BlaineLake",
+    #     "field_name": "Serhienko9S",
+    #     "mission_date": "2022-06-07"
+    # }
+
     org_image_set = {
         "username": "erik",
-        "farm_name": "BlaineLake",
-        "field_name": "Serhienko9S",
-        "mission_date": "2022-06-07"
+        "farm_name": "Blocks2022",
+        "field_name": "Kernen4",
+        "mission_date": "2022-06-08"
     }
 
     method1 = {}
@@ -2262,7 +2689,7 @@ def run():
     method5 = {}
     method5["method_name"] = "sel_img_sel_reg"
     method5["method_label"] = "sel_img_sel_reg"
-    method5["num_iterations"] = 2
+    method5["num_iterations"] = 5
     method5["num_regions"] = 5
     method5["num_annotations_per_region"] = 10    
 
@@ -2288,7 +2715,7 @@ def run():
     method8["num_low"] = 4
     method8["num_mid"] = 0
     method8["num_high"] = 0
-    method8["num_iterations"] = 5
+    method8["num_iterations"] = 10
     method8["num_regions_per_image"] = 4
 
     method9 = {}
@@ -2350,13 +2777,38 @@ def run():
     method16["num_annotations_per_region"] = 10
     method16["num_iterations"] = 2
 
+    method17 = {}
+    method17["method_name"] = "low_quality_regions_match_image_anno_count"
+    method17["method_label"] = "low_quality_regions_match_image_anno_count_random_initial"
+    method17["matched_image_set"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_random_initial:rep_0",
+        "field_name": "Serhienko9S:rand_img_random_initial:rep_0",
+        "mission_date": "2022-06-07"
+    }
+    method17["num_annotations_per_region"] = 10
+    method17["num_iterations"] = 7
+    
+    method18 = {}
+    method18["method_name"] = "sel_worst_img"
+    method18["method_label"] = "sel_worst_img"
+    method18["num_iterations"] = 1
+    method18["num_images"] = 1
 
+
+    method19 = {}
+    method19["method_name"] = "rand_img_rand_reg"
+    method19["method_label"] = "rand_img_rand_reg_v2"
+    method19["num_iterations"] = 5
+    method19["num_regions"] = 5
+    method19["num_annotations_per_region"] = 10
 
     # methods = [method1, method2, method3, method4, method5] #[method1, method2, method3, method4, method5] #, method5]
-    methods = [method16] #, method5, method7, method8, method9]
+    
+    methods = [method2] #[method1, method2] #, method5, method7, method8, method9]
 
-    num_replications = 1
-    run_methods(methods, org_image_set, num_replications)
+    num_replications = 4
+    # run_methods(methods, org_image_set, num_replications)
 
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])
@@ -2365,13 +2817,25 @@ def run():
     # create_eval_chart_annotations(org_image_set, methods, "global_accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "global_accuracy.svg")) #[method_2, method_3])
     # create_boxplot_comparison(org_image_set, [method1, method2, method5, method7, method9], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_annotations")
     # create_boxplot_comparison(org_image_set, [method1, method2, method5, method7, method9], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_iterations")
-    # create_boxplot_comparison(org_image_set, [method1, method2, method5, method7, method9], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_annotations")
-    # create_boxplot_comparison(org_image_set, [method1, method2, method5, method7, method9], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_iterations")
+    # create_boxplot_comparison(org_image_set, [method10, method16], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_annotations")
+    # create_boxplot_comparison(org_image_set, [method10, method16], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_iterations")
     # create_eval_chart_annotations_2(org_image_set, [method10, method11, method12], "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "min_needed_min_accuracy.svg")) #[method_2, method_3])
-    # create_thinline_comparison(org_image_set, [method10, method16], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_annotations")
-    # create_thinline_comparison(org_image_set, [method10, method16], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_annotations")
-    # create_thinline_comparison(org_image_set, [method10, method16], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_iterations")
-    # create_thinline_comparison(org_image_set, [method10, method16], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_iterations")
+    # create_thinline_comparison(org_image_set, [method1, method5], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_annotations")
+    # create_thinline_comparison(org_image_set, [method1, method5], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_annotations")
+    # create_thinline_comparison(org_image_set, [method1, method5], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_iterations")
+    # create_thinline_comparison(org_image_set, [method1, method5], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "thinline"), xpositions="num_iterations")
+
+    # # global_accuracy_plot(org_image_set, [method1, method2], 1,  os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "global_accuracy_plot.svg"))
+    # create_global_comparison(org_image_set, [method1, method5], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "global"), xpositions="num_annotations")
+
+    image_set_str = org_image_set["farm_name"] + ":" + org_image_set["field_name"] + ":" + org_image_set["mission_date"]
+    create_thinline_comparison(org_image_set, [method1, method2], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations")
+    create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations")
+    create_thinline_comparison(org_image_set, [method1, method2], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations")
+    create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations")
+
+    create_global_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "global"), xpositions="num_annotations")
+
 
 
 if __name__ == "__main__":
