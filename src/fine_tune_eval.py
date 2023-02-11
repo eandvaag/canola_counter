@@ -15,6 +15,8 @@ import pandas as pd
 from sklearn.neighbors import KDTree
 import matplotlib.pyplot as plt
 from natsort import natsorted
+
+from mean_average_precision import MetricBuilder
 # import traceback
 # import numpy as np
 # import glob
@@ -435,6 +437,39 @@ def get_confidence_quality(pred_scores):
             # confidence_score += prob * (2 ** (30 * (conf_val-1))) #( (2**7) * ((conf_val - 0.5) ** 7) )
     return confidence_score
 
+
+
+def get_AP(annotations, full_predictions, iou_thresh): #annotated_boxes, predicted_boxes, predicted_scores):
+    
+    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
+
+    for image_name in annotations.keys():
+        annotated_boxes = annotations[image_name]["boxes"]
+        predicted_boxes = full_predictions[image_name]["boxes"]
+        predicted_scores = full_predictions[image_name]["scores"]
+
+        annotated_classes = np.zeros(shape=(annotated_boxes.shape[0]))
+        predicted_classes = np.zeros(shape=(predicted_boxes.shape[0]))
+
+        pred_for_mAP, true_for_mAP = inference_metrics.get_pred_and_true_for_mAP(
+            predicted_boxes, 
+            predicted_classes, 
+            predicted_scores,
+            annotated_boxes,
+            annotated_classes)
+
+        metric_fn.add(pred_for_mAP, true_for_mAP)
+
+    if iou_thresh == ".50:.05:.95":
+        mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    elif iou_thresh == ".50":
+        mAP = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    elif iou_thresh == ".75":
+        mAP = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    else:
+        raise RuntimeError("Invalid IoU threshold: {}".format(iou_thresh))
+
+    return mAP
 
 def get_dics(annotations, full_predictions, assessment_images):
     dics = []
@@ -1434,15 +1469,26 @@ def create_global_comparison(image_set, methods, metric, num_replications, out_d
 
 
                     full_predictions_path = os.path.join(result_dir, "predictions.json")
-                    full_predictions = json_io.load_json(full_predictions_path)
+                    full_predictions = annotation_utils.load_predictions(full_predictions_path) #json_io.load_json(full_predictions_path)
 
-                    num_true_positives, num_false_positives, num_false_negatives = get_positives_and_negatives(annotations, full_predictions, list(annotations.keys()))
+                    
+
+
 
                     if metric == "accuracy":
+                        num_true_positives, num_false_positives, num_false_negatives = get_positives_and_negatives(annotations, full_predictions, list(annotations.keys()))
                         val = num_true_positives / (num_true_positives + num_false_positives + num_false_negatives)
                         # vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
-                    elif metric == "true_positives":
-                        val = num_true_positives
+                    elif metric == "AP (IoU=.50:.05:.95)":
+                        val = get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
+
+                    elif metric == "AP (IoU=.50)":
+                        val = get_AP(annotations, full_predictions, iou_thresh=".50")
+
+                    elif metric == "AP (IoU=.75)":
+                        val = get_AP(annotations, full_predictions, iou_thresh=".75")
+                    # elif metric == "true_positives":
+                    #     val = num_true_positives
                     #     vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
 
                     # else:
@@ -1539,7 +1585,7 @@ def create_global_comparison(image_set, methods, metric, num_replications, out_d
 
 
 
-def create_thinline_comparison(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations"):
+def create_thinline_comparison(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations", include_mean_line=True):
 
     colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
     for rep_num in range(num_replications):
@@ -1616,9 +1662,13 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
                         vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
                     elif metric == "percent_count_error":
                         vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
-
+                    elif metric == "abs_dic":
+                        vals = np.abs(get_dics(annotations, full_predictions, list(annotations.keys())))
+                    elif metric == "mse":
+                        vals = np.array(get_dics(annotations, full_predictions, list(annotations.keys()))) ** 2
                     else:
                         vals = get_dics(annotations, full_predictions, list(annotations.keys()))
+
                     # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
 
                     # included_rows = [x for x in range(0, len(df[df.keys()[0]])) if x not in excluded]
@@ -1658,13 +1708,14 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
                 positions = [i for i in range(len(chart_entry["vals"]))]
                 widths = 0.1
             for col in range(len(chart_entry["vals"][0])):
-                # if col == 0:
-                    
-                # else:
-                #     label = None
-                plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3) #, label=label)
-            label = chart_entry["method_label"]
-            plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2, label=label)
+                if col == 0:
+                    label = chart_entry["method_label"]
+                else:
+                    label = None
+                plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3, label=label)
+            # label = chart_entry["method_label"]
+            if include_mean_line:
+                plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2)
             # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
             # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
 
@@ -2646,19 +2697,19 @@ def run():
     # image_based_methods = ["rand_img", "sel_img"]
     # region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg"]
 
-    # org_image_set = {
-    #     "username": "erik",
-    #     "farm_name": "BlaineLake",
-    #     "field_name": "Serhienko9S",
-    #     "mission_date": "2022-06-07"
-    # }
-
     org_image_set = {
         "username": "erik",
-        "farm_name": "Blocks2022",
-        "field_name": "Kernen4",
-        "mission_date": "2022-06-08"
+        "farm_name": "BlaineLake",
+        "field_name": "Serhienko9S",
+        "mission_date": "2022-06-07"
     }
+
+    # org_image_set = {
+    #     "username": "erik",
+    #     "farm_name": "Blocks2022",
+    #     "field_name": "Kernen4",
+    #     "mission_date": "2022-06-08"
+    # }
 
     method1 = {}
     method1["method_name"] = "rand_img"
@@ -2805,10 +2856,10 @@ def run():
 
     # methods = [method1, method2, method3, method4, method5] #[method1, method2, method3, method4, method5] #, method5]
     
-    methods = [method2] #[method1, method2] #, method5, method7, method8, method9]
+    methods = [method1] #[method1, method2] #, method5, method7, method8, method9]
 
     num_replications = 4
-    # run_methods(methods, org_image_set, num_replications)
+    run_methods(methods, org_image_set, num_replications)
 
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])
@@ -2829,13 +2880,13 @@ def run():
     # create_global_comparison(org_image_set, [method1, method5], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "global"), xpositions="num_annotations")
 
     image_set_str = org_image_set["farm_name"] + ":" + org_image_set["field_name"] + ":" + org_image_set["mission_date"]
-    create_thinline_comparison(org_image_set, [method1, method2], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations")
-    create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations")
-    create_thinline_comparison(org_image_set, [method1, method2], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations")
-    create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations")
+    # create_thinline_comparison(org_image_set, [method1, method9], "abs_dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations", include_mean_line=False)
+    # create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations")
+    # create_thinline_comparison(org_image_set, [method1, method9], "abs_dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations", include_mean_line=False)
+    # create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations")
 
-    create_global_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "global"), xpositions="num_annotations")
-
+    # create_global_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "global"), xpositions="num_annotations")
+    # create_global_comparison(org_image_set, [method1, method2], "AP (IoU=.50)", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "global"), xpositions="num_annotations")
 
 
 if __name__ == "__main__":

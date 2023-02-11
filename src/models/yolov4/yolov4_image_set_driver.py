@@ -196,7 +196,7 @@ def create_default_config():
                 #     "parameters": {
                 #         "probability": 1.0, 
                 #         "scale": 1.0, 
-                #         "translate_percent": (-0.3, 0.3), 
+                #         "translate_percent": (-0.15, 0.15), 
                 #         "rotate": 0, 
                 #         "shear": 0
                 #     }
