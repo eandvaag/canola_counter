@@ -404,11 +404,9 @@ def process_baseline(item):
 
         try:
             if baseline_pending_dir is not None:
-                if os.path.exists(baseline_pending_dir):
-                    shutil.rmtree(baseline_pending_dir)
+
                 
-                if os.path.exists(baseline_available_dir):
-                    shutil.rmtree(baseline_available_dir)
+
 
                 log["aborted_time"] = int(time.time())
                 log["error_message"] = str(e)
@@ -416,6 +414,14 @@ def process_baseline(item):
                 os.makedirs(baseline_aborted_dir)
                 json_io.save_json(os.path.join(baseline_aborted_dir, "log.json"), log)
 
+                if os.path.exists(baseline_pending_dir):
+                    saved_pending_dir = os.path.join(baseline_aborted_dir, "saved_pending")
+                    shutil.move(baseline_pending_dir, saved_pending_dir)
+                    # shutil.rmtree(baseline_pending_dir)
+                if os.path.exists(baseline_available_dir):
+                    saved_available_dir = os.path.join(baseline_aborted_dir, "saved_available")
+                    shutil.move(baseline_pending_dir, saved_available_dir)
+                    # shutil.rmtree(baseline_available_dir)
 
             isa.emit_model_change(item["model_creator"])
             #json_io.save_json(sys_block_path, {"error_message": str(e)})
