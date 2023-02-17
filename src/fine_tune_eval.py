@@ -1656,18 +1656,24 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
                     # method["mean_accuracies"] = []
                     # for result_tuple in result_tuples:
 
-                    full_predictions_path = os.path.join(result_dir, "predictions.json")
-                    full_predictions = json_io.load_json(full_predictions_path)
+                    predictions_path = os.path.join(result_dir, "predictions.json")
+                    predictions = json_io.load_json(predictions_path)
                     if metric == "accuracy":
-                        vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
+                        vals = get_accuracies(annotations, predictions, list(annotations.keys()))
                     elif metric == "percent_count_error":
-                        vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
+                        vals = get_percent_count_errors(annotations, predictions, list(annotations.keys()))
                     elif metric == "abs_dic":
-                        vals = np.abs(get_dics(annotations, full_predictions, list(annotations.keys())))
+                        vals = np.abs(get_dics(annotations, predictions, list(annotations.keys())))
                     elif metric == "mse":
-                        vals = np.array(get_dics(annotations, full_predictions, list(annotations.keys()))) ** 2
+                        vals = np.array(get_dics(annotations, predictions, list(annotations.keys()))) ** 2
+                    elif metric == "confidence_quality":
+                        # predictions = json_io.load_json(os.path.join(result_dir, ""))
+                        vals = []
+                        for image_name in annotations.keys():
+                            val = get_confidence_quality(np.array(predictions[image_name]["scores"]))
+                            vals.append(val)
                     else:
-                        vals = get_dics(annotations, full_predictions, list(annotations.keys()))
+                        vals = get_dics(annotations, predictions, list(annotations.keys()))
 
                     # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
 
@@ -1715,7 +1721,7 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
                 plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3, label=label)
             # label = chart_entry["method_label"]
             if include_mean_line:
-                plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2)
+                plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2, marker="o")
             # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
             # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
 
@@ -1737,7 +1743,7 @@ def create_thinline_comparison(image_set, methods, metric, num_replications, out
             # plt.xlim(-2, len(ticks)*2)
             
             # set the limit for y axis
-        if metric == "accuracy":
+        if metric == "accuracy" or metric == "confidence_quality":
             plt.ylim(0, 1.0)
         if metric == "dic":
             plt.axhline(0, color="black", linestyle="dashed", linewidth=1)
@@ -1826,8 +1832,10 @@ def select_training_images(image_set, method, num):
 
 def add_training_annotations(image_set, method):
 
-    image_based_methods = ["rand_img", "sel_img", "sel_worst_img"]
-    region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg", "img_split", "quartile", "regions_match_image_anno_count", "low_quality_regions_match_image_anno_count"]
+    image_based_methods = ["rand_img", "sel_img", "sel_worst_img", "match"]
+    region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg", "img_split", "quartile", 
+    "regions_match_image_anno_count", "low_quality_regions_match_image_anno_count", "targeted_low_quality_regions_match_image_anno_count", 
+    "rand_patch", "sel_patch", "split_sel_rand_patch"]
 
     image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
         image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
@@ -1846,25 +1854,65 @@ def add_training_annotations(image_set, method):
 
 
     if method["method_name"] in image_based_methods: #== "rand_img" or method["method_name"] == "sel_img":
-        num_images = method["num_images"]
+        if method["method_name"] == "rand_img" or method["method_name"] == "sel_img":
+            num_images = method["num_images"]
 
-        candidates = []
-        for image_name in annotations.keys():
-            if len(annotations[image_name]["training_regions"]) == 0:
-                candidates.append(image_name)
+            candidates = []
+            for image_name in annotations.keys():
+                if len(annotations[image_name]["training_regions"]) == 0:
+                    candidates.append(image_name)
 
-        if method["method_name"] == "rand_img":
-            chosen_images = random.sample(candidates, num_images)
-        elif method["method_name"] == "sel_img" or method["method_name"] == "sel_worst_img":
-            quality_tuples = []
-            for image_name in candidates:
-                quality = get_confidence_quality(np.array(predictions[image_name]["scores"]))
-                quality_tuples.append((quality, image_name))
-            quality_tuples.sort(key=lambda x: x[0])
-            if method["method_name"] == "sel_img":
-                chosen_images = [x[1] for x in quality_tuples[:num_images]]
-            else:
-                chosen_images = [x[1] for x in quality_tuples[-num_images:]]
+            if method["method_name"] == "rand_img":
+                chosen_images = random.sample(candidates, num_images)
+            elif method["method_name"] == "sel_img" or method["method_name"] == "sel_worst_img":
+                quality_tuples = []
+                for image_name in candidates:
+                    quality = get_confidence_quality(np.array(predictions[image_name]["scores"]))
+                    quality_tuples.append((quality, image_name))
+                quality_tuples.sort(key=lambda x: x[0])
+                if method["method_name"] == "sel_img":
+                    chosen_images = [x[1] for x in quality_tuples[:num_images]]
+                else:
+                    chosen_images = [x[1] for x in quality_tuples[-num_images:]]
+        elif method["method_name"] == "match":
+
+            matched_image_set = method["matched_image_set"]
+
+            matched_image_set_dir = os.path.join("usr", "data", matched_image_set["username"], "image_sets",
+                matched_image_set["farm_name"], matched_image_set["field_name"], matched_image_set["mission_date"])
+
+            result_pairs = []
+            results_dir = os.path.join(matched_image_set_dir, "model", "results")
+            for result_dir in glob.glob(os.path.join(results_dir, "*")):
+                request_path = os.path.join(result_dir, "request.json")
+                request = json_io.load_json(request_path)
+                end_time = request["end_time"]
+                result_pairs.append((result_dir, end_time))
+
+            result_pairs.sort(key=lambda x: x[1])
+
+            matched_images = []
+            # matched_annotation_counts = []
+            for result_pair in result_pairs:
+                result_dir = result_pair[0]
+                matched_annotations_path = os.path.join(result_dir, "annotations.json")
+                matched_annotations = annotation_utils.load_annotations(matched_annotations_path)
+                for image_name in matched_annotations:
+                    if len(matched_annotations[image_name]["training_regions"]) > 0:
+                        if image_name not in matched_images:
+                            matched_images.append(image_name)
+                            # matched_annotation_counts.append(matched_annotations[image_name]["boxes"].shape[0])
+
+            # print("Num annotations in matched image set: {}".format(num_matched_annotations))
+
+            results_dir = os.path.join(image_set_dir, "model", "results")
+            current_iteration_number = len(glob.glob(os.path.join(results_dir, "*")))
+            current_index = current_iteration_number - 1
+
+            chosen_images = [matched_images[current_index]]
+
+
+
 
         for image_name in chosen_images:
             annotations[image_name]["training_regions"].append([
@@ -2021,7 +2069,9 @@ def add_training_annotations(image_set, method):
             else:
                 raise RuntimeError("Specified number of regions is not supported")
 
-        elif method["method_name"] == "regions_match_image_anno_count" or method["method_name"] == "low_quality_regions_match_image_anno_count":
+        elif method["method_name"] == "regions_match_image_anno_count" \
+            or method["method_name"] == "low_quality_regions_match_image_anno_count" \
+            or method["method_name"] == "targeted_low_quality_regions_match_image_anno_count":
 
             num_annotations_per_region = method["num_annotations_per_region"]
             matched_image_set = method["matched_image_set"]
@@ -2124,7 +2174,8 @@ def add_training_annotations(image_set, method):
                             # index += 1
 
 
-            else:
+
+            elif method["method_name"] == "low_quality_regions_match_image_anno_count":
                 quality_tuples = []
                 for image_name in annotations.keys():
                     quality = get_confidence_quality(np.array(predictions[image_name]["scores"]))
@@ -2159,6 +2210,128 @@ def add_training_annotations(image_set, method):
                             # index += 1
                     index += 1
 
+            elif method["method_name"] == "targeted_low_quality_regions_match_image_anno_count":
+                # candidate_images = []
+                # candidate_boxes = []
+                # candidate_scores = []
+                # candidate_image_inds = []
+                # for image_name in annotations.keys():
+                #     # scores = predictions[image_name]["scores"]
+                #     for i in range(len(predictions[image_name]["scores"])): #score in scores:
+                #         score = predictions[image_name]["scores"][i]
+                #         box = predictions[image_name]["boxes"][i]
+                #         candidate_images.append(image_name)
+                #         candidate_boxes.append(box)
+                #         candidate_scores.append(abs(score - 0.50))
+                #         candidate_image_inds.append(i)
+                        # candidates.append((image_name, box, abs(score - 0.50)))
+
+                # candidates.sort(key=lambda x: x[2])
+                # inds = np.arange(0, candidate_images.size, 1)
+                # random.shuffle(inds)
+                # candidate_images = candidate_images[inds]
+                # candidate_boxes = candidate_boxes[inds]
+                # candidate_scores = candidate_scores[inds]
+                # candidate_image_inds = candidate_image_inds[inds]
+
+                # candidate_images = np.array(candidate_images)
+                # candidate_boxes = np.array(candidate_boxes)
+                # candidate_scores = np.array(candidate_scores)
+                # candidate_image_inds = np.array(candidate_image_inds)
+                # cur_score_considered = 0
+                # images_selected = []
+                q_scores_to_consider = np.arange(0, 51, 1) #np.arange(0, 0.51, 0.01)
+                # while True:
+                # if num_remaining == 0:
+                #     break
+                
+                for q_score in q_scores_to_consider:
+                    print("Currently processing predictions with score distance of {}".format(q_score))
+                    if num_remaining == 0:
+                        break
+                    image_names = list(annotations.keys())
+                    random.shuffle(image_names)
+                    for image_name in image_names:
+                        if num_remaining == 0:
+                            break
+                        
+                        done_with_image = False
+                        image_h = metadata["images"][image_name]["height_px"]
+                        image_w = metadata["images"][image_name]["width_px"]
+                        image_q_scores = (abs(0.5 -np.array(predictions[image_name]["scores"])) * 100).astype(np.int64)
+                        c_inds = np.where(image_q_scores == q_score)[0]
+                        random.shuffle(c_inds)
+                        for c_ind in c_inds:
+                            if done_with_image:
+                                break
+
+                            num_to_add = min(num_remaining, num_annotations_per_region)
+                            box = np.array(predictions[image_name]["boxes"][c_ind])
+                            centre = (box[..., :2] + box[..., 2:]) / 2.0
+                            print("Trying to add a region with {} annotations to image {} (containing point: {}).".format(num_to_add, image_name, centre))
+                            new_region = search_vertices(centre, annotations, num_to_add, image_name, image_h, image_w)
+
+                            if new_region is not None:
+                                num_actually_added = box_utils.get_contained_inds(annotations[image_name]["boxes"], [new_region]).size
+                                
+                                if num_remaining <= num_annotations_per_region and num_actually_added != num_to_add:
+                                    pass
+                                else:
+                                    print("Actually added {} annotations".format(num_actually_added))
+                                    annotations[image_name]["training_regions"].append(new_region)
+                                    # num_added += 1
+                                    num_remaining = num_remaining - num_actually_added #num_to_add
+                                    # index += 1
+                                    done_with_image = True
+
+                if num_remaining > 0:
+                    print("\n\nCould not add sufficient number of annotations through targeted confidence. Adding additional random regions.\n\n")
+                while num_remaining > 0:
+                    num_to_add = min(num_remaining, num_annotations_per_region)
+                    # if index > len(image_names):
+                    #     raise RuntimeError("Ran out of choices")
+                    image_names = list(annotations.keys())
+                    random.shuffle(image_names)
+
+                    image_name = image_names[0] #[index] #random.choice(annotations.keys())
+                    image_h = metadata["images"][image_name]["height_px"]
+                    image_w = metadata["images"][image_name]["width_px"]
+                    print("Adding region with {} annotations to  image {}.".format(num_to_add, image_name))
+                    new_region = random_region(annotations, num_to_add, image_name, image_h, image_w)
+                    if new_region is not None:
+                        
+                        num_actually_added = box_utils.get_contained_inds(annotations[image_name]["boxes"], [new_region]).size
+                        
+                        if num_remaining <= num_annotations_per_region and num_actually_added != num_to_add:
+                            pass
+                        else:
+                            print("Actually added {} annotations".format(num_actually_added))
+                            annotations[image_name]["training_regions"].append(new_region)
+                            # num_added += 1
+                            num_remaining = num_remaining - num_actually_added #num_to_add
+                            # index += 1
+
+
+
+                    # mask = candidate_scores == cur_score_considered
+                    # sel_candidate_images = candidate_images[mask]
+                    # sel_candidate_boxes = candidate_boxes[mask]
+                    # sel_candidate_scores = candidate_scores[mask]
+                    # for i in range(sel_candidate_images.size):
+                    #     image_name = sel_candidate_images[i]
+                    #     if image_name not in images_selected:
+                    #         box = sel_candidate_boxes[i]
+                    #         # score = sel_candidate_scores[i]
+
+                    #         # np.
+                    #         centre = (box[..., :2] + box[..., 2:]) / 2.0
+                    #         image_centres = (uncontained_pred_boxes[..., :2] + uncontained_pred_boxes[..., 2:]) / 2.0
+                    #         np.linalg.norm(start_pt - vertices, axis=1)
+
+
+                    
+
+
             print("Done adding annotations.")
 
             # last_matched_result_dir = get_most_recent_result_dir(matched_image_set)
@@ -2177,6 +2350,570 @@ def add_training_annotations(image_set, method):
             #     image_w = metadata["images"][image_name]["width_px"]
             #     new_region = random_region(annotations, num_annotations_per_region, image_name, image_h, image_w)
 
+        elif method["method_name"] == "rand_patch":
+
+
+            matched_image_set = method["matched_image_set"]
+
+            matched_image_set_dir = os.path.join("usr", "data", matched_image_set["username"], "image_sets",
+                matched_image_set["farm_name"], matched_image_set["field_name"], matched_image_set["mission_date"])
+
+            result_pairs = []
+            results_dir = os.path.join(matched_image_set_dir, "model", "results")
+            for result_dir in glob.glob(os.path.join(results_dir, "*")):
+                request_path = os.path.join(result_dir, "request.json")
+                request = json_io.load_json(request_path)
+                end_time = request["end_time"]
+                result_pairs.append((result_dir, end_time))
+
+            result_pairs.sort(key=lambda x: x[1])
+
+            matched_images = []
+            matched_annotation_counts = []
+            for result_pair in result_pairs:
+                result_dir = result_pair[0]
+                matched_annotations_path = os.path.join(result_dir, "annotations.json")
+                matched_annotations = annotation_utils.load_annotations(matched_annotations_path)
+                for image_name in matched_annotations:
+                    if len(matched_annotations[image_name]["training_regions"]) > 0:
+                        if image_name not in matched_images:
+                            matched_images.append(image_name)
+                            matched_annotation_counts.append(matched_annotations[image_name]["boxes"].shape[0])
+
+            # print("Num annotations in matched image set: {}".format(num_matched_annotations))
+
+            results_dir = os.path.join(image_set_dir, "model", "results")
+            current_iteration_number = len(glob.glob(os.path.join(results_dir, "*")))
+            current_index = current_iteration_number - 1
+
+
+            print("Current iteration number: {}. Current index: {}".format(current_iteration_number, current_index))
+
+            
+
+
+            # num_annotations_to_add = matched_annotation_counts[current_index]
+            total_to_match = np.sum(matched_annotation_counts[:current_index+1])
+
+
+
+
+            # if method["sample_amount"] == "image_space":
+            patch_size = 416
+            patch_overlap_percent = 0 # 50
+            overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+            image_names = list(annotations.keys())
+            image_width = metadata["images"][image_names[0]]["width_px"]
+            image_height = metadata["images"][image_names[0]]["height_px"]
+
+            incr = patch_size - overlap_px
+            w_covered = max(image_width - patch_size, 0)
+            num_w_patches = m.ceil(w_covered / incr) + 1
+
+            h_covered = max(image_height - patch_size, 0)
+            num_h_patches = m.ceil(h_covered / incr) + 1
+
+            num_patches = num_w_patches * num_h_patches
+
+            # num_added = 0
+            cur_total = 0
+
+            print("Total to match: {}".format(total_to_match))
+            
+            while cur_total < total_to_match:
+                image_index = random.randrange(len(image_names))
+                image_name = image_names[image_index]
+
+                patch_w_index = random.randrange(num_w_patches)
+                patch_h_index = random.randrange(num_h_patches)
+
+                patch_min_y = (patch_size) * patch_h_index
+                patch_min_x = (patch_size) * patch_w_index
+
+                patch_max_y = min(patch_min_y + patch_size, image_height)
+                patch_max_x = min(patch_min_x + patch_size, image_width)
+
+                patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+                if patch_region not in annotations[image_name]["training_regions"]:
+                    annotations[image_name]["training_regions"].append(patch_region)
+                    # num_added += 1
+                    cur_total = 0
+                    for image_name in image_names:
+                        if len(annotations[image_name]["training_regions"]) > 0:
+                            cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+
+            print("Finished. New total is: {}".format(cur_total))
+
+        elif method["method_name"] == "sel_patch":
+
+
+            matched_image_set = method["matched_image_set"]
+
+            matched_image_set_dir = os.path.join("usr", "data", matched_image_set["username"], "image_sets",
+                matched_image_set["farm_name"], matched_image_set["field_name"], matched_image_set["mission_date"])
+
+            result_pairs = []
+            results_dir = os.path.join(matched_image_set_dir, "model", "results")
+            for result_dir in glob.glob(os.path.join(results_dir, "*")):
+                request_path = os.path.join(result_dir, "request.json")
+                request = json_io.load_json(request_path)
+                end_time = request["end_time"]
+                result_pairs.append((result_dir, end_time))
+
+            result_pairs.sort(key=lambda x: x[1])
+
+
+            matched_images = []
+            matched_annotation_counts = []
+            for result_pair in result_pairs:
+                result_dir = result_pair[0]
+                matched_annotations_path = os.path.join(result_dir, "annotations.json")
+                matched_annotations = annotation_utils.load_annotations(matched_annotations_path)
+                for image_name in matched_annotations:
+                    if len(matched_annotations[image_name]["training_regions"]) > 0:
+                        if image_name not in matched_images:
+                            matched_images.append(image_name)
+                            matched_annotation_counts.append(matched_annotations[image_name]["boxes"].shape[0])
+
+            results_dir = os.path.join(image_set_dir, "model", "results")
+            current_iteration_number = len(glob.glob(os.path.join(results_dir, "*")))
+            current_index = current_iteration_number - 1
+
+
+            print("Current iteration number: {}. Current index: {}".format(current_iteration_number, current_index))
+
+
+
+
+
+
+
+
+            patch_size = 416
+            patch_overlap_percent = 0 # 50
+            overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+            image_names = list(annotations.keys())
+            image_width = metadata["images"][image_names[0]]["width_px"]
+            image_height = metadata["images"][image_names[0]]["height_px"]
+
+            incr = patch_size - overlap_px
+            w_covered = max(image_width - patch_size, 0)
+            num_w_patches = m.ceil(w_covered / incr) + 1
+
+            h_covered = max(image_height - patch_size, 0)
+            num_h_patches = m.ceil(h_covered / incr) + 1
+
+            num_patches = num_w_patches * num_h_patches
+
+
+            total_patches_to_match = (current_index+1) * num_patches
+
+
+
+
+
+
+
+            total_to_match = np.sum(matched_annotation_counts[:current_index+1])
+            print("Total num annotations to match is {}".format(total_to_match))
+            patch_size = 416
+            cur_total = 0
+            added_candidates = []
+            for q_score in np.arange(0, 51, 1):
+                print("q_score: {}".format(q_score))
+                candidates = []
+                for image_name in predictions.keys():
+                    pred_boxes = np.array(predictions[image_name]["boxes"])
+                    # scores = np.array(predictions[image_name]["scores"])
+                    image_q_scores = (abs(0.5 -np.array(predictions[image_name]["scores"])) * 100).astype(np.int64)
+                    # c_inds = np.where(image_q_scores == q_score)[0]
+                    q_score_mask = image_q_scores == q_score
+
+                    for pred_box in pred_boxes[q_score_mask]:
+                        centre = (pred_box[..., :2] + pred_box[..., 2:]) / 2.0
+                        patch_min_y = int((centre[0] // patch_size) * patch_size)
+                        patch_min_x = int((centre[1] // patch_size) * patch_size)
+                        patch_max_y = int(min(patch_min_y + patch_size, image_height))
+                        patch_max_x = int(min(patch_min_x + patch_size, image_width))
+                        patch = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+                        if patch not in annotations[image_name]["training_regions"]:
+                            candidates.append((image_name, patch))
+
+                np.random.shuffle(candidates)
+
+                for i in range(len(candidates)):
+                    # annotations[candidates[i][0]]["training_regions"].append(candidates[i][1])
+                    # added_candidates.append((candidates[i][0], candidates[i][1]))
+
+                    cur_total = 0
+                    for image_name in image_names:
+                        if image_name != candidates[i][0]:
+                            if len(annotations[image_name]["training_regions"]) > 0:
+                                cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                    l = annotations[candidates[i][0]]["training_regions"].copy()
+                    l.append(candidates[i][1])
+                    cur_total += box_utils.get_contained_inds(annotations[candidates[i][0]]["boxes"], l).size
+                    if cur_total <= total_to_match:
+                        annotations[candidates[i][0]]["training_regions"].append(candidates[i][1])
+                        added_candidates.append((candidates[i][0], candidates[i][1]))
+
+
+                    if cur_total == total_to_match:
+                        break
+
+                if cur_total == total_to_match:
+                    break
+
+
+            # if cur_total > total_to_match:
+            #     random.shuffle(added_candidates)
+            #     for i in range(len(added_candidates)):
+            #         c = added_candidates[i]
+            #         image_name = c[0]
+            #         patch = c[1]
+
+            #         num_with = box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+            #         l = annotations[image_name]["training_regions"].copy()
+            #         ind = l.index(patch)
+            #         del l[ind]
+            #         num_without = box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+            #         if (num_with - num_without) == (cur_total - )
+
+            print("New total num annotations is: {}".format(cur_total))
+
+            double_check_total = 0
+            for image_name in image_names:
+                if len(annotations[image_name]["training_regions"]) > 0:
+                    double_check_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+            print("Double check: what is REALLY the number of annotations?: {}".format(double_check_total))
+
+
+
+            if cur_total != total_to_match:
+
+                print("Was unable to match the desired number of annotations using selection by confidence. Will now add random patches...")
+
+                # total_patch_list_length = num_patches * len(image_names)
+                # for i in range(total_patch_list_length)
+
+                attempts = 0
+                while cur_total != total_to_match:
+                    c_image_index = random.randrange(len(image_names))
+                    c_image_name = image_names[image_index]
+
+                    patch_w_index = random.randrange(num_w_patches)
+                    patch_h_index = random.randrange(num_h_patches)
+
+                    patch_min_y = (patch_size) * patch_h_index
+                    patch_min_x = (patch_size) * patch_w_index
+
+                    patch_max_y = min(patch_min_y + patch_size, image_height)
+                    patch_max_x = min(patch_min_x + patch_size, image_width)
+
+                    patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+                    if patch_region not in annotations[c_image_name]["training_regions"]:
+                        cur_total = 0
+                        for image_name in image_names:
+                            if image_name != c_image_name: #candidates[i][0]:
+                                if len(annotations[image_name]["training_regions"]) > 0:
+                                    cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                        l = annotations[c_image_name]["training_regions"].copy()
+                        l.append(patch_region)
+                        cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                        if cur_total <= total_to_match:
+                            annotations[c_image_name]["training_regions"].append(patch_region)
+                            added_candidates.append((c_image_name, patch_region))
+
+                    attempts += 1
+                    if attempts > 10000000:
+                        raise RuntimeError("Failed to add the correct number of annotations.")
+
+
+
+
+                        # l = annotations[image_name]["training_regions"].copy()
+                        # if 
+                        # annotations[image_name]["training_regions"].append(patch_region)
+                        # # num_added += 1
+                        # cur_total = 0
+                        # for image_name in image_names:
+                        #     if len(annotations[image_name]["training_regions"]) > 0:
+                        #         cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+
+                    
+
+
+            cur_num_patches = 0
+            for image_name in annotations.keys():
+                cur_num_patches += len(annotations[image_name]["training_regions"])
+            
+            num_to_add = total_patches_to_match - cur_num_patches
+            print("Total patches to match: {}".format(total_patches_to_match))
+            print("Cur num patches: {}".format(cur_num_patches))
+            print("Number of additional patches to add: {}".format(num_to_add))
+            if num_to_add > 0:
+                print("Adding patches that do not increase the overall annotation count...")
+                candidates = []
+                for image_name in annotations.keys():
+                    for i in range(0, num_w_patches):
+                        for j in range(0, num_h_patches):
+                            patch_min_y = (patch_size) * j
+                            patch_min_x = (patch_size) * i
+
+                            patch_max_y = min(patch_min_y + patch_size, image_height)
+                            patch_max_x = min(patch_min_x + patch_size, image_width)
+
+                            patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+                            if patch_region not in annotations[image_name]["training_regions"]:
+                                num_without = box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                                l = annotations[image_name]["training_regions"].copy()
+                                l.append(patch_region)
+                                num_with = box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                                if num_without == num_with:
+                                    candidates.append((image_name, patch_region))
+
+
+                extra_patches = random.sample(candidates, num_to_add)
+                for extra_patch in extra_patches:
+                    image_name = extra_patch[0]
+                    extra_patch_coords = extra_patch[1]
+                    annotations[image_name]["training_regions"].append(extra_patch_coords)
+                
+            elif num_to_add < 0:
+                print("Too many patches! Attempting to remove patches that do not change the overall annotation count.")
+                random.shuffle(added_candidates)
+
+                num_to_remove = abs(num_to_add)
+                for i in range(num_to_remove):
+                    c = added_candidates[i]
+                    image_name = c[0]
+                    patch = c[1]
+                    num_with = box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                    l = annotations[image_name]["training_regions"].copy()
+                    ind = l.index(patch)
+                    del l[ind]
+                    num_without = box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                    if num_with == num_without:
+                        annotations[image_name]["training_regions"] = l
+
+
+
+
+
+
+
+            new_total = 0
+            for image_name in image_names:
+                if len(annotations[image_name]["training_regions"]) > 0:
+                    new_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+            print("Total num annotations before adding additional patches: {}".format(cur_total))
+            print("Total num annotations after adding additional patches (should match): {}".format(new_total))
+
+            if cur_total != new_total:
+                raise RuntimeError("Annotation totals do not match.")
+
+            patch_count = 0
+            for image_name in image_names:
+                patch_count += len(annotations[image_name]["training_regions"])
+            print("Patch num to match: {}".format(total_patches_to_match))
+            print("Actual patch num (should match): {}".format(patch_count))
+
+            if total_patches_to_match != patch_count:
+                raise RuntimeError("Patch counts do not match.")
+
+
+
+        ####
+        elif method["method_name"] == "split_sel_rand_patch":
+
+            image_names = list(annotations.keys())
+            image_width = metadata["images"][image_names[0]]["width_px"]
+            image_height = metadata["images"][image_names[0]]["height_px"]
+
+            matched_image_set = method["matched_image_set"]
+
+            matched_image_set_dir = os.path.join("usr", "data", matched_image_set["username"], "image_sets",
+                matched_image_set["farm_name"], matched_image_set["field_name"], matched_image_set["mission_date"])
+
+            result_pairs = []
+            results_dir = os.path.join(matched_image_set_dir, "model", "results")
+            for result_dir in glob.glob(os.path.join(results_dir, "*")):
+                request_path = os.path.join(result_dir, "request.json")
+                request = json_io.load_json(request_path)
+                end_time = request["end_time"]
+                result_pairs.append((result_dir, end_time))
+
+            result_pairs.sort(key=lambda x: x[1])
+
+
+            matched_images = []
+            matched_annotation_counts = []
+            for result_pair in result_pairs:
+                result_dir = result_pair[0]
+                matched_annotations_path = os.path.join(result_dir, "annotations.json")
+                matched_annotations = annotation_utils.load_annotations(matched_annotations_path)
+                for image_name in matched_annotations:
+                    if len(matched_annotations[image_name]["training_regions"]) > 0:
+                        if image_name not in matched_images:
+                            matched_images.append(image_name)
+                            matched_annotation_counts.append(matched_annotations[image_name]["boxes"].shape[0])
+
+            results_dir = os.path.join(image_set_dir, "model", "results")
+            current_iteration_number = len(glob.glob(os.path.join(results_dir, "*")))
+            current_index = current_iteration_number - 1
+
+
+            print("Current iteration number: {}. Current index: {}".format(current_iteration_number, current_index))
+
+            total_to_match = np.sum(matched_annotation_counts[:current_index+1])
+
+            print("Total num annotations to match is {}".format(total_to_match))
+
+            sel_percent = method["sel_percent"]
+            sel_to_match = int(total_to_match * sel_percent)
+            rand_to_match = total_to_match - sel_to_match
+            print("sel_to_match: {}".format(sel_to_match))
+            print("rand_to_match: {}".format(rand_to_match))
+
+            patch_size = 416
+            cur_sel_total = 0
+            for q_score in np.arange(0, 51, 1):
+                print("q_score: {}".format(q_score))
+                candidates = []
+                for image_name in predictions.keys():
+                    pred_boxes = np.array(predictions[image_name]["boxes"])
+                    # scores = np.array(predictions[image_name]["scores"])
+                    image_q_scores = (abs(0.5 -np.array(predictions[image_name]["scores"])) * 100).astype(np.int64)
+                    # c_inds = np.where(image_q_scores == q_score)[0]
+                    q_score_mask = image_q_scores == q_score
+
+                    for pred_box in pred_boxes[q_score_mask]:
+                        centre = (pred_box[..., :2] + pred_box[..., 2:]) / 2.0
+                        patch_min_y = int((centre[0] // patch_size) * patch_size)
+                        patch_min_x = int((centre[1] // patch_size) * patch_size)
+                        patch_max_y = int(min(patch_min_y + patch_size, image_height))
+                        patch_max_x = int(min(patch_min_x + patch_size, image_width))
+                        patch = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+                        if patch not in annotations[image_name]["training_regions"]:
+                            candidates.append((image_name, patch))
+
+                np.random.shuffle(candidates)
+
+                for i in range(len(candidates)):
+                    annotations[candidates[i][0]]["training_regions"].append(candidates[i][1])
+
+                    cur_sel_total = 0
+                    for image_name in image_names:
+                        if len(annotations[image_name]["training_regions"]) > 0:
+                            cur_sel_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+
+                    if cur_sel_total >= sel_to_match:
+                        break
+
+                if cur_sel_total >= sel_to_match:
+                    break
+
+            patch_size = 416
+            patch_overlap_percent = 0 # 50
+            overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+            image_names = list(annotations.keys())
+            image_width = metadata["images"][image_names[0]]["width_px"]
+            image_height = metadata["images"][image_names[0]]["height_px"]
+
+            incr = patch_size - overlap_px
+            w_covered = max(image_width - patch_size, 0)
+            num_w_patches = m.ceil(w_covered / incr) + 1
+
+            h_covered = max(image_height - patch_size, 0)
+            num_h_patches = m.ceil(h_covered / incr) + 1
+
+            num_patches = num_w_patches * num_h_patches
+
+            print("Actual number added in sel stage is {}".format(cur_sel_total))
+            rand_to_match = total_to_match - cur_sel_total
+            print("Will add ~ {} annotations in rand stage".format(rand_to_match))
+
+            cur_total = cur_sel_total
+            while cur_total < total_to_match:
+                image_index = random.randrange(len(image_names))
+                image_name = image_names[image_index]
+
+                patch_w_index = random.randrange(num_w_patches)
+                patch_h_index = random.randrange(num_h_patches)
+
+                patch_min_y = (patch_size) * patch_h_index
+                patch_min_x = (patch_size) * patch_w_index
+
+                patch_max_y = min(patch_min_y + patch_size, image_height)
+                patch_max_x = min(patch_min_x + patch_size, image_width)
+
+                patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+                if patch_region not in annotations[image_name]["training_regions"]:
+                    annotations[image_name]["training_regions"].append(patch_region)
+                    # num_added += 1
+                    cur_total = 0
+                    for image_name in image_names:
+                        if len(annotations[image_name]["training_regions"]) > 0:
+                            cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+
+            # cur_total = cur_sel_total + cur_rand_total
+
+
+            print("Finished. New total num annotations is: {}".format(cur_total))
+
+
+
+
+            total_patches_to_match = (current_index+1) * num_patches
+
+            candidates = []
+            for image_name in annotations.keys():
+                for i in range(0, num_w_patches):
+                    for j in range(0, num_h_patches):
+                        patch_min_y = (patch_size) * j
+                        patch_min_x = (patch_size) * i
+
+                        patch_max_y = min(patch_min_y + patch_size, image_height)
+                        patch_max_x = min(patch_min_x + patch_size, image_width)
+
+                        patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+                        if patch_region not in annotations[image_name]["training_regions"]:
+                            num_without = box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                            l = annotations[image_name]["training_regions"].copy()
+                            l.append(patch_region)
+                            num_with = box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                            if num_without == num_with:
+                                candidates.append((image_name, patch_region))
+
+
+            cur_num_patches = 0
+            for image_name in annotations.keys():
+                cur_num_patches += len(annotations[image_name]["training_regions"])
+            
+            num_to_add = total_patches_to_match - cur_num_patches
+            print("Total patches to match: {}".format(total_patches_to_match))
+            print("Cur num patches: {}".format(cur_num_patches))
+            print("Number of additional patches to add: {}".format(num_to_add))
+            if num_to_add > 0:
+                extra_patches = random.sample(candidates, num_to_add)
+                for extra_patch in extra_patches:
+                    image_name = extra_patch[0]
+                    extra_patch_coords = extra_patch[1]
+                    annotations[image_name]["training_regions"].append(extra_patch_coords)
+
+
+
+            new_total = 0
+            for image_name in image_names:
+                if len(annotations[image_name]["training_regions"]) > 0:
+                    new_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+            print("Total num annotations before adding additional patches: {}".format(cur_total))
+            print("Total num annotations after adding additional patches (should match): {}".format(new_total))
 
 
 
@@ -2355,12 +3092,95 @@ def test(methods):
     # training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir)
 
 
-def run_methods(methods, org_image_set, num_replications):
 
+def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matched_duplications=3):
+    org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
+                                        org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
+
+    model_status_path = os.path.join(org_image_set_dir, "model", "status.json")
+    model_status = json_io.load_json(model_status_path)
+    baseline_name = model_status["model_name"]
+
+    
+
+    all_methods = []
+    for rep_num in range(num_replications):
+        
+        rand_method = {}
+        rand_method["method_name"] = "rand_img"
+        rand_method["method_label"] = "RUN_rand_img_" + baseline_name + "_no_overlap"
+        rand_method["num_iterations"] = num_iterations
+        rand_method["num_images"] = 1
+
+        rand_method["image_set"] = {
+            "username": org_image_set["username"],
+            "farm_name": org_image_set["farm_name"] + ":" + rand_method["method_label"] + ":rep_" + str(rep_num),
+            "field_name": org_image_set["field_name"] + ":" + rand_method["method_label"] + ":rep_" + str(rep_num),
+            "mission_date": org_image_set["mission_date"]
+        }
+
+        all_methods.append(rand_method)
+
+
+        for dup_num in range(num_matched_duplications):
+
+            match_method = {}
+            match_method["method_name"] = "sel_patch"
+            match_method["method_label"] = "RUN_sel_patch_exact_match_rand_img_" + baseline_name + "_no_overlap"
+            # method25["sample_amount"] = "image_space"
+
+            match_method["image_set"] = {
+                "username": org_image_set["username"],
+                "farm_name": org_image_set["farm_name"] + ":" + match_method["method_label"] + ":rep_" + str(rep_num) + ":dup_" + str(dup_num),
+                "field_name": org_image_set["field_name"] + ":" + match_method["method_label"] + ":rep_" + str(rep_num) + ":dup_" + str(dup_num),
+                "mission_date": org_image_set["mission_date"]
+            }
+
+            match_method["matched_image_set"] = {
+                "username": rand_method["image_set"]["username"],
+                "farm_name": rand_method["image_set"]["farm_name"],
+                "field_name": rand_method["image_set"]["field_name"],
+                "mission_date": rand_method["image_set"]["mission_date"]
+            }
+            match_method["num_iterations"] = num_iterations
+
+            all_methods.append(match_method)
+
+        
+
+    for method in all_methods:
+        print()
+        print()
+        print("Driver: Now running new method:")
+        print("\t username: {}".format(method["image_set"]["username"]))
+        print("\t farm_name: {}".format(method["image_set"]["farm_name"]))
+        print("\t field_name: {}".format(method["image_set"]["field_name"]))
+        print("\t mission_date: {}".format(method["image_set"]["mission_date"]))
+        print()
+        print()
+
+
+        method_image_set_dir = os.path.join("usr", "data", method["image_set"]["username"], "image_sets",
+                                    method["image_set"]["farm_name"], method["image_set"]["field_name"], method["image_set"]["mission_date"])
+        field_dir = os.path.join("usr", "data", method["image_set"]["username"], "image_sets",
+                                    method["image_set"]["farm_name"], method["image_set"]["field_name"])
+        if not os.path.exists(field_dir):
+            os.makedirs(field_dir)
+            shutil.copytree(org_image_set_dir, method_image_set_dir)
+
+        test([method])
+
+
+
+
+def run_methods(methods, org_image_set, num_replications):
+    org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
+                                        org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
     for i in range(num_replications):
         for method in methods:
-            org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
-                                        org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
+
+
+
 
             method["image_set"] = {
                 "username": org_image_set["username"],
@@ -2369,12 +3189,21 @@ def run_methods(methods, org_image_set, num_replications):
                 "mission_date": org_image_set["mission_date"]
             }
 
+            if "matched_image_set_no_rep" in method:
+                method["matched_image_set"] = {
+                    "username": method["matched_image_set_no_rep"]["username"],
+                    "farm_name": method["matched_image_set_no_rep"]["farm_name"] + ":rep_" + str(i),
+                    "field_name": method["matched_image_set_no_rep"]["field_name"] + ":rep_" + str(i),
+                    "mission_date": method["matched_image_set_no_rep"]["mission_date"]
+                }
+
             method_image_set_dir = os.path.join("usr", "data", method["image_set"]["username"], "image_sets",
                                         method["image_set"]["farm_name"], method["image_set"]["field_name"], method["image_set"]["mission_date"])
             field_dir = os.path.join("usr", "data", method["image_set"]["username"], "image_sets",
                                         method["image_set"]["farm_name"], method["image_set"]["field_name"])
-            # os.makedirs(field_dir, exist_ok=False)
-            # shutil.copytree(org_image_set_dir, method_image_set_dir)
+            if not os.path.exists(field_dir):
+                os.makedirs(field_dir)
+                shutil.copytree(org_image_set_dir, method_image_set_dir)
 
             test([method])
 
@@ -2387,6 +3216,46 @@ def run_methods(methods, org_image_set, num_replications):
         # annotation_utils.save_annotations(annotations_path, annotations)
 
 
+
+def plot_loss_vals(image_set, method, num_reps, out_dir):
+
+    for i in range(num_reps):
+        method["image_set"] = {
+            "username": image_set["username"],
+            "farm_name": image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(i),
+            "field_name": image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(i),
+            "mission_date": image_set["mission_date"]
+        }
+
+
+        image_set_dir = os.path.join("usr", "data", method["image_set"]["username"], "image_sets",
+                                    method["image_set"]["farm_name"], method["image_set"]["field_name"], method["image_set"]["mission_date"])
+
+        if not os.path.exists(image_set_dir):
+            continue
+
+        # image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+        #                             image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+
+        loss_record_path = os.path.join(image_set_dir, "model", "training", "loss_record.json")
+        loss_record = json_io.load_json(loss_record_path)
+
+        loss_vals = []
+        for iter_lst in loss_record["training_loss"]["values"]:
+            for loss_val in iter_lst:
+                loss_vals.append(loss_val)
+
+        fig = plt.figure(figsize=(16, 8))
+        plt.plot([i for i in range(len(loss_vals))], loss_vals, linewidth=2) #color=colors[i], linewidth=1, alpha=0.3, label=label)
+        
+        plt.ylabel("loss")
+        plt.xlabel("epoch")
+        plt.ylim(0, 3)
+        # plot_out_dir = os.path.join(out_dir, "rep_" + str(i))
+        # os.makedirs(plot_out_dir, exist_ok=True)
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        plt.savefig(os.path.join(out_dir, str(i) + ".svg")) #os.path.join(chart_out_dir, "rep_" + str(rep_num) + ".svg"))
 
 
 
@@ -2854,17 +3723,218 @@ def run():
     method19["num_regions"] = 5
     method19["num_annotations_per_region"] = 10
 
+
+    method20 = {}
+    method20["method_name"] = "sel_img"
+    method20["method_label"] = "sel_img_random_initial_v2"
+    method20["num_iterations"] = 1
+    method20["num_images"] = 1
+    
+    method21 = {}
+    method21["method_name"] = "rand_img"
+    method21["method_label"] = "rand_img_random_initial_v2"
+    method21["num_iterations"] = 5
+    method21["num_images"] = 1
+
+    method22 = {}
+    method22["method_name"] = "targeted_low_quality_regions_match_image_anno_count"
+    method22["method_label"] = "targeted_low_quality_regions_match_image_anno_count_random_initial_v2"
+    method22["matched_image_set"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_random_initial_v2:rep_0",
+        "field_name": "Serhienko9S:rand_img_random_initial_v2:rep_0",
+        "mission_date": "2022-06-07"
+    }
+    method22["num_annotations_per_region"] = 5
+    method22["num_iterations"] = 5
+
+    method23 = {}
+    method23["method_name"] = "targeted_low_quality_regions_match_image_anno_count"
+    method23["method_label"] = "targeted_low_quality_regions_match_image_anno_count_all_stages"
+    method23["matched_image_set"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img:rep_0",
+        "field_name": "Serhienko9S:rand_img:rep_0",
+        "mission_date": "2022-06-07"
+    }
+    method23["num_annotations_per_region"] = 5
+    method23["num_iterations"] = 5
+
+    method24 = {}
+    method24["method_name"] = "match"
+    method24["method_label"] = "match_rand_img_tol_20"
+    method24["matched_image_set"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img:rep_0",
+        "field_name": "Serhienko9S:rand_img:rep_0",
+        "mission_date": "2022-06-07"
+    }
+    method24["num_iterations"] = 5
+    
+    method25 = {}
+    method25["method_name"] = "rand_patch"
+    method25["method_label"] = "rand_patch_match_rand_img"
+    # method25["sample_amount"] = "image_space"
+    method25["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img",
+        "field_name": "Serhienko9S:rand_img",
+        "mission_date": "2022-06-07"
+    }
+    method25["num_iterations"] = 1
+
+    method26 = {}
+    method26["method_name"] = "rand_img"
+    method26["method_label"] = "rand_img_no_overlap"
+    method26["num_iterations"] = 3
+    method26["num_images"] = 1
+
+    method27 = {}
+    method27["method_name"] = "rand_patch"
+    method27["method_label"] = "rand_patch_match_rand_img_no_overlap"
+    # method25["sample_amount"] = "image_space"
+    method27["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_no_overlap",
+        "field_name": "Serhienko9S:rand_img_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method27["num_iterations"] = 6
+
+
+    method28 = {}
+    method28["method_name"] = "sel_patch"
+    method28["method_label"] = "sel_patch_match_rand_img_no_overlap"
+    # method25["sample_amount"] = "image_space"
+    method28["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_no_overlap",
+        "field_name": "Serhienko9S:rand_img_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method28["num_iterations"] = 1
+
+    method29 = {}
+    method29["method_name"] = "rand_img"
+    method29["method_label"] = "rand_img_MORSE_Nasser_no_overlap"
+    method29["num_iterations"] = 1
+    method29["num_images"] = 1
+
+
+    method30 = {}
+    method30["method_name"] = "sel_patch"
+    method30["method_label"] = "sel_patch_match_rand_img_MORSE_Nasser_no_overlap"
+    # method25["sample_amount"] = "image_space"
+    method30["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method30["num_iterations"] = 1
+
+
+    method31 = {}
+    method31["method_name"] = "rand_patch"
+    method31["method_label"] = "rand_patch_match_rand_img_MORSE_Nasser_no_overlap"
+    # method25["sample_amount"] = "image_space"
+    method31["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method31["num_iterations"] = 16
+
+    method32 = {}
+    method32["method_name"] = "sel_patch"
+    method32["method_label"] = "sel_patch_match_rand_img_match_patch_num_MORSE_Nasser_no_overlap"
+    # method25["sample_amount"] = "image_space"
+    method32["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method32["num_iterations"] = 8
+
+
+    method33 = {}
+    method33["method_name"] = "sel_patch"
+    method33["method_label"] = "sel_patch_match_rand_img_match_patch_num_MORSE_Nasser_no_overlap_dup_1"
+    # method25["sample_amount"] = "image_space"
+    method33["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method33["num_iterations"] = 8
+
+    method34 = {}
+    method34["method_name"] = "sel_patch"
+    method34["method_label"] = "sel_patch_match_rand_img_match_patch_num_MORSE_Nasser_no_overlap_dup_2"
+    # method25["sample_amount"] = "image_space"
+    method34["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method34["num_iterations"] = 16
+
+
+    method35 = {}
+    method35["method_name"] = "sel_patch"
+    method35["method_label"] = "sel_patch_match_rand_img_match_patch_num_MORSE_Nasser_no_overlap_dup_3"
+    # method25["sample_amount"] = "image_space"
+    method35["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method35["num_iterations"] = 16
+
+    method36 = {}
+    method36["method_name"] = "sel_patch"
+    method36["method_label"] = "sel_patch_exact_match_rand_img_MORSE_Nasser_no_overlap"
+    # method25["sample_amount"] = "image_space"
+    method36["matched_image_set_no_rep"] = {
+        "username": "erik",
+        "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+        "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+        "mission_date": "2022-06-07"
+    }
+    method36["num_iterations"] = 2
+
+
+    # method34 = {}
+    # method34["method_name"] = "split_sel_rand_patch"
+    # method34["method_label"] = "split_sel_rand_80_patch_match_rand_img_match_patch_num_MORSE_Nasser_no_overlap"
+    # # method25["sample_amount"] = "image_space"
+    # method34["matched_image_set_no_rep"] = {
+    #     "username": "erik",
+    #     "farm_name": "BlaineLake:rand_img_MORSE_Nasser_no_overlap",
+    #     "field_name": "Serhienko9S:rand_img_MORSE_Nasser_no_overlap",
+    #     "mission_date": "2022-06-07"
+    # }
+    # method34["sel_percent"] = 0.80
+    # method34["num_iterations"] = 8
+    
+
     # methods = [method1, method2, method3, method4, method5] #[method1, method2, method3, method4, method5] #, method5]
     
-    methods = [method1] #[method1, method2] #, method5, method7, method8, method9]
+    # methods = [method36] #1] #[method1, method2] #, method5, method7, method8, method9]
 
-    num_replications = 4
-    run_methods(methods, org_image_set, num_replications)
+    # num_replications = 1
+    # run_methods(methods, org_image_set, num_replications)
+    run_my_test(org_image_set, num_iterations=1, num_replications=1, num_matched_duplications=1) #3)
 
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])
     # create_eval_chart_annotations(org_image_set, methods, "dic", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "dic.svg"))
-    # create_eval_chart_annotations(org_image_set, methods, "percent_count_error", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "percent_count_error.svg"))
+    # create_eval_chart_anndotations(org_image_set, methods, "percent_count_error", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "percent_count_error.svg"))
     # create_eval_chart_annotations(org_image_set, methods, "global_accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "global_accuracy.svg")) #[method_2, method_3])
     # create_boxplot_comparison(org_image_set, [method1, method2, method5, method7, method9], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_annotations")
     # create_boxplot_comparison(org_image_set, [method1, method2, method5, method7, method9], "dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "boxplots"), xpositions="num_iterations")
@@ -2880,14 +3950,16 @@ def run():
     # create_global_comparison(org_image_set, [method1, method5], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "global"), xpositions="num_annotations")
 
     image_set_str = org_image_set["farm_name"] + ":" + org_image_set["field_name"] + ":" + org_image_set["mission_date"]
-    # create_thinline_comparison(org_image_set, [method1, method9], "abs_dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations", include_mean_line=False)
-    # create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_annotations")
-    # create_thinline_comparison(org_image_set, [method1, method9], "abs_dic", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations", include_mean_line=False)
-    # create_thinline_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "thinline"), xpositions="num_iterations")
+    # create_thinline_comparison(org_image_set, [method29, method36], "abs_dic", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations", include_mean_line=False)
+    # create_thinline_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations")
+    # create_thinline_comparison(org_image_set, [method29, method36], "abs_dic", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_iterations", include_mean_line=False)
+    # create_thinline_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_iterations")
+    # create_thinline_comparison(org_image_set, [method29, method36], "confidence_quality", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations")
+    # create_thinline_comparison(org_image_set, [method29, method36], "confidence_quality", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_iterations")
 
-    # create_global_comparison(org_image_set, [method1, method2], "accuracy", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "global"), xpositions="num_annotations")
-    # create_global_comparison(org_image_set, [method1, method2], "AP (IoU=.50)", 4, os.path.join("fine_tuning_charts", "comparisons", "all_stages", image_set_str, "global"), xpositions="num_annotations")
-
+    # create_global_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "global"), xpositions="num_annotations")
+    # create_global_comparison(org_image_set, [method29, method36], "AP (IoU=.50)", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "global"), xpositions="num_annotations")
+    # plot_loss_vals(org_image_set, method20, 4, os.path.join("fine_tuning_charts", "comparisons", "random_weights", image_set_str, "loss"))
 
 if __name__ == "__main__":
     run()

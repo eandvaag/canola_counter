@@ -16,16 +16,18 @@ from models.common import annotation_utils
 def reset_loss_record(image_set_dir):
 
     loss_record_path = os.path.join(image_set_dir, "model", "training", "loss_record.json")
+    loss_record = json_io.load_json(loss_record_path)
+    loss_record["training_loss"]["values"].append([100000000])
 
-    loss_record = {
-        "training_loss": { "values": [],
-                        "best": 100000000,
-                        "epochs_since_improvement": 0}, 
-        "validation_loss": {"values": [],
-                            "best": 100000000,
-                            "epochs_since_improvement": 0},
-        # "num_training_images": len(training_image_names)
-    }
+    # loss_record = {
+    #     "training_loss": { "values": [],
+    #                     "best": 100000000,
+    #                     "epochs_since_improvement": 0}, 
+    #     "validation_loss": {"values": [],
+    #                         "best": 100000000,
+    #                         "epochs_since_improvement": 0},
+    #     # "num_training_images": len(training_image_names)
+    # }
 
     json_io.save_json(loss_record_path, loss_record)
 

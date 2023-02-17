@@ -47,7 +47,7 @@ from models.yolov4.encode import Decoder
 # from models.yolov4.yolov4_driver import post_process_sample
 
 # VALIDATION_IMPROVEMENT_TOLERANCE = 10
-EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10
+EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10 #20
 TRAINING_TIME_SESSION_CEILING = 5000000           # number of seconds before current session is stopped in order to give others a chance
 
 # MAX_IN_MEMORY_IMAGE_SIZE = 5e+8     # 500 megabytes
@@ -231,18 +231,22 @@ def create_default_config():
 
 def update_loss_record(loss_record, key, cur_loss):
 
-    loss_record[key]["values"].append(cur_loss)
+    loss_vals = loss_record[key]["values"][-1]
 
-    best = loss_record[key]["best"]
-    #if cur_loss < best:
-    epsilon = 1e-5
-    if best - cur_loss > epsilon:
-        loss_record[key]["best"] = cur_loss
-        loss_record[key]["epochs_since_improvement"] = 0
-        return True
-    else:
-        loss_record[key]["epochs_since_improvement"] += 1
-        return False
+    loss_vals.append(cur_loss)
+
+    return np.argmin(loss_vals) == (len(loss_vals) - 1)
+
+    # best = loss_record[key]["best"]
+    # #if cur_loss < best:
+    # epsilon = 1e-5
+    # if best - cur_loss > epsilon:
+    #     loss_record[key]["best"] = cur_loss
+    #     loss_record[key]["epochs_since_improvement"] = 0
+    #     return True
+    # else:
+    #     loss_record[key]["epochs_since_improvement"] += 1
+    #     return False
 
 
 
@@ -1365,7 +1369,7 @@ def train_baseline(sch_ctx, root_dir):
     # logger.info("{} ('{}'): Starting to train with {} training patches and {} validation patches.".format(
     #                 config["arch"]["model_type"], config["model_name"], num_train_patches, num_val_patches))
 
-    logger.info("{} ('{}'): Starting to train baseline model with {} training patches patches.".format(
+    logger.info("{} ('{}'): Starting to train baseline model with {} training patches.".format(
                     config["arch"]["model_type"], config["model_name"], num_train_patches))
 
 
@@ -1589,7 +1593,7 @@ def drain_switch_queue(sch_ctx, cur_image_set_dir=None):
 
 def get_epochs_since_substantial_improvement(loss_record):
 
-    vals = loss_record["training_loss"]["values"]
+    vals = loss_record["training_loss"]["values"][-1]
     if len(vals) <= 1:
         return 0
     # best_index = np.argmin(loss_record["training_loss"]["values"])
@@ -1597,7 +1601,7 @@ def get_epochs_since_substantial_improvement(loss_record):
     epochs_since_improvement = 0
     val_to_improve_on = vals[0]
     for i in range(1, len(vals)):
-        if vals[i] < val_to_improve_on - SUBSTANTIAL_IMPROVEMENT_THRESH:
+        if vals[i] < (val_to_improve_on - SUBSTANTIAL_IMPROVEMENT_THRESH):
             val_to_improve_on = vals[i]
             epochs_since_improvement = 0
         else:
