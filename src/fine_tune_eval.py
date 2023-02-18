@@ -1432,137 +1432,138 @@ def create_boxplot_comparison(image_set, methods, metric, num_replications, out_
 
 
 
-def create_global_comparison(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations"):
+def create_global_comparison(methods, metric, out_path, xpositions="num_annotations"):
 
     colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
-    chart_data = {}
-    for rep_num in range(num_replications):
-        chart_data[rep_num] = []
-        for method in methods:
-        
-            chart_entry = {}
-            print("processing", method["method_name"])
-            method_label = method["method_label"]
-            image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
-                                        image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
-                                        image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
-                                        image_set["mission_date"])
+    chart_data = [] #{}
+    # for rep_num in range(num_replications):
+    # chart_data[rep_num] = []
+    for method in methods:
+    
+        chart_entry = {}
+        print("processing", method["method_name"])
+        method_label = method["method_label"]
+        image_set_dir = os.path.join("usr", "data", 
+                                    method["image_set"]["username"], "image_sets",
+                                    method["image_set"]["farm_name"], #+ ":" + method["method_label"] + ":rep_" + str(rep_num),
+                                    method["image_set"]["field_name"], # + ":" + method["method_label"] + ":rep_" + str(rep_num), 
+                                    method["image_set"]["mission_date"])
 
-            chart_entry["method_label"] = method_label
-            chart_entry["rep_num"] = rep_num
+        chart_entry["method_label"] = method_label
+        # chart_entry["rep_num"] = rep_num
 
-            results_dir = os.path.join(image_set_dir, "model", "results")
-            if os.path.exists(results_dir):
-                result_dirs = glob.glob(os.path.join(results_dir, "*"))
+        results_dir = os.path.join(image_set_dir, "model", "results")
+        if os.path.exists(results_dir):
+            result_dirs = glob.glob(os.path.join(results_dir, "*"))
 
-                chart_entry["vals"] = []
-                chart_entry["num_annotations"] = []
-                for result_dir in result_dirs:
-                    print("\tprocessing", os.path.basename(result_dir))
+            chart_entry["vals"] = []
+            chart_entry["num_annotations"] = []
+            for result_dir in result_dirs:
+                print("\tprocessing", os.path.basename(result_dir))
 
-                    annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
-                    # num_training_images = 0
-                    num_annotations = 0
-                    for image_name in annotations.keys():
-                        if len(annotations[image_name]["training_regions"]) > 0:
-                            num_annotations += (box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"])).size
-
-
-                    full_predictions_path = os.path.join(result_dir, "predictions.json")
-                    full_predictions = annotation_utils.load_predictions(full_predictions_path) #json_io.load_json(full_predictions_path)
-
-                    
+                annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
+                # num_training_images = 0
+                num_annotations = 0
+                for image_name in annotations.keys():
+                    if len(annotations[image_name]["training_regions"]) > 0:
+                        num_annotations += (box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"])).size
 
 
+                full_predictions_path = os.path.join(result_dir, "predictions.json")
+                full_predictions = annotation_utils.load_predictions(full_predictions_path) #json_io.load_json(full_predictions_path)
 
-                    if metric == "accuracy":
-                        num_true_positives, num_false_positives, num_false_negatives = get_positives_and_negatives(annotations, full_predictions, list(annotations.keys()))
-                        val = num_true_positives / (num_true_positives + num_false_positives + num_false_negatives)
-                        # vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
-                    elif metric == "AP (IoU=.50:.05:.95)":
-                        val = get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
+                
 
-                    elif metric == "AP (IoU=.50)":
-                        val = get_AP(annotations, full_predictions, iou_thresh=".50")
 
-                    elif metric == "AP (IoU=.75)":
-                        val = get_AP(annotations, full_predictions, iou_thresh=".75")
-                    # elif metric == "true_positives":
-                    #     val = num_true_positives
-                    #     vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
 
-                    # else:
-                    #     vals = get_dics(annotations, full_predictions, list(annotations.keys()))
-                    # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
+                if metric == "accuracy":
+                    num_true_positives, num_false_positives, num_false_negatives = get_positives_and_negatives(annotations, full_predictions, list(annotations.keys()))
+                    val = num_true_positives / (num_true_positives + num_false_positives + num_false_negatives)
+                    # vals = get_accuracies(annotations, full_predictions, list(annotations.keys()))
+                elif metric == "AP (IoU=.50:.05:.95)":
+                    val = get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
 
-                    # included_rows = [x for x in range(0, len(df[df.keys()[0]])) if x not in excluded]
-                    # subset_df = df.iloc[included_rows]
+                elif metric == "AP (IoU=.50)":
+                    val = get_AP(annotations, full_predictions, iou_thresh=".50")
 
-                    # mean_accuracy = np.mean(subset_df["Accuracy (IoU=.50, conf>.50)"])
-                    # mean_accuracy = np.mean(df["Accuracy (IoU=.50, conf>.50)"])
+                elif metric == "AP (IoU=.75)":
+                    val = get_AP(annotations, full_predictions, iou_thresh=".75")
+                # elif metric == "true_positives":
+                #     val = num_true_positives
+                #     vals = get_percent_count_errors(annotations, full_predictions, list(annotations.keys()))
 
-                    # chart_entry["mean_vals"].append(np.mean(vals))
-                    # chart_entry["min_vals"].append(np.min(vals))
-                    # chart_entry["max_vals"].append(np.max(vals))
-                    chart_entry["vals"].append(val)
-                    chart_entry["num_annotations"].append(num_annotations)
+                # else:
+                #     vals = get_dics(annotations, full_predictions, list(annotations.keys()))
+                # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
 
-                order = np.argsort(chart_entry["num_annotations"])
-                chart_entry["vals"] = (np.array(chart_entry["vals"])[order]).tolist()
-                chart_entry["num_annotations"] = (np.array(chart_entry["num_annotations"])[order]).tolist()
+                # included_rows = [x for x in range(0, len(df[df.keys()[0]])) if x not in excluded]
+                # subset_df = df.iloc[included_rows]
 
-                chart_data[rep_num].append(chart_entry)
+                # mean_accuracy = np.mean(subset_df["Accuracy (IoU=.50, conf>.50)"])
+                # mean_accuracy = np.mean(df["Accuracy (IoU=.50, conf>.50)"])
+
+                # chart_entry["mean_vals"].append(np.mean(vals))
+                # chart_entry["min_vals"].append(np.min(vals))
+                # chart_entry["max_vals"].append(np.max(vals))
+                chart_entry["vals"].append(val)
+                chart_entry["num_annotations"].append(num_annotations)
+
+            order = np.argsort(chart_entry["num_annotations"])
+            chart_entry["vals"] = (np.array(chart_entry["vals"])[order]).tolist()
+            chart_entry["num_annotations"] = (np.array(chart_entry["num_annotations"])[order]).tolist()
+
+            chart_data.append(chart_entry)
 
     fig = plt.figure(figsize=(16, 8))
     # ax = fig.add_subplot(111)
     min_val =  10000000 #np.inf
     max_val = -10000000 #(-1) * np.inf
     # print("len chart_data", len(chart_data))
-    for rep_num in chart_data.keys():
-        for i, chart_entry in enumerate(chart_data[rep_num]):
-            # print("len num_annotations", len(chart_entry["num_annotations"]))
-            # print("len chart_entry vals", len(chart_entry["vals"]))
-            # if i == 0:
-            #     widths = 0.8
-            # else:
-            
-            if xpositions == "num_annotations":
-                positions = chart_entry["num_annotations"]
-            else:
-                positions = [i for i in range(len(chart_entry["vals"]))]
-            # for col in range(len(chart_entry["vals"][0])):
-            #     # if col == 0:
-                    
-            #     # else:
-            #     #     label = None
-            #     plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3) #, label=label)
-            # label = chart_entry["method_label"]
-            if rep_num == 0:
-                label = chart_entry["method_label"]
-            else:
-                label = None
-            plt.plot(positions, chart_entry["vals"], color=colors[i], linewidth=1, label=label, marker="o")
-            # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
-            # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
+    # for rep_num in chart_data.keys():
+    for i, chart_entry in enumerate(chart_data):
+        # print("len num_annotations", len(chart_entry["num_annotations"]))
+        # print("len chart_entry vals", len(chart_entry["vals"]))
+        # if i == 0:
+        #     widths = 0.8
+        # else:
+        
+        if xpositions == "num_annotations":
+            positions = chart_entry["num_annotations"]
+        else:
+            positions = [i for i in range(len(chart_entry["vals"]))]
+        # for col in range(len(chart_entry["vals"][0])):
+        #     # if col == 0:
+                
+        #     # else:
+        #     #     label = None
+        #     plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3) #, label=label)
+        # label = chart_entry["method_label"]
+        # if rep_num == 0:
+        label = chart_entry["method_label"]
+        # else:
+        #     label = None
+        plt.plot(positions, chart_entry["vals"], color=colors[i], linewidth=1, label=label, marker="o")
+        # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
+        # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
 
-            # cur_min = np.min(chart_entry["vals"])
-            # if cur_min < min_val:
-            #     min_val = cur_min
+        # cur_min = np.min(chart_entry["vals"])
+        # if cur_min < min_val:
+        #     min_val = cur_min
 
-            # cur_max = np.max(chart_entry["vals"])
-            # if cur_max > max_val:
-            #     max_val = cur_max
+        # cur_max = np.max(chart_entry["vals"])
+        # if cur_max > max_val:
+        #     max_val = cur_max
 
 
 
-            # ticks = np.arange(0, len(methods[0]["accuracies"]))
-            # set the x label values
-            # plt.xticks(np.arange(0, len(ticks) * 2, 2), ticks)
-            
-            # set the limit for x axis
-            # plt.xlim(-2, len(ticks)*2)
-            
-            # set the limit for y axis
+        # ticks = np.arange(0, len(methods[0]["accuracies"]))
+        # set the x label values
+        # plt.xticks(np.arange(0, len(ticks) * 2, 2), ticks)
+        
+        # set the limit for x axis
+        # plt.xlim(-2, len(ticks)*2)
+        
+        # set the limit for y axis
     # if metric == "accuracy":
     #     plt.ylim(0, 1.0)
     # if metric == "dic":
@@ -1575,189 +1576,200 @@ def create_global_comparison(image_set, methods, metric, num_replications, out_d
     plt.ylabel(metric)
     # set the title
     #plt.title('Grouped boxplot using matplotlib')
-    chart_out_dir = os.path.join(out_dir, metric, xpositions)
-    os.makedirs(chart_out_dir, exist_ok=True)
-    plt.savefig(os.path.join(chart_out_dir, "all_replications.svg"))
+    # chart_out_dir = os.path.join(out_dir, metric, xpositions)
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path) #os.path.join(chart_out_dir, "all_replications.svg"))
 
 
 
+# def create_my_thinline_plot(methods, out_dir, xpositions="num_annotations", include_mean_line=True):
+
+#     for rep
 
 
 
-
-def create_thinline_comparison(image_set, methods, metric, num_replications, out_dir, xpositions="num_annotations", include_mean_line=True):
+def create_thinline_comparison(methods, metric, out_path, xpositions="num_annotations", include_mean_line=True):
 
     colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
-    for rep_num in range(num_replications):
-        chart_data = []
-        for method in methods:
-        
-            chart_entry = {}
-            print("processing", method["method_name"])
-            # image_set = method["image_set"]
-            method_label = method["method_label"]
-            image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
-                                        image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
-                                        image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
-                                        image_set["mission_date"])
-
-            chart_entry["method_label"] = method_label
-            chart_entry["rep_num"] = rep_num
-
-
-            # image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
-            # image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
-            # annotations = json_io.load_json(
-            #                     os.path.join(image_set_dir, "annotations", "annotations.json")
-            # )
-            # metadata = json_io.load_json(
-            #                 os.path.join(image_set_dir, "metadata", "metadata.json")
-            # )
-
-            results_dir = os.path.join(image_set_dir, "model", "results")
-            if os.path.exists(results_dir):
-                result_dirs = glob.glob(os.path.join(results_dir, "*"))
-
-                # sorted_result_dirs = natsorted(result_dirs, key=lambda y: y.lower())
+    # for rep_num in range(num_replications):
+    chart_data = []
+    for method in methods:
+    
+        chart_entry = {}
+        print("processing", method["method_name"])
+        # image_set = method["image_set"]
+        method_label = method["method_label"]
+        # image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+        #                             image_set["farm_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num),
+        #                             image_set["field_name"] + ":" + method["method_label"] + ":rep_" + str(rep_num), 
+        #                             image_set["mission_date"])
+        image_set_dir = os.path.join("usr", "data", 
+                                    method["image_set"]["username"], "image_sets",
+                                    method["image_set"]["farm_name"],
+                                    method["image_set"]["field_name"], 
+                                    method["image_set"]["mission_date"])
 
 
-                # result_tuples = []
-                # for result_dir in result_dirs:
-                #     annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
-                #     test_images = []
-                #     for image_name in annotations.keys():
-                #         if annotation_utils.is_fully_annotated_for_testing(annotations, image_name, 
-                #                                     metadata["images"][image_name]["width_px"], metadata["images"][image_name]["height_px"]):
-                #             test_images.append(image_name)
-                #     result_tuples.append((test_images, result_dir))
-                # result_tuples.sort(key=lambda x: len(x[0]))
-
-                # assessment_images = result_tuples[-1][0]
-                # result_tuples = []
+        chart_entry["method_label"] = method_label
+        # chart_entry["rep_num"] = rep_num
 
 
-                chart_entry["vals"] = []
-                chart_entry["num_annotations"] = []
-                for result_dir in result_dirs:
-                    print("\tprocessing", os.path.basename(result_dir))
+        # image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+        # image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+        # annotations = json_io.load_json(
+        #                     os.path.join(image_set_dir, "annotations", "annotations.json")
+        # )
+        # metadata = json_io.load_json(
+        #                 os.path.join(image_set_dir, "metadata", "metadata.json")
+        # )
 
-                    annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
-                    # num_training_images = 0
-                    num_annotations = 0
+        results_dir = os.path.join(image_set_dir, "model", "results")
+        if os.path.exists(results_dir):
+            result_dirs = glob.glob(os.path.join(results_dir, "*"))
+
+            # sorted_result_dirs = natsorted(result_dirs, key=lambda y: y.lower())
+
+
+            # result_tuples = []
+            # for result_dir in result_dirs:
+            #     annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
+            #     test_images = []
+            #     for image_name in annotations.keys():
+            #         if annotation_utils.is_fully_annotated_for_testing(annotations, image_name, 
+            #                                     metadata["images"][image_name]["width_px"], metadata["images"][image_name]["height_px"]):
+            #             test_images.append(image_name)
+            #     result_tuples.append((test_images, result_dir))
+            # result_tuples.sort(key=lambda x: len(x[0]))
+
+            # assessment_images = result_tuples[-1][0]
+            # result_tuples = []
+
+
+            chart_entry["vals"] = []
+            chart_entry["num_annotations"] = []
+            for result_dir in result_dirs:
+                print("\tprocessing", os.path.basename(result_dir))
+
+                annotations = annotation_utils.load_annotations(os.path.join(result_dir, "annotations.json"))
+                # num_training_images = 0
+                num_annotations = 0
+                for image_name in annotations.keys():
+                    if len(annotations[image_name]["training_regions"]) > 0:
+                        # num_training_images += 1
+                        # for region in annotations[image_name]["training_region"]:
+                        num_annotations += (box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"])).size
+
+                # result_tuples.append((num_annotations, result_dir))
+                # result_tuples.sort(key=lambda x: x[0])
+
+                # method["mean_accuracies"] = []
+                # for result_tuple in result_tuples:
+
+                predictions_path = os.path.join(result_dir, "predictions.json")
+                predictions = json_io.load_json(predictions_path)
+                if metric == "accuracy":
+                    vals = get_accuracies(annotations, predictions, list(annotations.keys()))
+                elif metric == "percent_count_error":
+                    vals = get_percent_count_errors(annotations, predictions, list(annotations.keys()))
+                elif metric == "abs_dic":
+                    vals = np.abs(get_dics(annotations, predictions, list(annotations.keys())))
+                elif metric == "mse":
+                    vals = np.array(get_dics(annotations, predictions, list(annotations.keys()))) ** 2
+                elif metric == "confidence_quality":
+                    # predictions = json_io.load_json(os.path.join(result_dir, ""))
+                    vals = []
                     for image_name in annotations.keys():
-                        if len(annotations[image_name]["training_regions"]) > 0:
-                            # num_training_images += 1
-                            # for region in annotations[image_name]["training_region"]:
-                            num_annotations += (box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"])).size
-
-                    # result_tuples.append((num_annotations, result_dir))
-                    # result_tuples.sort(key=lambda x: x[0])
-
-                    # method["mean_accuracies"] = []
-                    # for result_tuple in result_tuples:
-
-                    predictions_path = os.path.join(result_dir, "predictions.json")
-                    predictions = json_io.load_json(predictions_path)
-                    if metric == "accuracy":
-                        vals = get_accuracies(annotations, predictions, list(annotations.keys()))
-                    elif metric == "percent_count_error":
-                        vals = get_percent_count_errors(annotations, predictions, list(annotations.keys()))
-                    elif metric == "abs_dic":
-                        vals = np.abs(get_dics(annotations, predictions, list(annotations.keys())))
-                    elif metric == "mse":
-                        vals = np.array(get_dics(annotations, predictions, list(annotations.keys()))) ** 2
-                    elif metric == "confidence_quality":
-                        # predictions = json_io.load_json(os.path.join(result_dir, ""))
-                        vals = []
-                        for image_name in annotations.keys():
-                            val = get_confidence_quality(np.array(predictions[image_name]["scores"]))
-                            vals.append(val)
-                    else:
-                        vals = get_dics(annotations, predictions, list(annotations.keys()))
-
-                    # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
-
-                    # included_rows = [x for x in range(0, len(df[df.keys()[0]])) if x not in excluded]
-                    # subset_df = df.iloc[included_rows]
-
-                    # mean_accuracy = np.mean(subset_df["Accuracy (IoU=.50, conf>.50)"])
-                    # mean_accuracy = np.mean(df["Accuracy (IoU=.50, conf>.50)"])
-
-                    # chart_entry["mean_vals"].append(np.mean(vals))
-                    # chart_entry["min_vals"].append(np.min(vals))
-                    # chart_entry["max_vals"].append(np.max(vals))
-                    chart_entry["vals"].append(vals)
-                    chart_entry["num_annotations"].append(num_annotations)
-
-                order = np.argsort(chart_entry["num_annotations"])
-                chart_entry["vals"] = (np.array(chart_entry["vals"])[order]).tolist()
-                chart_entry["num_annotations"] = (np.array(chart_entry["num_annotations"])[order]).tolist()
-
-                chart_data.append(chart_entry)
-
-        fig = plt.figure(figsize=(16, 8))
-        # ax = fig.add_subplot(111)
-        min_val =  10000000 #np.inf
-        max_val = -10000000 #(-1) * np.inf
-        print("len chart_data", len(chart_data))
-        for i, chart_entry in enumerate(chart_data):
-            print("len num_annotations", len(chart_entry["num_annotations"]))
-            print("len chart_entry vals", len(chart_entry["vals"]))
-            # if i == 0:
-            #     widths = 0.8
-            # else:
-            
-            if xpositions == "num_annotations":
-                positions = chart_entry["num_annotations"]
-                widths = 1.5
-            else:
-                positions = [i for i in range(len(chart_entry["vals"]))]
-                widths = 0.1
-            for col in range(len(chart_entry["vals"][0])):
-                if col == 0:
-                    label = chart_entry["method_label"]
+                        val = get_confidence_quality(np.array(predictions[image_name]["scores"]))
+                        vals.append(val)
                 else:
-                    label = None
-                plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3, label=label)
-            # label = chart_entry["method_label"]
-            if include_mean_line:
-                plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2, marker="o")
-            # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
-            # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
+                    vals = get_dics(annotations, predictions, list(annotations.keys()))
 
-            cur_min = np.min(chart_entry["vals"])
-            if cur_min < min_val:
-                min_val = cur_min
+                # df = pd.read_excel(os.path.join(result_dir, "metrics.xlsx"))
 
-            cur_max = np.max(chart_entry["vals"])
-            if cur_max > max_val:
-                max_val = cur_max
+                # included_rows = [x for x in range(0, len(df[df.keys()[0]])) if x not in excluded]
+                # subset_df = df.iloc[included_rows]
 
+                # mean_accuracy = np.mean(subset_df["Accuracy (IoU=.50, conf>.50)"])
+                # mean_accuracy = np.mean(df["Accuracy (IoU=.50, conf>.50)"])
 
+                # chart_entry["mean_vals"].append(np.mean(vals))
+                # chart_entry["min_vals"].append(np.min(vals))
+                # chart_entry["max_vals"].append(np.max(vals))
+                chart_entry["vals"].append(vals)
+                chart_entry["num_annotations"].append(num_annotations)
 
-            # ticks = np.arange(0, len(methods[0]["accuracies"]))
-            # set the x label values
-            # plt.xticks(np.arange(0, len(ticks) * 2, 2), ticks)
-            
-            # set the limit for x axis
-            # plt.xlim(-2, len(ticks)*2)
-            
-            # set the limit for y axis
-        if metric == "accuracy" or metric == "confidence_quality":
-            plt.ylim(0, 1.0)
-        if metric == "dic":
-            plt.axhline(0, color="black", linestyle="dashed", linewidth=1)
-            ext_val = max(abs(max_val), abs(min_val))
-            plt.ylim(-ext_val, ext_val)
+            order = np.argsort(chart_entry["num_annotations"])
+            chart_entry["vals"] = (np.array(chart_entry["vals"])[order]).tolist()
+            chart_entry["num_annotations"] = (np.array(chart_entry["num_annotations"])[order]).tolist()
+
+            chart_data.append(chart_entry)
+
+    fig = plt.figure(figsize=(16, 8))
+    # ax = fig.add_subplot(111)
+    min_val =  10000000 #np.inf
+    max_val = -10000000 #(-1) * np.inf
+    print("len chart_data", len(chart_data))
+    for i, chart_entry in enumerate(chart_data):
+        print("len num_annotations", len(chart_entry["num_annotations"]))
+        print("len chart_entry vals", len(chart_entry["vals"]))
+        # if i == 0:
+        #     widths = 0.8
+        # else:
         
-        plt.legend()
-        plt.xlabel(xpositions)
-        plt.ylabel(metric)
-        # set the title
-        #plt.title('Grouped boxplot using matplotlib')
-        chart_out_dir = os.path.join(out_dir, metric, xpositions)
-        os.makedirs(chart_out_dir, exist_ok=True)
-        plt.savefig(os.path.join(chart_out_dir, "rep_" + str(rep_num) + ".svg"))
+        if xpositions == "num_annotations":
+            positions = chart_entry["num_annotations"]
+            widths = 1.5
+        else:
+            positions = [i for i in range(len(chart_entry["vals"]))]
+            widths = 0.1
+        for col in range(len(chart_entry["vals"][0])):
+            if col == 0:
+                label = chart_entry["method_label"]
+            else:
+                label = None
+            plt.plot(positions, np.array(chart_entry["vals"])[:, col], color=colors[i], linewidth=1, alpha=0.3, label=label)
+        # label = chart_entry["method_label"]
+        if include_mean_line:
+            plt.plot(positions, np.mean(np.array(chart_entry["vals"]), axis=1), color=colors[i], linewidth=2, marker="o")
+        # chart_entry_plot = plt.boxplot(chart_entry["vals"], positions=positions, notch=True, widths=widths, whis=(0, 100))
+        # define_box_properties(chart_entry_plot, colors[i], chart_entry["method_label"])
+
+        cur_min = np.min(chart_entry["vals"])
+        if cur_min < min_val:
+            min_val = cur_min
+
+        cur_max = np.max(chart_entry["vals"])
+        if cur_max > max_val:
+            max_val = cur_max
+
+
+
+        # ticks = np.arange(0, len(methods[0]["accuracies"]))
+        # set the x label values
+        # plt.xticks(np.arange(0, len(ticks) * 2, 2), ticks)
+        
+        # set the limit for x axis
+        # plt.xlim(-2, len(ticks)*2)
+        
+        # set the limit for y axis
+    if metric == "accuracy" or metric == "confidence_quality":
+        plt.ylim(0, 1.0)
+    if metric == "dic":
+        plt.axhline(0, color="black", linestyle="dashed", linewidth=1)
+        ext_val = max(abs(max_val), abs(min_val))
+        plt.ylim(-ext_val, ext_val)
+    
+    plt.legend()
+    plt.xlabel(xpositions)
+    plt.ylabel(metric)
+    # set the title
+    #plt.title('Grouped boxplot using matplotlib')
+    # chart_out_dir = os.path.join(out_dir, metric, xpositions)
+    # os.makedirs(chart_out_dir, exist_ok=True)
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path) #os.path.join(chart_out_dir, "rep_" + str(rep_num) + ".svg"))
 
 
 
@@ -3091,9 +3103,55 @@ def test(methods):
 
     # training_finished, re_enqueue = yolov4_image_set_driver.train(sch_ctx, image_set_dir)
 
+def plot_my_results(org_image_set, num_iterations=16, num_replications=1, num_matched_duplications=3):
 
+    all_methods = get_all_methods(org_image_set, num_iterations, num_replications, num_matched_duplications)
+    org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
+                                        org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
 
-def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matched_duplications=3):
+    image_set_str = org_image_set["farm_name"] + ":" + org_image_set["field_name"] + ":" + org_image_set["mission_date"]
+
+    model_status_path = os.path.join(org_image_set_dir, "model", "status.json")
+    model_status = json_io.load_json(model_status_path)
+    baseline_name = model_status["model_name"]
+
+    for i in range(num_replications):
+        rep_methods = all_methods[i * (1 + num_matched_duplications): (i+1) * (1 + num_matched_duplications)]
+
+        create_thinline_comparison(rep_methods, 
+                "abs_dic", 
+                os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "thinline", "abs_dic", str(i) + ".svg"), 
+                xpositions="num_annotations", 
+                include_mean_line=False)
+
+        create_thinline_comparison(rep_methods, 
+                "accuracy", 
+                os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "thinline", "accuracy", str(i) + ".svg"), 
+                xpositions="num_annotations", 
+                include_mean_line=True)
+
+        # os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations", include_mean_line=False)
+        # create_thinline_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations")
+        # create_thinline_comparison(org_image_set, [method29, method36], "abs_dic", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_iterations", include_mean_line=False)
+        # create_thinline_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_iterations")
+        # create_thinline_comparison(org_image_set, [method29, method36], "confidence_quality", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations")
+        # create_thinline_comparison(org_image_set, [method29, method36], "confidence_quality", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_iterations")
+
+        # create_global_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "global"), xpositions="num_annotations")
+        create_global_comparison(rep_methods,
+                                "accuracy", 
+                                os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "global", "accuracy", str(i) + ".svg"),
+                                xpositions="num_annotations")
+
+        create_global_comparison(rep_methods,
+                        "AP (IoU=.50)", 
+                        os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "global", "AP (IoU=.50)", str(i) + ".svg"),
+                        xpositions="num_annotations")
+        
+        # create_global_comparison(org_image_set, [method29, method36], "AP (IoU=.50)", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "global"), xpositions="num_annotations")
+
+def get_all_methods(org_image_set, num_iterations, num_replications, num_matched_duplications):
+
     org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
                                         org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
 
@@ -3101,7 +3159,6 @@ def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matche
     model_status = json_io.load_json(model_status_path)
     baseline_name = model_status["model_name"]
 
-    
 
     all_methods = []
     for rep_num in range(num_replications):
@@ -3118,6 +3175,7 @@ def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matche
             "field_name": org_image_set["field_name"] + ":" + rand_method["method_label"] + ":rep_" + str(rep_num),
             "mission_date": org_image_set["mission_date"]
         }
+
 
         all_methods.append(rand_method)
 
@@ -3145,6 +3203,17 @@ def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matche
             match_method["num_iterations"] = num_iterations
 
             all_methods.append(match_method)
+
+    return all_methods
+
+
+def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matched_duplications=3):
+
+    all_methods = get_all_methods(org_image_set, num_iterations, num_replications, num_matched_duplications)
+
+    org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
+                                        org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
+
 
         
 
@@ -3929,8 +3998,18 @@ def run():
 
     # num_replications = 1
     # run_methods(methods, org_image_set, num_replications)
-    run_my_test(org_image_set, num_iterations=1, num_replications=1, num_matched_duplications=1) #3)
+    #
 
+    org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
+                                    org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
+
+    # annotations_path = os.path.join(org_image_set_dir, "annotations", "annotations.json")
+    # annotations = annotation_utils.load_annotations(annotations_path)
+
+    # num_iterations = m.ceil(len(list(annotations.keys())) / 2)
+    num_iterations = 9
+    run_my_test(org_image_set, num_iterations=9, num_replications=1, num_matched_duplications=3) #3)
+    # plot_my_results(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3)
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])
     # create_eval_chart_annotations(org_image_set, methods, "dic", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "dic.svg"))
