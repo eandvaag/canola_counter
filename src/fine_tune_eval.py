@@ -2699,7 +2699,11 @@ def add_training_annotations(image_set, method):
                 random.shuffle(added_candidates)
 
                 num_to_remove = abs(num_to_add)
-                for i in range(num_to_remove):
+                # for i in range(num_to_remove):
+                i = 0
+                while num_to_remove > 0:
+                    if i > len(added_candidates):
+                        raise RuntimeError("Ran out of candidates to remove.")
                     c = added_candidates[i]
                     image_name = c[0]
                     patch = c[1]
@@ -2710,6 +2714,8 @@ def add_training_annotations(image_set, method):
                     num_without = box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
                     if num_with == num_without:
                         annotations[image_name]["training_regions"] = l
+                        num_to_remove -= 1
+                        i += 1
 
 
 
@@ -4003,12 +4009,13 @@ def run():
     org_image_set_dir = os.path.join("usr", "data", org_image_set["username"], "image_sets",
                                     org_image_set["farm_name"], org_image_set["field_name"], org_image_set["mission_date"])
 
-    # annotations_path = os.path.join(org_image_set_dir, "annotations", "annotations.json")
-    # annotations = annotation_utils.load_annotations(annotations_path)
+    annotations_path = os.path.join(org_image_set_dir, "annotations", "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path)
 
-    # num_iterations = m.ceil(len(list(annotations.keys())) / 2)
-    num_iterations = 9
-    run_my_test(org_image_set, num_iterations=9, num_replications=1, num_matched_duplications=3) #3)
+    num_iterations = m.ceil(len(list(annotations.keys())) / 2) + 1
+    # num_iterations = 9
+    print("num_iterations: {}".format(num_iterations))
+    run_my_test(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3) #3)
     # plot_my_results(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3)
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])
