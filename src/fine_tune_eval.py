@@ -1432,9 +1432,10 @@ def create_boxplot_comparison(image_set, methods, metric, num_replications, out_
 
 
 
-def create_global_comparison(methods, metric, out_path, xpositions="num_annotations"):
+def create_global_comparison(methods, metric, out_path, xpositions="num_annotations", colors=None):
 
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+    if colors is None:
+        colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
     chart_data = [] #{}
     # for rep_num in range(num_replications):
     # chart_data[rep_num] = []
@@ -1589,9 +1590,10 @@ def create_global_comparison(methods, metric, out_path, xpositions="num_annotati
 
 
 
-def create_thinline_comparison(methods, metric, out_path, xpositions="num_annotations", include_mean_line=True):
+def create_thinline_comparison(methods, metric, out_path, xpositions="num_annotations", include_mean_line=True, colors=None):
 
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+    if colors is None:
+        colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
     # for rep_num in range(num_replications):
     chart_data = []
     for method in methods:
@@ -2715,7 +2717,7 @@ def add_training_annotations(image_set, method):
                     if num_with == num_without:
                         annotations[image_name]["training_regions"] = l
                         num_to_remove -= 1
-                        i += 1
+                    i += 1
 
 
 
@@ -3121,6 +3123,8 @@ def plot_my_results(org_image_set, num_iterations=16, num_replications=1, num_ma
     model_status = json_io.load_json(model_status_path)
     baseline_name = model_status["model_name"]
 
+    colors = ["royalblue", "tomato", "tomato", "tomato"]
+
     for i in range(num_replications):
         rep_methods = all_methods[i * (1 + num_matched_duplications): (i+1) * (1 + num_matched_duplications)]
 
@@ -3128,13 +3132,15 @@ def plot_my_results(org_image_set, num_iterations=16, num_replications=1, num_ma
                 "abs_dic", 
                 os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "thinline", "abs_dic", str(i) + ".svg"), 
                 xpositions="num_annotations", 
-                include_mean_line=False)
+                include_mean_line=False,
+                colors=colors)
 
         create_thinline_comparison(rep_methods, 
                 "accuracy", 
                 os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "thinline", "accuracy", str(i) + ".svg"), 
                 xpositions="num_annotations", 
-                include_mean_line=True)
+                include_mean_line=True,
+                colors=colors)
 
         # os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations", include_mean_line=False)
         # create_thinline_comparison(org_image_set, [method29, method36], "accuracy", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "thinline"), xpositions="num_annotations")
@@ -3147,12 +3153,14 @@ def plot_my_results(org_image_set, num_iterations=16, num_replications=1, num_ma
         create_global_comparison(rep_methods,
                                 "accuracy", 
                                 os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "global", "accuracy", str(i) + ".svg"),
-                                xpositions="num_annotations")
+                                xpositions="num_annotations",
+                                colors=colors)
 
         create_global_comparison(rep_methods,
                         "AP (IoU=.50)", 
                         os.path.join("fine_tuning_charts", "comparisons", baseline_name, image_set_str, "global", "AP (IoU=.50)", str(i) + ".svg"),
-                        xpositions="num_annotations")
+                        xpositions="num_annotations",
+                        colors=colors)
         
         # create_global_comparison(org_image_set, [method29, method36], "AP (IoU=.50)", 1, os.path.join("fine_tuning_charts", "comparisons", "MORSE_Nasser", image_set_str, "global"), xpositions="num_annotations")
 
@@ -3239,9 +3247,11 @@ def run_my_test(org_image_set, num_iterations=16, num_replications=3, num_matche
                                     method["image_set"]["farm_name"], method["image_set"]["field_name"], method["image_set"]["mission_date"])
         field_dir = os.path.join("usr", "data", method["image_set"]["username"], "image_sets",
                                     method["image_set"]["farm_name"], method["image_set"]["field_name"])
-        if not os.path.exists(field_dir):
-            os.makedirs(field_dir)
-            shutil.copytree(org_image_set_dir, method_image_set_dir)
+        if os.path.exists(field_dir):
+            raise RuntimeError("Field dir exists!")
+        
+        os.makedirs(field_dir)
+        shutil.copytree(org_image_set_dir, method_image_set_dir)
 
         test([method])
 
@@ -4015,8 +4025,8 @@ def run():
     num_iterations = m.ceil(len(list(annotations.keys())) / 2) + 1
     # num_iterations = 9
     print("num_iterations: {}".format(num_iterations))
-    run_my_test(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3) #3)
-    # plot_my_results(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3)
+    # run_my_test(org_image_set, num_iterations=num_iterations, num_replications=3, num_matched_duplications=3) #3)
+    plot_my_results(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3)
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])
     # create_eval_chart_annotations(org_image_set, methods, "dic", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "dic.svg"))
