@@ -8,7 +8,14 @@ import math as m
 import numpy as np
 import tensorflow as tf
 from mean_average_precision import MetricBuilder
+from matplotlib.patches import Circle, Wedge, Polygon
+from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
+
+from scipy.spatial import Voronoi, voronoi_plot_2d
+import shapely.geometry
+import shapely.ops
+
 
 import pandas as pd
 import pandas.io.formats.excel
@@ -865,10 +872,12 @@ def can_calculate_density(metadata, camera_specs):
     make = metadata["camera_info"]["make"]
     model = metadata["camera_info"]["model"]
 
-    if metadata["is_ortho"] == "yes":
-        return False
+    # if metadata["is_ortho"] == "yes":
+    #     return False
 
-    if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["camera_height"] == "":
+    # if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["camera_height"] == "":
+    #     return False
+    if metadata["camera_height"] == "":
         return False
 
     if make not in camera_specs:
@@ -879,21 +888,22 @@ def can_calculate_density(metadata, camera_specs):
 
     return True
 
-def calculate_area_m2(camera_specs, metadata, image_name):
+def calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px):
 
     make = metadata["camera_info"]["make"]
     model = metadata["camera_info"]["model"]
     camera_entry = camera_specs[make][model]
 
     gsd_h = (metadata["camera_height"] * camera_entry["sensor_height"]) / \
-            (camera_entry["focal_length"] * metadata["images"][image_name]["height_px"])
+            (camera_entry["focal_length"] * camera_entry["image_height_px"]) #metadata["images"][image_name]["height_px"])
 
     gsd_w = (metadata["camera_height"] * camera_entry["sensor_width"]) / \
-            (camera_entry["focal_length"] * metadata["images"][image_name]["width_px"])
+            (camera_entry["focal_length"] * camera_entry["image_width_px"]) # metadata["images"][image_name]["width_px"])
 
     gsd = min(gsd_h, gsd_w)
 
-    area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
+    # area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
+    area_m2 = (area_height_px * gsd) * (area_width_px * gsd)
 
     return area_m2
     
@@ -1001,7 +1011,7 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
         df.to_excel(writer, index=False, sheet_name=sheet_name, na_rep='NA')  # send df to writer
         worksheet = writer.sheets[sheet_name]  # pull worksheet object
 
-        worksheet.set_column('A:Z', None, fmt)
+        worksheet.set_column('A:ZZ', None, fmt)
         worksheet.set_row(0, None, fmt)
 
         for idx, col in enumerate(df):  # loop through all columns
@@ -1098,6 +1108,8 @@ def create_images_sheet(args, updated_metrics):
         "Percent Count Error",
         "Excess Green Threshold",
         "Vegetation Percentage",
+        "Percentage of Vegetation Belonging to Objects",
+        "Percentage of Vegetation Belonging to Non-Objects"
     ])
 
     # columns.append("MS_COCO_mAP")
@@ -1191,7 +1203,9 @@ def create_images_sheet(args, updated_metrics):
 
 
         if include_density:
-            area_m2 = calculate_area_m2(camera_specs, metadata, image_name)
+            area_height_px = metadata["images"][image_name]["height_px"]
+            area_width_px = metadata["images"][image_name]["width_px"]
+            area_m2 = calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px)
             # if image_status == "unannotated":
             #     d["annotated_plant_count_per_square_metre"].append("NA")
             # else:
@@ -1202,8 +1216,13 @@ def create_images_sheet(args, updated_metrics):
         # if excess_green_record is not None:
         d["Percent Count Error"].append(percent_count_error)
         d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
-        d["Vegetation Percentage"].append(vegetation_record[image_name]["image"])
-
+        vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"]["image"]
+        obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"]["image"]
+        obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
+        non_obj_percentage = round(100 - obj_percentage, 2)
+        d["Vegetation Percentage"].append(vegetation_percentage)
+        d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
+        d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
 
         if fully_annotated == "no":
             for metric in metrics_lst:
@@ -1255,6 +1274,250 @@ def create_images_sheet(args, updated_metrics):
     return df
 
 
+def create_voronoi_areas_spreadsheet(results_dir):
+
+    logger = logging.getLogger(__name__)
+
+    path_pieces = results_dir.split("/")
+    username = path_pieces[2]
+    farm_name = path_pieces[4]
+    field_name = path_pieces[5]
+    mission_date = path_pieces[6]
+    image_set_dir = os.path.join(*path_pieces[:len(path_pieces)-3])
+
+
+    metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    metadata = json_io.load_json(metadata_path)
+
+    camera_specs_path = os.path.join("usr", "data", username, "cameras", "cameras.json")
+    camera_specs = json_io.load_json(camera_specs_path)
+    
+
+    predictions_path = os.path.join(results_dir, "predictions.json")
+    predictions = annotation_utils.load_predictions(predictions_path) #w3c_io.load_predictions(predictions_path, {"plant": 0})
+
+    annotations_path = os.path.join(results_dir, "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path) 
+
+    # full_predictions_path = os.path.join(results_dir, "full_predictions.json")
+    # full_predictions = annotation_utils.load_predictions(full_predictions_path)
+
+
+
+
+    # metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    # metadata = json_io.load_json(metadata_path)
+
+    if not can_calculate_density(metadata, camera_specs):
+        logger.info("Cannot calculate voronoi areas (cannot calculate density).")
+        return
+    
+    logger.info("Started collecting voronoi areas.")
+
+
+    start_time = time.time()
+
+    make = metadata["camera_info"]["make"]
+    model = metadata["camera_info"]["model"]
+    camera_entry = camera_specs[make][model]
+
+    image_w = metadata["images"][list(annotations.keys())[0]]["width_px"]
+    image_h = metadata["images"][list(annotations.keys())[0]]["height_px"]
+
+    gsd_h = (metadata["camera_height"] * camera_entry["sensor_height"]) / \
+            (camera_entry["focal_length"] * image_h)
+
+    gsd_w = (metadata["camera_height"] * camera_entry["sensor_width"]) / \
+            (camera_entry["focal_length"] * image_w)
+
+    gsd = min(gsd_h, gsd_w)
+
+    # area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
+    entries = []
+    
+    for image_name in annotations.keys():
+        predicted_boxes = predictions[image_name]["boxes"]
+        predicted_scores = predictions[image_name]["scores"]
+        
+        pred_mask = predicted_scores > 0.50
+        sel_predicted_boxes = predicted_boxes[pred_mask]
+
+        predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
+        predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
+
+        vor = Voronoi(predicted_centres)
+        # fig = voronoi_plot_2d(vor)
+
+        lines = [
+            shapely.geometry.LineString(vor.vertices[line])
+            for line in vor.ridge_vertices
+            if -1 not in line
+        ]
+        
+        boundary = shapely.geometry.Polygon([(0, 0), (image_w, 0), (image_w, image_h), (0, image_h)])
+        filtered_lines = []
+        for line in lines:
+            if boundary.contains(line):
+                filtered_lines.append(line)
+
+        areas_m2 = []
+        # polygons = []
+        for poly in shapely.ops.polygonize(filtered_lines):
+            # plt.scatter([x[0] for x in poly.exterior.coords], [x[1] for x in poly.exterior.coords], color="green")
+            # polygons.append(Polygon(poly.exterior.coords, fill=True, facecolor="green"))
+            area_px = poly.area
+            area_m2 = round(area_px * (gsd ** 2), 8)
+            areas_m2.append(area_m2)
+        # p = PatchCollection(polygons, alpha=0.4)
+        # fig.axes[0].add_collection(p)
+        # plt.ylim((0, image_h))
+        # plt.xlim((0, image_w))
+        # plt.savefig(os.path.join(results_dir, "voronoi_plots", image_name + ":" + region_label + "_region_" + str(i) + ".svg"))
+
+        # plt.close()
+
+        d = {
+            image_name: sorted(areas_m2)
+        }
+
+        entries.append(pd.DataFrame(d))
+
+    images_df = pd.concat(entries, axis=1)
+    images_df = images_df.fillna('')
+
+
+    entries = []
+    for image_name in annotations.keys():
+
+        # annotated_boxes = annotations[image_name]["boxes"]
+        predicted_boxes = predictions[image_name]["boxes"]
+        predicted_scores = predictions[image_name]["scores"]
+
+        # annotations_source = annotations[image_name]["source"]
+
+        for region_type in ["training", "test"]:
+            if region_type == "training":
+                region_label = "fine_tuning"
+            else:
+                region_label = "test"
+
+            regions = annotations[image_name][region_type + "_regions"]
+
+            for i, region in enumerate(regions):
+
+                # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                # region_annotated_boxes = annotated_boxes[annotated_inds]
+                predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
+                region_predicted_scores = predicted_scores[predicted_inds]
+
+                pred_mask = region_predicted_scores > 0.50
+                
+                region_predicted_boxes = predicted_boxes[predicted_inds][pred_mask]
+
+                # annotated_count = region_annotated_boxes.shape[0]
+                # predicted_count = np.sum(region_predicted_scores > 0.50)
+
+                region_predicted_centres = (region_predicted_boxes[..., :2] + region_predicted_boxes[..., 2:]) / 2.0
+                region_predicted_centres = np.stack([region_predicted_centres[:, 1], region_predicted_centres[:, 0]], axis=-1)
+
+
+                vor = Voronoi(region_predicted_centres)
+
+                # if not drew_plot:
+                # fig = voronoi_plot_2d(vor)
+
+                # for vor_reg in vor.regions:
+                #     if len(vor_reg) > 0 and -1 not in vor_reg:
+                #         vor_verts = vor.vertices[vor_reg]
+
+                lines = [
+                    shapely.geometry.LineString(vor.vertices[line])
+                    for line in vor.ridge_vertices
+                    if -1 not in line
+                ]
+                # print(lines)
+                boundary = shapely.geometry.Polygon([(region[1], region[0]), (region[3], region[0]), (region[3], region[2]), (region[1], region[2])])
+                filtered_lines = []
+                for line in lines:
+                    if boundary.contains(line): # line.crosses(boundary): #boundary.contains(line):
+                        filtered_lines.append(line)
+
+                areas_m2 = []
+                # polygons = []
+                for poly in shapely.ops.polygonize(filtered_lines):
+                    # plt.scatter([x[0] for x in poly.exterior.coords], [x[1] for x in poly.exterior.coords], color="green")
+                    # polygons.append(Polygon(poly.exterior.coords, fill=True, facecolor="green"))
+                    area_px = poly.area
+                    area_m2 = round(area_px * (gsd ** 2), 8)
+                    areas_m2.append(area_m2)
+                # p = PatchCollection(polygons, alpha=0.4)
+                # fig.axes[0].add_collection(p)
+                # plt.ylim((0, image_h))
+                # plt.xlim((0, image_w))
+                # plt.savefig(os.path.join(results_dir, "voronoi_plots", image_name + ":" + region_label + "_region_" + str(i) + ".svg"))
+
+                # plt.close()
+
+                d = {
+                    image_name + ":" + region_label + "_" + str(i+1): sorted(areas_m2)
+                }
+
+                entries.append(pd.DataFrame(d))
+
+
+    # df = pd.DataFrame([*zip(all_areas_m2)])
+    regions_df = pd.concat(entries, axis=1)
+    regions_df = regions_df.fillna('')
+    # print(df)
+
+    # out_path = 
+
+
+    out_path = os.path.join(results_dir, "voronoi_areas.xlsx") #os.path.join(out_dir, "results.xlsx")
+    # with pd.ExcelWriter(out_path) as writer:
+    #     images_df.to_excel(writer, sheet_name="Images")
+
+    sheet_name_to_df = {
+        "Images": images_df,
+        "Regions": regions_df
+        # "Stats": stats_df
+    }
+    writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
+    fmt = writer.book.add_format({"font_name": "Courier New"})
+
+
+    for sheet_name in sheet_name_to_df.keys():
+
+        df = sheet_name_to_df[sheet_name]
+
+        df.to_excel(writer, index=False, sheet_name=sheet_name, na_rep='NA')  # send df to writer
+        worksheet = writer.sheets[sheet_name]  # pull worksheet object
+
+        worksheet.set_column('A:ZZ', None, fmt)
+        worksheet.set_row(0, None, fmt)
+
+        for idx, col in enumerate(df):  # loop through all columns
+            series = df[col]
+            if series.size > 0:
+                max_entry_size = series.astype(str).map(len).max()
+            else:
+                max_entry_size = 0
+            max_len = max((
+                max_entry_size,  # len of largest item
+                len(str(series.name))  # len of column name/header
+                )) + 1  # adding a little extra space
+            worksheet.set_column(idx, idx, max_len)  # set column width
+
+    writer.save()
+
+    end_time = time.time()
+    elapsed_time = round(end_time - start_time, 2)
+
+    logger.info("Calculated Voronoi areas in {} seconds.".format(elapsed_time))
+
+
+    
+
 def create_regions_sheet(args, updated_metrics):
     username = args["username"]
     farm_name = args["farm_name"]
@@ -1291,7 +1554,9 @@ def create_regions_sheet(args, updated_metrics):
     columns.extend([
         "Percent Count Error",
         "Excess Green Threshold",
-        "Vegetation Percentage"
+        "Vegetation Percentage",
+        "Percentage of Vegetation Belonging to Objects",
+        "Percentage of Vegetation Belonging to Non-Objects"
     ])
 
     metrics_lst = [
@@ -1371,14 +1636,27 @@ def create_regions_sheet(args, updated_metrics):
 
 
                 if include_density:
-                    area_m2 = calculate_area_m2(camera_specs, metadata, image_name)
+                    area_height_px = region[2] - region[0]
+                    area_width_px = region[3] - region[1]
+                    area_m2 = calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px) #image_name)
                     d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 2))
                     d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 2))
 
 
                 d["Percent Count Error"].append(percent_count_error)
                 d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
-                d["Vegetation Percentage"].append(vegetation_record[image_name][region_type + "_regions"][i])
+                vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"][region_type + "_regions"][i]
+                obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"][region_type + "_regions"][i]
+                obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
+                non_obj_percentage = round(100 - obj_percentage, 2)
+                d["Vegetation Percentage"].append(vegetation_percentage)
+                d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
+                d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
+
+
+                # d["Vegetation Percentage"].append(vegetation_percentage)
+                # d["Vegetation Percentage (Object)"].append(obj_vegetation_percentage)
+                # d["Vegetation Percentage (Non-Object)"].append(round(vegetation_percentage - obj_vegetation_percentage, 2))
                 # MS_COCO_mAP = get_MS_COCO_mAP(region_annotated_boxes, region_predicted_boxes, region_predicted_scores)
                 # d["MS_COCO_mAP"].append(round(MS_COCO_mAP, 2))
 

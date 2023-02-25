@@ -122,7 +122,7 @@ from models.common import box_utils
 #     detections = 
 
 
-def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, excess_green_record, annotations):
+def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record, annotations, full_predictions):
 
     chunk_size = 5000
     image_name = list(annotations.keys())[0]
@@ -130,17 +130,17 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
 
     # if image_name in vegetation_record and excess_green_record[image_name]["sel_val"] == vegetation_record[image_name]["sel_val"]:
     #     return vegetation_record
-    needs_update = False
-    if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
-        needs_update = True
-    elif not np.array_equal(np.array(vegetation_record[image_name]["training_regions_coordinates"]), 
-                            np.array(annotations[image_name]["training_regions"])):
-        needs_update = True
-    elif not np.array_equal(np.array(vegetation_record[image_name]["test_regions_coordinates"]), 
-                            np.array(annotations[image_name]["test_regions"])):
-        needs_update = True
-    if not needs_update:
-        return vegetation_record
+    # needs_update = False
+    # if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
+    #     needs_update = True
+    # elif not np.array_equal(np.array(vegetation_record[image_name]["training_regions_coordinates"]), 
+    #                         np.array(annotations[image_name]["training_regions"])):
+    #     needs_update = True
+    # elif not np.array_equal(np.array(vegetation_record[image_name]["test_regions_coordinates"]), 
+    #                         np.array(annotations[image_name]["test_regions"])):
+    #     needs_update = True
+    # if not needs_update:
+    #     return vegetation_record
 
 
     image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
@@ -156,37 +156,47 @@ def update_vegetation_record_for_orthomosaic(image_set_dir, vegetation_record, e
 
     # image_chunk = ds.ReadAsArray(i, j, chunk_size, chunk_size)
 
-    results = Parallel(10)(
-        delayed(get_updated_vegetation_percentages_for_chunk)(
-            excess_green_record, annotations, image.image_path, chunk_coords) for chunk_coords in chunk_coords_lst)
+    results = Parallel(int(os.cpu_count() / 2))(
+        delayed(get_vegetation_percentages_for_chunk)(
+            excess_green_record, annotations, full_predictions, image.image_path, chunk_coords) for chunk_coords in chunk_coords_lst)
     # print("results", results)
 
+    vegetation_record = {}
     vegetation_record[image_name] = {}
     vegetation_record[image_name]["sel_val"] = excess_green_record[image_name]["sel_val"]
-    vegetation_record[image_name]["image"] = 0
+    vegetation_record[image_name]["vegetation_percentage"] = {}
+    vegetation_record[image_name]["obj_vegetation_percentage"] = {}
+    vegetation_record[image_name]["vegetation_percentage"]["image"] = 0
+    vegetation_record[image_name]["obj_vegetation_percentage"]["image"] = 0
     for region_key in ["training_regions", "test_regions"]:
-        vegetation_record[image_name][region_key] = []
-        vegetation_record[image_name][region_key + "_coordinates"] = annotations[image_name][region_key]
+        vegetation_record[image_name]["vegetation_percentage"][region_key] = []
+        vegetation_record[image_name]["obj_vegetation_percentage"][region_key] = []
+        # vegetation_record[image_name][region_key + "_coordinates"] = annotations[image_name][region_key]
         for i in range(len(annotations[image_name][region_key])):
-            vegetation_record[image_name][region_key].append(0)
-
+            vegetation_record[image_name]["vegetation_percentage"][region_key].append(0)
+            vegetation_record[image_name]["obj_vegetation_percentage"][region_key].append(0)
 
     for result in results:
-        vegetation_record[image_name]["image"] += result["chunk"]
+        vegetation_record[image_name]["vegetation_percentage"]["image"] += result["vegetation_percentage"]["chunk"]
+        vegetation_record[image_name]["obj_vegetation_percentage"]["image"] += result["obj_vegetation_percentage"]["chunk"]
         for region_key in ["training_regions", "test_regions"]:
             for i in range(len(annotations[image_name][region_key])):
-                vegetation_record[image_name][region_key][i] += result[region_key][i]
+                vegetation_record[image_name]["vegetation_percentage"][region_key][i] += result["vegetation_percentage"][region_key][i]
+                vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] += result["obj_vegetation_percentage"][region_key][i]
+                # vegetation_record[image_name][region_key][i] += result[region_key][i]
         
     # print("vegetation_record image pixel count", vegetation_record[image_name]["image"])
-    vegetation_record[image_name]["image"] = round(float((vegetation_record[image_name]["image"] / (w * h)) * 100), 2)
+    vegetation_record[image_name]["vegetation_percentage"]["image"] = round(float((vegetation_record[image_name]["vegetation_percentage"]["image"] / (w * h)) * 100), 2)
+    vegetation_record[image_name]["obj_vegetation_percentage"]["image"] = round(float((vegetation_record[image_name]["obj_vegetation_percentage"]["image"] / (w * h)) * 100), 2)
     for region_key in ["training_regions", "test_regions"]:
         for i, region in enumerate(annotations[image_name][region_key]):
             region_area = (region[2] - region[0]) * (region[3] - region[1])
-            vegetation_record[image_name][region_key][i] = round(float((vegetation_record[image_name][region_key][i] / region_area) * 100), 2)
+            vegetation_record[image_name]["vegetation_percentage"][region_key][i] = round(float((vegetation_record[image_name]["vegetation_percentage"][region_key][i] / region_area) * 100), 2)
+            vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] = round(float((vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] / region_area) * 100), 2)
 
     return vegetation_record
 
-def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotations, image_path, chunk_coords):
+def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_predictions, image_path, chunk_coords):
     ds = gdal.Open(image_path)
     chunk_array = ds.ReadAsArray(chunk_coords[1], 
                                  chunk_coords[0], 
@@ -201,10 +211,42 @@ def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotation
     sel_val = excess_green_record[image_name]["sel_val"]
     chunk_vegetation_pixel_count = int(np.sum(exg_array > sel_val))
 
+
+    pred_mask = np.full((chunk_array.shape[0], chunk_array.shape[1]), True)
+    pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    inds = box_utils.get_contained_inds(pred_boxes, [chunk_coords])
+    pred_boxes = pred_boxes[inds]
+    adj_pred_boxes = np.stack([
+        np.maximum(pred_boxes[:, 0] - chunk_coords[0], 0),
+        np.maximum(pred_boxes[:, 1] - chunk_coords[1], 0),
+        np.maximum(pred_boxes[:, 2] - chunk_coords[0], 0),
+        np.maximum(pred_boxes[:, 3] - chunk_coords[1], 0)
+    ], axis=-1)
+    for pred_box in adj_pred_boxes:
+        pred_mask[pred_box[0]:pred_box[2], pred_box[1]:pred_box[3]] = False
+
+    # obj_exg_array = exg_array[pred_mask]
+    obj_exg_array = np.copy(exg_array)
+    obj_exg_array[pred_mask] = -10000
+
+    obj_chunk_vegetation_pixel_count = int(np.sum(obj_exg_array > sel_val))
+
+
     result = {
-        "chunk": chunk_vegetation_pixel_count,
-        "training_regions": [],
-        "test_regions": []
+        "vegetation_percentage": {
+            "chunk": chunk_vegetation_pixel_count,
+            "training_regions": [],
+            "test_regions": []
+        },
+        "obj_vegetation_percentage": {
+            "chunk": obj_chunk_vegetation_pixel_count,
+            "training_regions": [],
+            "test_regions": []
+        }
+
+        # "chunk": chunk_vegetation_pixel_count,
+        # "training_regions": [],
+        # "test_regions": []
     }
 
     # print("chunk: {}, (v.c.: {} / {})".format(chunk_coords, chunk_vegetation_pixel_count, exg_array.size))
@@ -212,7 +254,8 @@ def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotation
         for region in annotations[image_name][region_key]:
             intersects, intersect_region = box_utils.get_intersection_rect(region, chunk_coords)
             if not intersects:
-                result[region_key].append(0)
+                result["vegetation_percentage"][region_key].append(0)
+                result["obj_vegetation_percentage"][region_key].append(0)
             else:
                 # index_coords = [
                 #     intersect_region[0] - chunk_coords[0],
@@ -228,64 +271,93 @@ def get_updated_vegetation_percentages_for_chunk(excess_green_record, annotation
                 vegetation_pixel_count = int(np.sum(intersect_vals > sel_val)) # / intersect_vals.size)
                 # print("intersect_region for {}-{}: {} ({}) (v. c. {} / {}) {}".format(
                 # region, chunk_coords, intersect_region, index_coords, vegetation_pixel_count, intersect_vals.size, exg_array.size))
-                result[region_key].append(vegetation_pixel_count)
+                result["vegetation_percentage"][region_key].append(vegetation_pixel_count)
+
+                obj_intersect_vals = obj_exg_array[intersect_region[0] - chunk_coords[0]:intersect_region[2] - chunk_coords[0], 
+                                                   intersect_region[1] - chunk_coords[1]:intersect_region[3] - chunk_coords[1]]
+
+                obj_vegetation_pixel_count = int(np.sum(obj_intersect_vals > sel_val))
+
+                result["obj_vegetation_percentage"][region_key].append(obj_vegetation_pixel_count)
 
     return result
 
 
-def update_vegetation_record_for_image_set(image_set_dir, vegetation_record, excess_green_record, annotations):
-    needs_update = []
-    for image_name in annotations.keys():
-        if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
-            needs_update.append(image_name)
-        elif not np.array_equal(np.array(vegetation_record[image_name]["training_regions_coordinates"]), 
-                                np.array(annotations[image_name]["training_regions"])):
-            needs_update.append(image_name)
-        elif not np.array_equal(np.array(vegetation_record[image_name]["test_regions_coordinates"]), 
-                                np.array(annotations[image_name]["test_regions"])):
-            needs_update.append(image_name)
+def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, annotations, full_predictions):
+    # needs_update = []
+    # for image_name in annotations.keys():
+    #     if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
+    #         needs_update.append(image_name)
+    #     elif not np.array_equal(np.array(vegetation_record[image_name]["training_regions_coordinates"]), 
+    #                             np.array(annotations[image_name]["training_regions"])):
+    #         needs_update.append(image_name)
+    #     elif not np.array_equal(np.array(vegetation_record[image_name]["test_regions_coordinates"]), 
+    #                             np.array(annotations[image_name]["test_regions"])):
+    #         needs_update.append(image_name)
 
-        
+    image_names = list(annotations.keys()) 
 
-    results = Parallel(10)(
-        delayed(get_updated_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, image_name) for image_name in needs_update)
+    results = Parallel(int(os.cpu_count() / 2))(
+        delayed(get_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, full_predictions, image_name) for image_name in image_names)
 
     # print("new vegetation record results", results)
-
+    vegetation_record = {}
     for result in results:
         image_name = result[0]
         vegetation_results = result[1]
-        vegetation_record[image_name] = {}
-        vegetation_record[image_name]["sel_val"] = excess_green_record[image_name]["sel_val"]
-        vegetation_record[image_name]["image"] = vegetation_results["image"]
-        vegetation_record[image_name]["training_regions_coordinates"] = annotations[image_name]["training_regions"]
-        vegetation_record[image_name]["training_regions"] = vegetation_results["training_regions"]
-        vegetation_record[image_name]["test_regions_coordinates"] = annotations[image_name]["test_regions"]
-        vegetation_record[image_name]["test_regions"] = vegetation_results["test_regions"]
+        vegetation_record[image_name] = result[1] #{}
+        # vegetation_record[image_name]["sel_val"] = excess_green_record[image_name]["sel_val"]
+        # vegetation_record[image_name]["image"] = vegetation_results["image"]
+        # vegetation_record[image_name]["training_regions_coordinates"] = annotations[image_name]["training_regions"]
+        # vegetation_record[image_name]["training_regions"] = vegetation_results["training_regions"]
+        # vegetation_record[image_name]["test_regions_coordinates"] = annotations[image_name]["test_regions"]
+        # vegetation_record[image_name]["test_regions"] = vegetation_results["test_regions"]
 
     return vegetation_record
 
 
 
-def get_updated_vegetation_percentages_for_image(image_set_dir, excess_green_record, annotations, image_name):
+def get_vegetation_percentages_for_image(image_set_dir, excess_green_record, annotations, full_predictions, image_name):
 
     image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
     image = Image(image_path)
     image_array = image.load_image_array()
     exg_array = image_utils.excess_green(image_array)
+
+    pred_mask = np.full((image_array.shape[0], image_array.shape[1]), True)
+    pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    for pred_box in pred_boxes:
+        pred_mask[pred_box[0]:pred_box[2], pred_box[1]:pred_box[3]] = False
+
+    # obj_exg_array = exg_array[pred_mask]
+    obj_exg_array = np.copy(exg_array)
+    obj_exg_array[pred_mask] = -10000
+
     sel_val = excess_green_record[image_name]["sel_val"]
     image_vegetation_percentage = round(float((np.sum(exg_array > sel_val) / exg_array.size) * 100), 2)
-    
+    obj_image_vegetation_percentage = round(float((np.sum(obj_exg_array > sel_val) / exg_array.size) * 100), 2)
+
     result = {
-        "image": image_vegetation_percentage,
-        "training_regions": [],
-        "test_regions": []
+        "sel_val": sel_val,
+        "vegetation_percentage": {
+            "image": image_vegetation_percentage,
+            "training_regions": [],
+            "test_regions": []
+        },
+        "obj_vegetation_percentage": {
+            "image": obj_image_vegetation_percentage,
+            "training_regions": [],
+            "test_regions": []
+        }
     }
     for region_key in ["training_regions", "test_regions"]:
         for region in annotations[image_name][region_key]:
             region_vals = exg_array[region[0]:region[2], region[1]:region[3]]
             vegetation_percentage = round(float((np.sum(region_vals > sel_val) / region_vals.size) * 100), 2)
-            result[region_key].append(vegetation_percentage)
+            result["vegetation_percentage"][region_key].append(vegetation_percentage)
+            obj_region_vals = obj_exg_array[region[0]:region[2], region[1]:region[3]]
+            obj_vegetation_percentage = round(float((np.sum(obj_region_vals > sel_val) / region_vals.size) * 100), 2)
+            result["obj_vegetation_percentage"][region_key].append(obj_vegetation_percentage)
 
     return (image_name, result)
 

@@ -26,6 +26,8 @@ PREDICTING = "Predicting"
 FINISHED_PREDICTING = "Finished Predicting"
 
 COLLECTING_METRICS = "Collecting Metrics"
+CALCULATING_VEGETATION_COVERAGE = "Calculating Vegetation Coverage"
+CALCULATING_VORONOI_AREAS = "Calculating Voronoi Areas"
 
 SWITCHING_MODELS = "Switching Models"
 FINISHED_SWITCHING_MODELS = "Finished Switching Models"
