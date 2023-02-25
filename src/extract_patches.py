@@ -228,7 +228,7 @@ def update_training_patches(image_set_dir, annotations, updated_patch_size):
                     image, 
                     updated_patch_size,
                     image_annotations=None,
-                    patch_overlap_percent=50, #0, #50, 
+                    patch_overlap_percent=0, #50, 
                     include_patch_arrays=False,
                     regions=annotations[image_name]["training_regions"],
                     is_ortho=is_ortho,
