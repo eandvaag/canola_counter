@@ -1382,7 +1382,10 @@ def create_voronoi_areas_spreadsheet(results_dir):
 
         entries.append(pd.DataFrame(d))
 
-    images_df = pd.concat(entries, axis=1)
+    if len(entries) > 0:
+        images_df = pd.concat(entries, axis=1)
+    else:
+        images_df = pd.DataFrame()
     images_df = images_df.fillna('')
 
 
@@ -1466,7 +1469,10 @@ def create_voronoi_areas_spreadsheet(results_dir):
 
 
     # df = pd.DataFrame([*zip(all_areas_m2)])
-    regions_df = pd.concat(entries, axis=1)
+    if len(entries) > 0:
+        regions_df = pd.concat(entries, axis=1)
+    else:
+        regions_df = pd.DataFrame()
     regions_df = regions_df.fillna('')
     # print(df)
 
