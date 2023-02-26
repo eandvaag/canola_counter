@@ -1349,40 +1349,51 @@ def create_voronoi_areas_spreadsheet(results_dir):
         predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
         predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
 
-        vor = Voronoi(predicted_centres)
-        # fig = voronoi_plot_2d(vor)
+        if predicted_centres.shape[0] <= 1:
+            d = {
+                image_name: []
+            }
+        else:
+            try:
+                vor = Voronoi(predicted_centres)
+                # fig = voronoi_plot_2d(vor)
 
-        lines = [
-            shapely.geometry.LineString(vor.vertices[line])
-            for line in vor.ridge_vertices
-            if -1 not in line
-        ]
-        
-        boundary = shapely.geometry.Polygon([(0, 0), (image_w, 0), (image_w, image_h), (0, image_h)])
-        filtered_lines = []
-        for line in lines:
-            if boundary.contains(line):
-                filtered_lines.append(line)
+                lines = [
+                    shapely.geometry.LineString(vor.vertices[line])
+                    for line in vor.ridge_vertices
+                    if -1 not in line
+                ]
+                
+                boundary = shapely.geometry.Polygon([(0, 0), (image_w, 0), (image_w, image_h), (0, image_h)])
+                filtered_lines = []
+                for line in lines:
+                    if boundary.contains(line):
+                        filtered_lines.append(line)
 
-        areas_m2 = []
-        # polygons = []
-        for poly in shapely.ops.polygonize(filtered_lines):
-            # plt.scatter([x[0] for x in poly.exterior.coords], [x[1] for x in poly.exterior.coords], color="green")
-            # polygons.append(Polygon(poly.exterior.coords, fill=True, facecolor="green"))
-            area_px = poly.area
-            area_m2 = round(area_px * (gsd ** 2), 8)
-            areas_m2.append(area_m2)
-        # p = PatchCollection(polygons, alpha=0.4)
-        # fig.axes[0].add_collection(p)
-        # plt.ylim((0, image_h))
-        # plt.xlim((0, image_w))
-        # plt.savefig(os.path.join(results_dir, "voronoi_plots", image_name + ":" + region_label + "_region_" + str(i) + ".svg"))
+                areas_m2 = []
+                # polygons = []
+                for poly in shapely.ops.polygonize(filtered_lines):
+                    # plt.scatter([x[0] for x in poly.exterior.coords], [x[1] for x in poly.exterior.coords], color="green")
+                    # polygons.append(Polygon(poly.exterior.coords, fill=True, facecolor="green"))
+                    area_px = poly.area
+                    area_m2 = round(area_px * (gsd ** 2), 8)
+                    areas_m2.append(area_m2)
+                # p = PatchCollection(polygons, alpha=0.4)
+                # fig.axes[0].add_collection(p)
+                # plt.ylim((0, image_h))
+                # plt.xlim((0, image_w))
+                # plt.savefig(os.path.join(results_dir, "voronoi_plots", image_name + ":" + region_label + "_region_" + str(i) + ".svg"))
 
-        # plt.close()
+                # plt.close()
 
-        d = {
-            image_name: sorted(areas_m2)
-        }
+                d = {
+                    image_name: sorted(areas_m2)
+                }
+            except Exception as e:
+                logger.info("Voronoi area calculation generated exception: {}".format(e))
+                d = {
+                    image_name: []
+                }
 
         entries.append(pd.DataFrame(d))
 
@@ -1427,47 +1438,59 @@ def create_voronoi_areas_spreadsheet(results_dir):
                 region_predicted_centres = (region_predicted_boxes[..., :2] + region_predicted_boxes[..., 2:]) / 2.0
                 region_predicted_centres = np.stack([region_predicted_centres[:, 1], region_predicted_centres[:, 0]], axis=-1)
 
+                if region_predicted_centres.shape[0] <= 1:
+                    d = {
+                        image_name + ":" + region_label + "_" + str(i+1): []
+                    }
+                else:
 
-                vor = Voronoi(region_predicted_centres)
+                    try:
+                        vor = Voronoi(region_predicted_centres)
 
-                # if not drew_plot:
-                # fig = voronoi_plot_2d(vor)
+                        # if not drew_plot:
+                        # fig = voronoi_plot_2d(vor)
 
-                # for vor_reg in vor.regions:
-                #     if len(vor_reg) > 0 and -1 not in vor_reg:
-                #         vor_verts = vor.vertices[vor_reg]
+                        # for vor_reg in vor.regions:
+                        #     if len(vor_reg) > 0 and -1 not in vor_reg:
+                        #         vor_verts = vor.vertices[vor_reg]
 
-                lines = [
-                    shapely.geometry.LineString(vor.vertices[line])
-                    for line in vor.ridge_vertices
-                    if -1 not in line
-                ]
-                # print(lines)
-                boundary = shapely.geometry.Polygon([(region[1], region[0]), (region[3], region[0]), (region[3], region[2]), (region[1], region[2])])
-                filtered_lines = []
-                for line in lines:
-                    if boundary.contains(line): # line.crosses(boundary): #boundary.contains(line):
-                        filtered_lines.append(line)
+                        lines = [
+                            shapely.geometry.LineString(vor.vertices[line])
+                            for line in vor.ridge_vertices
+                            if -1 not in line
+                        ]
+                        # print(lines)
+                        boundary = shapely.geometry.Polygon([(region[1], region[0]), (region[3], region[0]), (region[3], region[2]), (region[1], region[2])])
+                        filtered_lines = []
+                        for line in lines:
+                            if boundary.contains(line): # line.crosses(boundary): #boundary.contains(line):
+                                filtered_lines.append(line)
 
-                areas_m2 = []
-                # polygons = []
-                for poly in shapely.ops.polygonize(filtered_lines):
-                    # plt.scatter([x[0] for x in poly.exterior.coords], [x[1] for x in poly.exterior.coords], color="green")
-                    # polygons.append(Polygon(poly.exterior.coords, fill=True, facecolor="green"))
-                    area_px = poly.area
-                    area_m2 = round(area_px * (gsd ** 2), 8)
-                    areas_m2.append(area_m2)
-                # p = PatchCollection(polygons, alpha=0.4)
-                # fig.axes[0].add_collection(p)
-                # plt.ylim((0, image_h))
-                # plt.xlim((0, image_w))
-                # plt.savefig(os.path.join(results_dir, "voronoi_plots", image_name + ":" + region_label + "_region_" + str(i) + ".svg"))
+                        areas_m2 = []
+                        # polygons = []
+                        for poly in shapely.ops.polygonize(filtered_lines):
+                            # plt.scatter([x[0] for x in poly.exterior.coords], [x[1] for x in poly.exterior.coords], color="green")
+                            # polygons.append(Polygon(poly.exterior.coords, fill=True, facecolor="green"))
+                            area_px = poly.area
+                            area_m2 = round(area_px * (gsd ** 2), 8)
+                            areas_m2.append(area_m2)
+                        # p = PatchCollection(polygons, alpha=0.4)
+                        # fig.axes[0].add_collection(p)
+                        # plt.ylim((0, image_h))
+                        # plt.xlim((0, image_w))
+                        # plt.savefig(os.path.join(results_dir, "voronoi_plots", image_name + ":" + region_label + "_region_" + str(i) + ".svg"))
 
-                # plt.close()
+                        # plt.close()
 
-                d = {
-                    image_name + ":" + region_label + "_" + str(i+1): sorted(areas_m2)
-                }
+                        d = {
+                            image_name + ":" + region_label + "_" + str(i+1): sorted(areas_m2)
+                        }
+                    except Exception as e:
+                        logger.info("Voronoi area calculation generated exception: {}".format(e))
+                        d = {
+                            image_name + ":" + region_label + "_" + str(i+1): []
+                        }
+
 
                 entries.append(pd.DataFrame(d))
 
