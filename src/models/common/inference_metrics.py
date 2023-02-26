@@ -1660,7 +1660,7 @@ def create_regions_sheet(args, updated_metrics):
                 if vegetation_percentage == 0:
                     obj_percentage = "NA"
                     non_obj_percentage = "NA"
-                else
+                else:
                     obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
                     non_obj_percentage = round(100 - obj_percentage, 2)
                 
