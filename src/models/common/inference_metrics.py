@@ -1346,15 +1346,15 @@ def create_voronoi_areas_spreadsheet(results_dir):
         pred_mask = predicted_scores > 0.50
         sel_predicted_boxes = predicted_boxes[pred_mask]
 
-        predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
-        predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
-
-        if predicted_centres.shape[0] <= 1:
+        if sel_predicted_boxes.shape[0] <= 3:
             d = {
                 image_name: []
             }
         else:
             try:
+                predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
+                predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
+
                 vor = Voronoi(predicted_centres)
                 # fig = voronoi_plot_2d(vor)
 
@@ -1434,17 +1434,17 @@ def create_voronoi_areas_spreadsheet(results_dir):
 
                 # annotated_count = region_annotated_boxes.shape[0]
                 # predicted_count = np.sum(region_predicted_scores > 0.50)
-
-                region_predicted_centres = (region_predicted_boxes[..., :2] + region_predicted_boxes[..., 2:]) / 2.0
-                region_predicted_centres = np.stack([region_predicted_centres[:, 1], region_predicted_centres[:, 0]], axis=-1)
-
-                if region_predicted_centres.shape[0] <= 1:
+                if region_predicted_boxes.shape[0] <= 3:
                     d = {
                         image_name + ":" + region_label + "_" + str(i+1): []
                     }
                 else:
 
                     try:
+
+                        region_predicted_centres = (region_predicted_boxes[..., :2] + region_predicted_boxes[..., 2:]) / 2.0
+                        region_predicted_centres = np.stack([region_predicted_centres[:, 1], region_predicted_centres[:, 0]], axis=-1)
+
                         vor = Voronoi(region_predicted_centres)
 
                         # if not drew_plot:
