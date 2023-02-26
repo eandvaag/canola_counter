@@ -1218,8 +1218,12 @@ def create_images_sheet(args, updated_metrics):
         d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
         vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"]["image"]
         obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"]["image"]
-        obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
-        non_obj_percentage = round(100 - obj_percentage, 2)
+        if vegetation_percentage == 0:
+            obj_percentage = "NA"
+            non_obj_percentage = "NA"
+        else:
+            obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
+            non_obj_percentage = round(100 - obj_percentage, 2)
         d["Vegetation Percentage"].append(vegetation_percentage)
         d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
         d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
@@ -1653,8 +1657,13 @@ def create_regions_sheet(args, updated_metrics):
                 d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
                 vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"][region_type + "_regions"][i]
                 obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"][region_type + "_regions"][i]
-                obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
-                non_obj_percentage = round(100 - obj_percentage, 2)
+                if vegetation_percentage == 0:
+                    obj_percentage = "NA"
+                    non_obj_percentage = "NA"
+                else
+                    obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
+                    non_obj_percentage = round(100 - obj_percentage, 2)
+                
                 d["Vegetation Percentage"].append(vegetation_percentage)
                 d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
                 d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
