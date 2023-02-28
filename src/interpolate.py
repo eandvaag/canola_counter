@@ -445,7 +445,8 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
 
 
 def create_interpolation_map(username, farm_name, field_name, mission_date, 
-                             predictions_path, out_dir, interpolation, tile_size):
+                             predictions_path, out_dir, interpolated_value, interpolation, 
+                             tile_size, vegetation_record_path):
 
     # farm_name = dataset.farm_name
     # field_name = dataset.field_name
@@ -473,11 +474,11 @@ def create_interpolation_map(username, farm_name, field_name, mission_date,
                     predictions_path, out_dir, interpolation, tile_size)
     else:
         create_interpolation_map_for_image_set(username, farm_name, field_name, mission_date, 
-                    predictions_path, out_dir, interpolation)
+                    predictions_path, out_dir, interpolated_value, interpolation, vegetation_record_path)
 
 
 def create_interpolation_map_for_image_set(username, farm_name, field_name, mission_date, 
-                                           predictions_path, out_dir, interpolation):
+                                           predictions_path, out_dir, interpolated_value, interpolation, vegetation_record_path):
 
     # if pred_path is not None:
     predictions = json_io.load_json(predictions_path)
@@ -486,6 +487,9 @@ def create_interpolation_map_for_image_set(username, farm_name, field_name, miss
                         farm_name, field_name, mission_date,
                         "metadata", "metadata.json")
     metadata = json_io.load_json(metadata_path)
+
+    if vegetation_record_path:
+        vegetation_record = json_io.load_json(vegetation_record_path)
 
 
     if (metadata["missing"]["latitude"] or metadata["missing"]["longitude"]) or metadata["camera_height"] == "":# or metadata["missing"]["area_m2"]:
@@ -558,7 +562,21 @@ def create_interpolation_map_for_image_set(username, farm_name, field_name, miss
         #         #             v += 1
                 
         #         #predicted_value = len(predictions[image_name]["annotations"]) 
-        predicted_value = np.sum(np.array(predictions[image_name]["scores"]) > 0.50) / area_m2
+
+        if interpolated_value == "obj_density":
+            predicted_value = np.sum(np.array(predictions[image_name]["scores"]) > 0.50) / area_m2
+        else:
+            perc_veg = vegetation_record[image_name]["vegetation_percentage"]["image"]
+            perc_veg_obj = vegetation_record[image_name]["obj_vegetation_percentage"]["image"]
+            perc_veg_non_obj = vegetation_record[image_name]["vegetation_percentage"]["image"] - vegetation_record[image_name]["obj_vegetation_percentage"]["image"]
+
+            if interpolated_value == "perc_veg":
+                predicted_value = perc_veg
+            elif interpolated_value == "perc_veg_obj":
+                predicted_value = perc_veg_obj
+            elif interpolated_value == "perc_veg_non_obj":
+                predicted_value = perc_veg_non_obj
+
         predicted_values.append(predicted_value)
 
     # print("predicted_values", predicted_values)
@@ -729,12 +747,17 @@ if __name__ == "__main__":
     # parser.add_argument("annotations_path", type=str)
     parser.add_argument("predictions_path", type=str)
     parser.add_argument("out_dir", type=str)
+    parser.add_argument("interpolated_value", type=str)
     # parser.add_argument("map_download_uuid", type=str)
     #parser.add_argument('-density', action='store_true')
 
-    parser.add_argument('-nearest', action='store_true')
+    parser.add_argument("-nearest", action='store_true')
     # parser.add_argument('-completed_only', action='store_true')
-    parser.add_argument('-tile_size', type=float)
+    parser.add_argument("-tile_size", type=float)
+
+    parser.add_argument("-vegetation_record_path", type=str)
+
+
     # parser.add_argument('-diff', action='store_true')
     args = parser.parse_args()
     
@@ -764,11 +787,18 @@ if __name__ == "__main__":
     else:
         interpolation = "linear"
 
+    if args.interpolated_value != "obj_density" and not args.vegetation_record_path:
+        raise RuntimeError("Require vegetation record path")
+
+    valid_values = ["obj_density", "perc_veg", "perc_veg_obj", "perc_veg_non_obj"]
+    if args.interpolated_value not in valid_values:
+        raise RuntimeError("Invalid interpolated value: {}".format(args.interpolated_value))
+
     # if args.diff:
     #     comparison_type = "diff"
     # else:
     # comparison_type = "side_by_side"
-    value = "plant_density"
+    # value = "plant_density"
 
     remove_old_maps(args.out_dir)
 
@@ -779,9 +809,12 @@ if __name__ == "__main__":
                             args.mission_date,
                             args.predictions_path, #annotations_path,
                             args.out_dir, 
+                            args.interpolated_value,
+
                             # args.map_download_uuid,
                             interpolation=interpolation,
-                            tile_size=args.tile_size)
+                            tile_size=args.tile_size,
+                            vegetation_record_path=args.vegetation_record_path)
                             # completed_only=args.completed_only,
                             #pred_path=args.pred_path,
                             # value=value)
