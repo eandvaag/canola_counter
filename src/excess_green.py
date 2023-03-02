@@ -15,6 +15,10 @@ from io_utils import json_io
 import lock
 from models.common import box_utils
 
+CHUNK_SIZE = 5000
+# TILE_SIZE = 500
+
+
 # def range_map(old_val, old_min, old_max, new_min, new_max):
 #     new_val = (((old_val - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
 #     return new_val
@@ -124,7 +128,7 @@ from models.common import box_utils
 
 def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record, annotations, full_predictions):
 
-    chunk_size = 5000
+    
     image_name = list(annotations.keys())[0]
 
 
@@ -150,9 +154,9 @@ def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record,
     
 
     chunk_coords_lst = []
-    for i in range(0, h, chunk_size):
-        for j in range(0, w, chunk_size):
-            chunk_coords_lst.append([i, j, min(i+chunk_size, h), min(j+chunk_size, w)])
+    for i in range(0, h, CHUNK_SIZE):
+        for j in range(0, w, CHUNK_SIZE):
+            chunk_coords_lst.append([i, j, min(i+CHUNK_SIZE, h), min(j+CHUNK_SIZE, w)])
 
     # image_chunk = ds.ReadAsArray(i, j, chunk_size, chunk_size)
 
@@ -233,21 +237,66 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
 
 
     result = {
+
         "vegetation_percentage": {
             "chunk": chunk_vegetation_pixel_count,
             "training_regions": [],
             "test_regions": []
+            # "tiles": []
         },
         "obj_vegetation_percentage": {
             "chunk": obj_chunk_vegetation_pixel_count,
             "training_regions": [],
             "test_regions": []
+            # "tiles": []
         }
-
-        # "chunk": chunk_vegetation_pixel_count,
-        # "training_regions": [],
-        # "test_regions": []
     }
+
+
+    # tile_min_y = chunk_coords[0]
+    # tile_min_x = chunk_coords[1]
+    # num_y_tiles = m.ceil((chunk_coords[2]-chunk_coords[0]) / TILE_SIZE)
+    # num_x_tiles = m.ceil((chunk_coords[3]-chunk_coords[1]) / TILE_SIZE)
+    # for i in range(num_y_tiles):
+    #     for j in range(num_x_tiles):
+    #         # tile_coords = [
+    #         #                chunk_coords[0] + (TILE_SIZE) * i,
+    #         #                chunk_coords[1] + (TILE_SIZE) * j,
+    #         #                min(chunk_coords[0] + (TILE_SIZE) * (i+1), chunk_coords[2]),
+    #         #                min(chunk_coords[1] + (TILE_SIZE) * (j+1), chunk_coords[3])
+    #         #                ]
+
+    #         tile_exg_array = exg_array[i*(TILE_SIZE):(i+1)*TILE_SIZE, j*(TILE_SIZE):(j+1)*TILE_SIZE]
+    #         tile_obj_exg_array = obj_exg_array[i*(TILE_SIZE):(i+1)*TILE_SIZE, j*(TILE_SIZE):(j+1)*TILE_SIZE]
+
+
+
+
+    #         tile_vegetation_pixel_count = int(np.sum(tile_exg_array > sel_val))
+    #         tile_obj_vegetation_pixel_count = int(np.sum(tile_obj_exg_array > sel_val))
+
+    #         result["vegetation_percentage"]["tiles"].append(tile_vegetation_pixel_count)
+    #         result["obj_vegetation_percentage"]["tiles"].append(tile_vegetation_pixel_count)
+
+
+
+
+    # result = {
+    #     "vegetation_percentage": {
+    #         "chunk": chunk_vegetation_pixel_count,
+    #         "training_regions": [],
+    #         "test_regions": []
+    #     },
+    #     "obj_vegetation_percentage": {
+    #         "chunk": obj_chunk_vegetation_pixel_count,
+    #         "training_regions": [],
+    #         "test_regions": []
+    #     }
+
+    #     # "chunk": chunk_vegetation_pixel_count,
+    #     # "training_regions": [],
+    #     # "test_regions": []
+    # }
 
     # print("chunk: {}, (v.c.: {} / {})".format(chunk_coords, chunk_vegetation_pixel_count, exg_array.size))
     for region_key in ["training_regions", "test_regions"]:

@@ -354,6 +354,12 @@ def process_baseline(item):
             # validation_patches_record_path = os.path.join(training_dir, "validation-patches-record.tfrec")
             # tf_record_io.output_patch_tf_records(validation_patches_record_path, validation_tf_records)
 
+            loss_record = {
+                "training_loss": { "values": [] }
+            }
+            loss_record_path = os.path.join(baseline_pending_dir, "model", "training", "loss_record.json")
+            json_io.save_json(loss_record_path, loss_record)
+
             image_set_aux.reset_loss_record(baseline_pending_dir)
 
             log["training_start_time"] = int(time.time())
