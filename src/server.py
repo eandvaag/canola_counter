@@ -209,6 +209,10 @@ def process_baseline(item):
         #     raise RuntimeError("A baseline with the same name already exists!")
 
         if os.path.exists(baseline_available_dir) or os.path.exists(baseline_aborted_dir):
+            if os.path.exists(baseline_available_dir):
+                logger.info("Not training baseline: baseline_available_dir exists")
+            else:
+                logger.info("Not training baseline: baseline_aborted_dir exists")
             return False #raise RuntimeError("A baseline with the same name already exists!")
 
         logging.info("Starting to train baseline {}".format(item))
@@ -299,7 +303,20 @@ def process_baseline(item):
                 logger.info("Patch size: {} px".format(patch_size))
 
                 for image_name in annotations.keys():
-                    regions = annotations[image_name]["training_regions"] + annotations[image_name]["test_regions"]
+                    
+                    if "taken_regions" in image_set:
+                        if image_name in image_set["taken_regions"]:
+                            regions = image_set["taken_regions"][image_name]
+                        else:
+                            regions = []
+                    else:
+                        regions = annotations[image_name]["training_regions"] + annotations[image_name]["test_regions"]
+                    
+                    if "patch_overlap_percent" in image_set:
+                        patch_overlap_percent = image_set["patch_overlap_percent"]
+                    else:
+                        patch_overlap_percent = 50
+
                     if len(regions) > 0:
 
                         image_path = glob.glob(os.path.join(images_dir, image_name + ".*"))[0]
@@ -308,7 +325,7 @@ def process_baseline(item):
                             image,
                             patch_size,
                             image_annotations=annotations[image_name],
-                            patch_overlap_percent=50, 
+                            patch_overlap_percent=patch_overlap_percent, #50, 
                             regions=regions,
                             is_ortho=is_ortho,
                             include_patch_arrays=False,

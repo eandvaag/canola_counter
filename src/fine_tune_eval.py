@@ -41,7 +41,7 @@ import server
 from lock_queue import LockQueue
 
 
-sch_ctx = {}
+# sch_ctx = {}
 
 
 
@@ -1442,7 +1442,7 @@ def create_global_comparison(methods, metric, out_path, xpositions="num_annotati
     for method in methods:
     
         chart_entry = {}
-        print("processing", method["method_name"])
+        print("processing", method["method_label"]) #["method_name"])
         method_label = method["method_label"]
         image_set_dir = os.path.join("usr", "data", 
                                     method["image_set"]["username"], "image_sets",
@@ -1515,7 +1515,7 @@ def create_global_comparison(methods, metric, out_path, xpositions="num_annotati
 
             chart_data.append(chart_entry)
 
-    fig = plt.figure(figsize=(16, 8))
+    fig = plt.figure(figsize=(8, 6)) #(16, 8))
     # ax = fig.add_subplot(111)
     min_val =  10000000 #np.inf
     max_val = -10000000 #(-1) * np.inf
@@ -2480,15 +2480,22 @@ def add_training_annotations(image_set, method):
 
             matched_images = []
             matched_annotation_counts = []
-            for result_pair in result_pairs:
+            num_images_added_per_iter = []
+            for result_pair in result_pairs[1:]:
                 result_dir = result_pair[0]
                 matched_annotations_path = os.path.join(result_dir, "annotations.json")
                 matched_annotations = annotation_utils.load_annotations(matched_annotations_path)
+                matched_annotation_count = 0
+                num_images_added_this_iter = 0
                 for image_name in matched_annotations:
                     if len(matched_annotations[image_name]["training_regions"]) > 0:
                         if image_name not in matched_images:
                             matched_images.append(image_name)
-                            matched_annotation_counts.append(matched_annotations[image_name]["boxes"].shape[0])
+                            matched_annotation_count += matched_annotations[image_name]["boxes"].shape[0]
+                            num_images_added_this_iter += 1
+
+                matched_annotation_counts.append(matched_annotation_count) #matched_annotations[image_name]["boxes"].shape[0])
+                num_images_added_per_iter.append(num_images_added_this_iter)
 
             results_dir = os.path.join(image_set_dir, "model", "results")
             current_iteration_number = len(glob.glob(os.path.join(results_dir, "*")))
@@ -2522,7 +2529,7 @@ def add_training_annotations(image_set, method):
             num_patches = num_w_patches * num_h_patches
 
 
-            total_patches_to_match = (current_index+1) * num_patches
+            total_patches_to_match = np.sum(num_images_added_per_iter[:current_index+1]) * num_patches
 
 
 
@@ -2699,11 +2706,11 @@ def add_training_annotations(image_set, method):
             elif num_to_add < 0:
                 print("Too many patches! Attempting to remove patches that do not change the overall annotation count.")
                 random.shuffle(added_candidates)
-
+                print("There are {} candidates that have been added.".format(len(added_candidates)))
                 num_to_remove = abs(num_to_add)
                 # for i in range(num_to_remove):
                 i = 0
-                while num_to_remove > 0:
+                while num_to_remove >= 0:
                     if i > len(added_candidates):
                         raise RuntimeError("Ran out of candidates to remove.")
                     c = added_candidates[i]
@@ -3181,7 +3188,7 @@ def get_all_methods(org_image_set, num_iterations, num_replications, num_matched
         rand_method["method_name"] = "rand_img"
         rand_method["method_label"] = "RUN_rand_img_" + baseline_name + "_no_overlap"
         rand_method["num_iterations"] = num_iterations
-        rand_method["num_images"] = 1
+        rand_method["num_images"] = 1 #5 #1
 
         rand_method["image_set"] = {
             "username": org_image_set["username"],
@@ -3651,12 +3658,12 @@ def run():
     # image_based_methods = ["rand_img", "sel_img"]
     # region_based_methods = ["rand_img_rand_reg", "sel_img_rand_reg", "sel_img_sel_reg"]
 
-    org_image_set = {
-        "username": "erik",
-        "farm_name": "BlaineLake",
-        "field_name": "Serhienko9S",
-        "mission_date": "2022-06-07"
-    }
+    # org_image_set = {
+    #     "username": "erik",
+    #     "farm_name": "BlaineLake",
+    #     "field_name": "Serhienko9S",
+    #     "mission_date": "2022-06-07"
+    # }
 
     # org_image_set = {
     #     "username": "erik",
@@ -3664,6 +3671,13 @@ def run():
     #     "field_name": "Kernen4",
     #     "mission_date": "2022-06-08"
     # }
+
+    org_image_set = {
+        "username": "erik",
+        "farm_name": "KSU_1",
+        "field_name": "KSU_1",
+        "mission_date": "2023-03-09"
+    }
 
     method1 = {}
     method1["method_name"] = "rand_img"
@@ -4022,10 +4036,10 @@ def run():
     annotations_path = os.path.join(org_image_set_dir, "annotations", "annotations.json")
     annotations = annotation_utils.load_annotations(annotations_path)
 
-    num_iterations = m.ceil(len(list(annotations.keys())) / 2) + 1
+    num_iterations = m.ceil((len(list(annotations.keys())) / 2) / 1) + 1
     # num_iterations = 9
     print("num_iterations: {}".format(num_iterations))
-    # run_my_test(org_image_set, num_iterations=num_iterations, num_replications=3, num_matched_duplications=3) #3)
+    # run_my_test(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3) #3)
     plot_my_results(org_image_set, num_iterations=num_iterations, num_replications=1, num_matched_duplications=3)
 
     # create_eval_chart_annotations(org_image_set, methods, "accuracy", num_replications, os.path.join("fine_tuning_charts", "comparisons", "all_stages", "BlaineLake:Serhienko9S:2022-06-07", "accuracy.svg")) #[method_2, method_3])

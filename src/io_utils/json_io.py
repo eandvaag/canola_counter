@@ -1,9 +1,4 @@
 import json
-import os
-import numpy as np
-
-
-from io_utils import xml_io
 
 
 def save_json(path, data):
