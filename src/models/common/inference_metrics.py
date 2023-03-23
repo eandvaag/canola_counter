@@ -25,7 +25,7 @@ from natsort import index_natsorted
 
 
 
-from models.common import box_utils, annotation_utils
+from models.common import box_utils, annotation_utils, poly_utils
 
 
 from io_utils import json_io, w3c_io
@@ -589,14 +589,29 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
                     region_pred_boxes = pred_boxes
                     region_pred_scores = pred_scores
                 else:
-                    region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
-                    region_annotated_boxes = annotated_boxes[region_annotated_inds]
-                    # region_annotated_classes = np.zeros(shape=(region_annotated_boxes.shape[0]))
+                    # region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                    # region_annotated_boxes = annotated_boxes[region_annotated_inds]
+                    # # region_annotated_classes = np.zeros(shape=(region_annotated_boxes.shape[0]))
                     
 
-                    region_pred_inds = box_utils.get_contained_inds(pred_boxes, [region])
-                    region_pred_boxes = pred_boxes[region_pred_inds]
-                    region_pred_scores = pred_scores[region_pred_inds]
+                    # region_pred_inds = box_utils.get_contained_inds(pred_boxes, [region])
+                    # region_pred_boxes = pred_boxes[region_pred_inds]
+                    # region_pred_scores = pred_scores[region_pred_inds]
+
+
+                    # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                    annotated_centres = (annotated_boxes[..., :2] + annotated_boxes[..., 2:]) / 2.0
+                    annotated_inds = box_utils.get_contained_inds_for_points(annotated_centres, [region])
+                    region_annotated_boxes = annotated_boxes[annotated_inds]
+
+                    # predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
+                    predicted_centres = (pred_boxes[..., :2] + pred_boxes[..., 2:]) / 2.0
+                    predicted_inds = box_utils.get_contained_inds_for_points(predicted_centres, [region])
+                    region_pred_boxes = pred_boxes[predicted_inds]
+
+                    region_pred_scores = pred_scores[predicted_inds]
+
+                    
                 
                 # sel_region_pred_scores = region_pred_scores[region_pred_scores >= 0.50]
                 
@@ -888,7 +903,7 @@ def can_calculate_density(metadata, camera_specs):
 
     return True
 
-def calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px):
+def calculate_area_m2(camera_specs, metadata, area_px):
 
     make = metadata["camera_info"]["make"]
     model = metadata["camera_info"]["model"]
@@ -903,7 +918,7 @@ def calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px):
     gsd = min(gsd_h, gsd_w)
 
     # area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
-    area_m2 = (area_height_px * gsd) * (area_width_px * gsd)
+    area_m2 = area_px * (gsd ** 2) #(area_height_px * gsd) * (area_width_px * gsd)
 
     return area_m2
     
@@ -950,6 +965,7 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
     metrics = json_io.load_json(metrics_path)
     
     
+    tags_path = os.path.join(results_dir, "tags.json")
     # else:
     #     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     #     # excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
@@ -964,6 +980,9 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
     # else:
     #     excess_green_record = None
 
+    tags = json_io.load_json(tags_path)
+
+
 
     args = {
         "username": username,
@@ -976,7 +995,8 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
         "metadata": metadata,
         "camera_specs": camera_specs,
         # "excess_green_record": excess_green_record,
-        "vegetation_record": vegetation_record
+        "vegetation_record": vegetation_record,
+        "tags": tags
     }
     # if annotation_version == "preserved":
     updated_metrics = metrics
@@ -1092,6 +1112,7 @@ def create_images_sheet(args, updated_metrics):
         "Field Name",
         "Mission Date",
         "Image Name",
+        "Regions of Interest",
         "Training Regions",
         "Test Regions",
         "Image Is Fully Annotated",
@@ -1102,6 +1123,10 @@ def create_images_sheet(args, updated_metrics):
 
     if include_density:
         columns.extend(["Annotated Count Per Square Metre", "Predicted Count Per Square Metre"])
+
+    columns.extend(["Area (Pixels)"])
+    if include_density:
+        columns.extend(["Area (Square Metres)"])
 
     # if excess_green_record is not None:
     columns.extend([
@@ -1146,6 +1171,7 @@ def create_images_sheet(args, updated_metrics):
     for image_name in annotations.keys():
 
         image_abs_boxes = annotations[image_name]["boxes"]
+        regions_of_interest = annotations[image_name]["regions_of_interest"]
         training_regions = annotations[image_name]["training_regions"]
         test_regions = annotations[image_name]["test_regions"]
 
@@ -1188,6 +1214,7 @@ def create_images_sheet(args, updated_metrics):
         d["Field Name"].append(field_name)
         d["Mission Date"].append(mission_date)
         d["Image Name"].append(image_name)
+        d["Regions of Interest"].append(len(regions_of_interest))
         d["Training Regions"].append(len(training_regions))
         d["Test Regions"].append(len(test_regions))
         d["Image Is Fully Annotated"].append(fully_annotated)
@@ -1202,15 +1229,21 @@ def create_images_sheet(args, updated_metrics):
         d["Predicted Count"].append(predicted_count)
 
 
+        height_px = metadata["images"][image_name]["height_px"]
+        width_px = metadata["images"][image_name]["width_px"]
+        area_px = height_px * width_px
+        d["Area (Pixels)"].append(area_px)
+
         if include_density:
-            area_height_px = metadata["images"][image_name]["height_px"]
-            area_width_px = metadata["images"][image_name]["width_px"]
-            area_m2 = calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px)
+
+            area_m2 = calculate_area_m2(camera_specs, metadata, area_px)
             # if image_status == "unannotated":
             #     d["annotated_plant_count_per_square_metre"].append("NA")
             # else:
             d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 2))
             d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 2))
+            d["Area (Square Metres)"].append(round(area_m2, 2))
+
 
 
         # if excess_green_record is not None:
@@ -1278,7 +1311,7 @@ def create_images_sheet(args, updated_metrics):
     return df
 
 
-def create_voronoi_areas_spreadsheet(results_dir):
+def create_areas_spreadsheet(results_dir):
 
     logger = logging.getLogger(__name__)
 
@@ -1337,7 +1370,12 @@ def create_voronoi_areas_spreadsheet(results_dir):
     gsd = min(gsd_h, gsd_w)
 
     # area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
-    entries = []
+    
+    
+
+    
+    object_entries = []
+    voronoi_entries = []
     
     for image_name in annotations.keys():
         predicted_boxes = predictions[image_name]["boxes"]
@@ -1346,16 +1384,28 @@ def create_voronoi_areas_spreadsheet(results_dir):
         pred_mask = predicted_scores > 0.50
         sel_predicted_boxes = predicted_boxes[pred_mask]
 
+        if (sel_predicted_boxes.size > 0):
+            predicted_box_areas = (sel_predicted_boxes[:, 2] - sel_predicted_boxes[:, 0]) * (sel_predicted_boxes[:, 3] - sel_predicted_boxes[:, 1])
+            predicted_box_areas_m2 = np.round(predicted_box_areas * (gsd ** 2), 8)
+        else:
+            predicted_box_areas_m2 = []
+
+        d_object = {
+            image_name: sorted(predicted_box_areas_m2)
+        }
+
+
+
         if sel_predicted_boxes.shape[0] <= 3:
-            d = {
+            d_voronoi = {
                 image_name: []
             }
         else:
             try:
                 predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
-                predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
+                xy_predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
 
-                vor = Voronoi(predicted_centres)
+                vor = Voronoi(xy_predicted_centres)
                 # fig = voronoi_plot_2d(vor)
 
                 lines = [
@@ -1386,84 +1436,107 @@ def create_voronoi_areas_spreadsheet(results_dir):
 
                 # plt.close()
 
-                d = {
+                d_voronoi = {
                     image_name: sorted(areas_m2)
                 }
             except Exception as e:
                 logger.info("Voronoi area calculation generated exception: {}".format(e))
-                d = {
+                d_voronoi = {
                     image_name: []
                 }
 
-        entries.append(pd.DataFrame(d))
 
-    if len(entries) > 0:
-        images_df = pd.concat(entries, axis=1)
+        object_entries.append(pd.DataFrame(d_object))
+        voronoi_entries.append(pd.DataFrame(d_voronoi))
+
+    if len(object_entries) > 0:
+        object_images_df = pd.concat(object_entries, axis=1)
     else:
-        images_df = pd.DataFrame()
-    images_df = images_df.fillna('')
+        object_images_df = pd.DataFrame()
+    object_images_df = object_images_df.fillna('')
+
+    if len(voronoi_entries) > 0:
+        voronoi_images_df = pd.concat(voronoi_entries, axis=1)
+    else:
+        voronoi_images_df = pd.DataFrame()
+    voronoi_images_df = voronoi_images_df.fillna('')
 
 
-    entries = []
+
+
+    object_entries = []
+    voronoi_entries = []
     for image_name in annotations.keys():
 
-        # annotated_boxes = annotations[image_name]["boxes"]
         predicted_boxes = predictions[image_name]["boxes"]
         predicted_scores = predictions[image_name]["scores"]
 
-        # annotations_source = annotations[image_name]["source"]
+        pred_mask = predicted_scores > 0.50
+        sel_predicted_boxes = predicted_boxes[pred_mask]
 
-        for region_type in ["training", "test"]:
-            if region_type == "training":
+        for region_type in ["regions_of_interest", "training_regions", "test_regions"]:
+            if region_type == "regions_of_interest":
+                region_label = "interest"
+            elif region_type == "training_regions":
                 region_label = "fine_tuning"
             else:
                 region_label = "test"
 
-            regions = annotations[image_name][region_type + "_regions"]
+            regions = annotations[image_name][region_type]
 
             for i, region in enumerate(regions):
 
-                # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
-                # region_annotated_boxes = annotated_boxes[annotated_inds]
-                predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
-                region_predicted_scores = predicted_scores[predicted_inds]
+                entry_name = image_name + ":" + region_label + "_" + str(i+1)
 
-                pred_mask = region_predicted_scores > 0.50
+                predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
+                # xy_predicted_centres = np.stack([predicted_centres[:, 1], predicted_centres[:, 0]], axis=-1)
+
+
+                if region_type == "regions_of_interest":
+                    predicted_inds = poly_utils.get_contained_inds_for_points(predicted_centres, [region])
+                else:
+                    predicted_inds = box_utils.get_contained_inds_for_points(predicted_centres, [region])
                 
-                region_predicted_boxes = predicted_boxes[predicted_inds][pred_mask]
+                region_predicted_boxes = sel_predicted_boxes[predicted_inds]
 
-                # annotated_count = region_annotated_boxes.shape[0]
-                # predicted_count = np.sum(region_predicted_scores > 0.50)
+
+                if region_predicted_boxes.size > 0:
+                    region_predicted_box_areas_px = (region_predicted_boxes[:, 2] - region_predicted_boxes[:, 0]) * (region_predicted_boxes[:, 3] - region_predicted_boxes[:, 1])
+                    region_predicted_box_areas_m2 = np.round(region_predicted_box_areas_px * (gsd ** 2), 8)
+                else:
+                    region_predicted_box_areas_m2 = []
+                d_object = {
+                    entry_name: sorted(region_predicted_box_areas_m2)
+                }
+
+
                 if region_predicted_boxes.shape[0] <= 3:
-                    d = {
-                        image_name + ":" + region_label + "_" + str(i+1): []
+                    d_voronoi = {
+                        entry_name: []
                     }
                 else:
 
                     try:
 
                         region_predicted_centres = (region_predicted_boxes[..., :2] + region_predicted_boxes[..., 2:]) / 2.0
-                        region_predicted_centres = np.stack([region_predicted_centres[:, 1], region_predicted_centres[:, 0]], axis=-1)
+                        xy_region_predicted_centres = np.stack([region_predicted_centres[:, 1], region_predicted_centres[:, 0]], axis=-1)
 
-                        vor = Voronoi(region_predicted_centres)
-
-                        # if not drew_plot:
-                        # fig = voronoi_plot_2d(vor)
-
-                        # for vor_reg in vor.regions:
-                        #     if len(vor_reg) > 0 and -1 not in vor_reg:
-                        #         vor_verts = vor.vertices[vor_reg]
+                        vor = Voronoi(xy_region_predicted_centres)
 
                         lines = [
                             shapely.geometry.LineString(vor.vertices[line])
                             for line in vor.ridge_vertices
                             if -1 not in line
                         ]
-                        # print(lines)
-                        boundary = shapely.geometry.Polygon([(region[1], region[0]), (region[3], region[0]), (region[3], region[2]), (region[1], region[2])])
+
+                        if region_type == "regions_of_interest":
+                            boundary = shapely.geometry.Polygon([(x[1], x[0]) for x in region])
+                        else:
+                            boundary = shapely.geometry.Polygon([(region[1], region[0]), (region[3], region[0]), (region[3], region[2]), (region[1], region[2])])
+                        
                         filtered_lines = []
                         for line in lines:
-                            if boundary.contains(line): # line.crosses(boundary): #boundary.contains(line):
+                            if boundary.contains(line):
                                 filtered_lines.append(line)
 
                         areas_m2 = []
@@ -1482,37 +1555,44 @@ def create_voronoi_areas_spreadsheet(results_dir):
 
                         # plt.close()
 
-                        d = {
-                            image_name + ":" + region_label + "_" + str(i+1): sorted(areas_m2)
+                        d_voronoi = {
+                            entry_name: sorted(areas_m2)
                         }
                     except Exception as e:
                         logger.info("Voronoi area calculation generated exception: {}".format(e))
-                        d = {
-                            image_name + ":" + region_label + "_" + str(i+1): []
+                        d_voronoi = {
+                            entry_name: []
                         }
 
 
-                entries.append(pd.DataFrame(d))
+                object_entries.append(pd.DataFrame(d_object))
+                voronoi_entries.append(pd.DataFrame(d_voronoi))
 
 
-    # df = pd.DataFrame([*zip(all_areas_m2)])
-    if len(entries) > 0:
-        regions_df = pd.concat(entries, axis=1)
+
+    if len(object_entries) > 0:
+        object_regions_df = pd.concat(object_entries, axis=1)
     else:
-        regions_df = pd.DataFrame()
-    regions_df = regions_df.fillna('')
-    # print(df)
-
-    # out_path = 
+        object_regions_df = pd.DataFrame()
+    object_regions_df = object_regions_df.fillna('')
 
 
-    out_path = os.path.join(results_dir, "voronoi_areas.xlsx") #os.path.join(out_dir, "results.xlsx")
-    # with pd.ExcelWriter(out_path) as writer:
-    #     images_df.to_excel(writer, sheet_name="Images")
+    if len(voronoi_entries) > 0:
+        voronoi_regions_df = pd.concat(voronoi_entries, axis=1)
+    else:
+        voronoi_regions_df = pd.DataFrame()
+    voronoi_regions_df = voronoi_regions_df.fillna('')
+
+
+
+
+    out_path = os.path.join(results_dir, "areas.xlsx")
 
     sheet_name_to_df = {
-        "Images": images_df,
-        "Regions": regions_df
+        "Image Object Areas": object_images_df,
+        "Region Object Areas": object_regions_df,
+        "Image Voronoi Areas": voronoi_images_df,
+        "Region Voronoi Areas": voronoi_regions_df
         # "Stats": stats_df
     }
     writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
@@ -1561,6 +1641,7 @@ def create_regions_sheet(args, updated_metrics):
     metadata = args["metadata"]
     camera_specs = args["camera_specs"]
     vegetation_record = args["vegetation_record"]
+    tags = args["tags"]
 
 
     include_density = can_calculate_density(metadata, camera_specs)
@@ -1573,15 +1654,25 @@ def create_regions_sheet(args, updated_metrics):
         "Field Name",
         "Mission Date",
         "Image Name",
-        "Region Name",
+        "Region Name"]
+    
+    for tag_name in tags.keys():
+        columns.append(tag_name)
+
+
+    columns.extend([
         "Source Of Annotations (For Image)",
         "Annotated Count",
         "Predicted Count"
-    ]
+    ])
 
     if include_density:
         columns.extend(["Annotated Count Per Square Metre", "Predicted Count Per Square Metre"])
 
+    columns.extend(["Area (Pixels)"])
+
+    if include_density:
+        columns.extend(["Area (Square Metres)"])
     # if excess_green_record is not None:
     # columns.append("ground_cover_percentage")
     columns.extend([
@@ -1626,36 +1717,54 @@ def create_regions_sheet(args, updated_metrics):
         # metrics["F1 Score (IoU=0.7)"][image_name] = {}
         # metrics["F1 Score (IoU=0.9)"][image_name] = {}
 
-        for region_type in ["training", "test"]:
+        for region_type in ["regions_of_interest", "training_regions", "test_regions"]:
+
 
             # metrics["MS COCO mAP"][image_name][region_type + "_regions"] = []
             # metrics["F1 Score (IoU=0.5)"][image_name][region_type + "_regions"] = []
             # metrics["F1 Score (IoU=0.7)"][image_name][region_type + "_regions"] = []
             # metrics["F1 Score (IoU=0.9)"][image_name][region_type + "_regions"] = []
 
-            regions = annotations[image_name][region_type + "_regions"]
+            regions = annotations[image_name][region_type]
 
             for i, region in enumerate(regions):
-
-                if region_type == "training":
+                if region_type == "regions_of_interest":
+                    region_name = "interest_" + (str(i+1))
+                elif region_type == "training_regions":
                     region_name = "fine_tuning_" + (str(i+1))
                 else:
                     region_name = "test_" + (str(i+1))
 
-                annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                annotated_centres = (annotated_boxes[..., :2] + annotated_boxes[..., 2:]) / 2.0
+                # predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
+                predicted_centres = (predicted_boxes[..., :2] + predicted_boxes[..., 2:]) / 2.0
+
+                if region_type == "regions_of_interest":
+                    annotated_inds = poly_utils.get_contained_inds_for_points(annotated_centres, [region])
+                    predicted_inds = poly_utils.get_contained_inds_for_points(predicted_centres, [region])
+                    area_px = poly_utils.get_poly_area(region)
+                else:
+                    annotated_inds = box_utils.get_contained_inds_for_points(annotated_centres, [region])
+                    predicted_inds = box_utils.get_contained_inds_for_points(predicted_centres, [region])
+                    height_px = region[2] - region[0]
+                    width_px = region[3] - region[1]
+                    area_px = height_px * width_px
+
                 region_annotated_boxes = annotated_boxes[annotated_inds]
-                predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
-                # region_predicted_boxes = predicted_boxes[predicted_inds]
                 region_predicted_scores = predicted_scores[predicted_inds]
 
 
                 annotated_count = region_annotated_boxes.shape[0]
                 predicted_count = np.sum(region_predicted_scores > 0.50)
 
-                if annotated_count > 0:
-                    percent_count_error = round(abs((predicted_count - annotated_count) / (annotated_count)) * 100, 2)
+                if region_type == "regions_of_interest":
+                    percent_count_error = "NA"
                 else:
-                    percent_count_error = "NA" #"undefined"
+                    if annotated_count > 0:
+                        percent_count_error = round(abs((predicted_count - annotated_count) / (annotated_count)) * 100, 2)
+                    else:
+                        percent_count_error = "NA" #"undefined"
 
                 d["Username"].append(username)
                 d["Farm Name"].append(farm_name)
@@ -1663,23 +1772,31 @@ def create_regions_sheet(args, updated_metrics):
                 d["Mission Date"].append(mission_date)
                 d["Image Name"].append(image_name)
                 d["Region Name"].append(region_name)
+                nav_item = image_name + "/" + str(i)
+                for tag_name in tags.keys():
+                    if region_type == "regions_of_interest" and nav_item in tags[tag_name]:
+                        d[tag_name].append(tags[tag_name][nav_item])
+                    else:
+                        d[tag_name].append("NA")
+
                 d["Source Of Annotations (For Image)"].append(annotations_source)
                 d["Annotated Count"].append(annotated_count)
                 d["Predicted Count"].append(predicted_count)
 
+                d["Area (Pixels)"].append(round(area_px, 2))
 
                 if include_density:
-                    area_height_px = region[2] - region[0]
-                    area_width_px = region[3] - region[1]
-                    area_m2 = calculate_area_m2(camera_specs, metadata, area_height_px, area_width_px) #image_name)
+
+                    area_m2 = calculate_area_m2(camera_specs, metadata, area_px) #image_name)
                     d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 2))
                     d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 2))
+                    d["Area (Square Metres)"].append(round(area_m2, 2))
 
 
                 d["Percent Count Error"].append(percent_count_error)
                 d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
-                vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"][region_type + "_regions"][i]
-                obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"][region_type + "_regions"][i]
+                vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"][region_type][i]
+                obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"][region_type][i]
                 if vegetation_percentage == 0:
                     obj_percentage = "NA"
                     non_obj_percentage = "NA"
@@ -1699,9 +1816,13 @@ def create_regions_sheet(args, updated_metrics):
                 # d["MS_COCO_mAP"].append(round(MS_COCO_mAP, 2))
 
                 for metric in metrics_lst:
-                    metric_val = updated_metrics[metric][image_name][region_type + "_regions"][i]
-                    if isinstance(metric_val, float):
-                        metric_val = round(metric_val, 2)
+                    if region_type == "regions_of_interest":
+                        metric_val = "NA"
+                    else:
+                        metric_val = updated_metrics[metric][image_name][region_type][i]
+
+                        if isinstance(metric_val, float):
+                            metric_val = round(metric_val, 2)
                     d[metric].append(metric_val)
 
                 # metrics["MS COCO mAP"][image_name][region_type + "_regions"].append(MS_COCO_mAP)
@@ -1763,10 +1884,10 @@ def create_stats_sheet(args, regions_df):
 
     if len(regions_df.index) > 0:
 
-        for region_type in ["training", "test"]:
-
-            # data[region_type] = {}
-            if region_type == "training":
+        for region_type in ["training_regions", "test_regions"]: #["interest", "training", "test"]:
+            # if region_type == "regions_of_interest":
+            #     disp_region_type = "interest"
+            if region_type == "training_regions":
                 disp_region_type = "fine_tuning"
             else:
                 disp_region_type = "test"
@@ -1797,8 +1918,12 @@ def create_stats_sheet(args, regions_df):
                 # d["Pearson's r: Annotated Count v. Predicted Count"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Predicted Count"])[0][1]), 2)
                 # d["Pearson's r: Annotated Count v. Vegetation Percentage"] = round(float(np.corrcoef(sub_df["Annotated Count"], sub_df["Vegetation Percentage"])[0][1]), 2)
 
-
+                
                 for metric in averaged_metrics:
+
+                    # if region_type == "regions_of_interest":
+                    #     metric_val = "NA"
+                    # else:
                     # metric_val = updated_metrics[metric][image_name][region_type + "_regions"][i]
                     try:
                         # if isinstance(metric_val, float):

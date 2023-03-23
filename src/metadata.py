@@ -74,7 +74,7 @@ def extract_metadata(image_set_dir, camera_height=None):
     image_num = 0
     for image_path in tqdm.tqdm(glob.glob(os.path.join(images_dir, "*")), desc="Extracting metadata"):
 
-        image_name = os.path.basename(image_path)[:-4]
+        image_name = os.path.basename(image_path).split(".")[0]
 
         image = Image(image_path)
 

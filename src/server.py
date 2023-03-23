@@ -653,7 +653,7 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 #     return end_time
 
-def create_vegetation_record(image_set_dir, annotations, full_predictions, excess_green_record):
+def create_vegetation_record(image_set_dir, excess_green_record, annotations, full_predictions):
 
     # vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
     # vegetation_record = json_io.load_json(vegetation_record_path)
@@ -758,7 +758,7 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
 
 
     isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.CALCULATING_VEGETATION_COVERAGE)
-    vegetation_record = create_vegetation_record(image_set_dir, annotations, full_predictions, excess_green_record)
+    vegetation_record = create_vegetation_record(image_set_dir, excess_green_record, annotations, full_predictions)
 
     # vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
     # json_io.save_json(vegetation_record_path, updated_vegetation_record)
@@ -771,6 +771,10 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     excess_green_record_dst_path = os.path.join(results_dir, "excess_green_record.json")
     # shutil.copyfile(excess_green_record_src_path, excess_green_record_dst_path)
     json_io.save_json(excess_green_record_dst_path, excess_green_record)
+
+    tags_src_path = os.path.join(image_set_dir, "annotations", "tags.json")
+    tags_dst_path = os.path.join(results_dir, "tags.json")
+    shutil.copy(tags_src_path, tags_dst_path)
     
     # annotations_src_path = os.path.join(image_set_dir, "annotations", "annotations.json")
     annotations_dst_path = os.path.join(results_dir, "annotations.json")
@@ -790,7 +794,7 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
 
     if inference_metrics.can_calculate_density(metadata, camera_specs):
         isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.CALCULATING_VORONOI_AREAS)
-        inference_metrics.create_voronoi_areas_spreadsheet(results_dir)
+        inference_metrics.create_areas_spreadsheet(results_dir)
 
     raw_outputs_dir = os.path.join(results_dir, "raw_outputs")
     os.makedirs(raw_outputs_dir)
@@ -799,21 +803,35 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     downloadable_annotations = {}
     int_to_ext_annotation_keys = {
         "boxes": "annotations",
+        "regions_of_interest": "regions_of_interest",
         "training_regions": "fine_tuning_regions",
         "test_regions": "test_regions"
     }
+
+
     for image_name in annotations.keys():
         downloadable_annotations[image_name] = {}
         for key in int_to_ext_annotation_keys.keys():
+
             downloadable_annotations[image_name][int_to_ext_annotation_keys[key]] = []
-            for box in annotations[image_name][key]:
-                download_box = [
-                    int(box[1]),
-                    int(box[0]),
-                    int(box[3]),
-                    int(box[2])
-                ]
-                downloadable_annotations[image_name][int_to_ext_annotation_keys[key]].append(download_box)
+
+            if key == "regions_of_interest":
+
+                for poly in annotations[image_name]["regions_of_interest"]:
+                    download_poly = []
+                    for coord in poly:
+                        download_poly.append([int(coord[1]), int(coord[0])])
+                    downloadable_annotations[image_name][int_to_ext_annotation_keys[key]].append(download_poly)
+                
+            else:
+                for box in annotations[image_name][key]:
+                    download_box = [
+                        int(box[1]),
+                        int(box[0]),
+                        int(box[3]),
+                        int(box[2])
+                    ]
+                    downloadable_annotations[image_name][int_to_ext_annotation_keys[key]].append(download_box)
     
     json_io.save_json(os.path.join(raw_outputs_dir, "annotations.json"), downloadable_annotations)
 
@@ -1015,6 +1033,7 @@ def process_predict(item):
                     os.remove(prediction_request_path)
 
                 if results_dir is not None and os.path.exists(results_dir):
+                    # shutil.move(results_dir, os.path.join(prediction_dir, "image_set_requests", "aborted", os.path.basename(prediction_request_path))[:-5])
                     shutil.rmtree(results_dir)
 
                 if request["save_result"]:
@@ -1176,6 +1195,7 @@ def one_pass():
     logger = logging.getLogger(__name__)
     for username_path in glob.glob(os.path.join("usr", "data", "*")):
         username = os.path.basename(username_path)
+        # logger.info("checking {}".format(username_path))
         try:
             check_baseline(username)
         except Exception as e:
@@ -1183,43 +1203,44 @@ def one_pass():
             logger.error("Exception occurred while performing pass (check_baseline)")
             logger.error(e)
             logger.error(trace)
-        for user_dir in glob.glob(os.path.join(username_path, "*")):
-            if os.path.basename(user_dir) == "image_sets":
-                for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
-                    farm_name = os.path.basename(farm_path)
-                    for field_path in glob.glob(os.path.join(farm_path, "*")):
-                        field_name = os.path.basename(field_path)
-                        for mission_path in glob.glob(os.path.join(field_path, "*")):
-                            mission_date = os.path.basename(mission_path)
-                            try:
-                                check_switch(username, farm_name, field_name, mission_date)
-                            except Exception as e:
-                                trace = traceback.format_exc()
-                                logger.error("Exception occurred while performing pass (check_switch)")
-                                logger.error(e)
-                                logger.error(trace)
-                            try:
-                                check_auto_select(username, farm_name, field_name, mission_date)
-                            except Exception as e:
-                                trace = traceback.format_exc()
-                                logger.error("Exception occurred while performing pass (check_auto_select)")
-                                logger.error(e)
-                                logger.error(trace)
+        # for user_dir in glob.glob(os.path.join(username_path, "*")):
+        #     if os.path.basename(user_dir) == "image_sets":
+        for farm_path in glob.glob(os.path.join(username_path, "image_sets", "*")):
+            farm_name = os.path.basename(farm_path)
+            # logger.info("checking {}".format(farm_name))
+            for field_path in glob.glob(os.path.join(farm_path, "*")):
+                field_name = os.path.basename(field_path)
+                for mission_path in glob.glob(os.path.join(field_path, "*")):
+                    mission_date = os.path.basename(mission_path)
+                    try:
+                        check_switch(username, farm_name, field_name, mission_date)
+                    except Exception as e:
+                        trace = traceback.format_exc()
+                        logger.error("Exception occurred while performing pass (check_switch)")
+                        logger.error(e)
+                        logger.error(trace)
+                    try:
+                        check_auto_select(username, farm_name, field_name, mission_date)
+                    except Exception as e:
+                        trace = traceback.format_exc()
+                        logger.error("Exception occurred while performing pass (check_auto_select)")
+                        logger.error(e)
+                        logger.error(trace)
 
-                            try:
-                                check_predict(username, farm_name, field_name, mission_date)
-                            except Exception as e:
-                                trace = traceback.format_exc()
-                                logger.error("Exception occurred while performing pass (check_predict)")
-                                logger.error(e)
-                                logger.error(trace)
-                            try:                            
-                                check_train(username, farm_name, field_name, mission_date)
-                            except Exception as e:
-                                trace = traceback.format_exc()
-                                logger.error("Exception occurred while performing pass (check_train)")
-                                logger.error(e)
-                                logger.error(trace)
+                    try:
+                        check_predict(username, farm_name, field_name, mission_date)
+                    except Exception as e:
+                        trace = traceback.format_exc()
+                        logger.error("Exception occurred while performing pass (check_predict)")
+                        logger.error(e)
+                        logger.error(trace)
+                    try:                            
+                        check_train(username, farm_name, field_name, mission_date)
+                    except Exception as e:
+                        trace = traceback.format_exc()
+                        logger.error("Exception occurred while performing pass (check_train)")
+                        logger.error(e)
+                        logger.error(trace)
 
 
 

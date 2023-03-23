@@ -107,7 +107,9 @@ if __name__ == "__main__":
             break
 
         img_path, img, boxes, classes = data_loader.read_tf_sample(tf_sample)
-        img_id = os.path.basename(img_path)[:-4]
+        img_name = os.path.basename(img_path)
+        img_name_split = img_name.split(".")
+        img_id = img_name_split[0]
 
         output_result(img, boxes, classes, os.path.join(out_dir, img_id + "_original.png"))
 

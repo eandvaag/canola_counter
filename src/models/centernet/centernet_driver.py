@@ -121,8 +121,8 @@ def generate_predictions(config):
 
                     img_path = bytes.decode((patch_info["img_path"]).numpy())
                     patch_path = bytes.decode((patch_info["patch_path"]).numpy())
-                    img_name = os.path.basename(img_path)[:-4]
-                    patch_name = os.path.basename(patch_path)[:-4]
+                    img_name = os.path.basename(img_path).split(".")[0]
+                    patch_name = os.path.basename(patch_path).split(".")[0]
                     patch_coords = tf.sparse.to_dense(patch_info["patch_coords"]).numpy().astype(np.int32)
 
                     if dataset.is_annotated:

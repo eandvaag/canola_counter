@@ -12,7 +12,8 @@ from io_utils import json_io
 from lock_queue import LockQueue
 
 
-accepted_extensions = [".jpg", ".JPG", ".png", ".PNG"]
+# accepted_extensions = [".jpg", ".JPG", ".png", ".PNG"]
+accepted_extensions = ["jpg", "JPG", "jpeg", "JPEG", "png", "PNG"]
 NUM_WORKERS = 10
 
 image_queue = LockQueue()
@@ -33,12 +34,14 @@ def thread_function(index):
         image_path = image_queue.dequeue()
         image_name = os.path.basename(image_path)
         # print("worker thread dequeued", image_path)
-        dzi_path = os.path.join(dzi_images_dir, image_name[:-4])
+        split_image_name = image_name.split(".")
+        dzi_path = os.path.join(dzi_images_dir, split_image_name[0])
+        image_extension = split_image_name[-1]
         # print("dzi_path", dzi_path)
 
-        if (image_path[-4:] not in accepted_extensions) and not is_ortho:
+        if (image_extension not in accepted_extensions) and not is_ortho:
             # print("running convert")
-            conv_path = os.path.join(images_dir, image_name[-4:] + ".png")
+            conv_path = os.path.join(images_dir, split_image_name[0] + ".png")
             try:
                 subprocess.run(["convert", image_path, conv_path], check=True)
             except Exception as e:

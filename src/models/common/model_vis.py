@@ -168,7 +168,7 @@ def output_image_predictions(out_dir, img_predictions_lst, class_map, img_paths)
         fig = px.imshow(img_arrays, animation_frame=0, binary_string=True,
                         labels=dict(animation_frame="slice"), binary_compression_level=9)
 
-        out_name = os.path.basename(img_path)[:-4] + "_predictions.html"
+        out_name = os.path.basename(img_path).split(".")[0] + "_predictions.html"
 
         fig.write_html(os.path.join(out_dir, out_name))
 

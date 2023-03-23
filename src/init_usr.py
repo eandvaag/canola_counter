@@ -148,16 +148,18 @@ def update_w3c_annotation_file(image_set_dir):
 
 def default_overlay_appearance():
     return {
-        "draw_order": ["training_region", "test_region", "annotation", "prediction"],
+        "draw_order": ["region_of_interest", "training_region", "test_region", "annotation", "prediction"],
         "style": {
             "annotation": "strokeRect",
             "prediction": "strokeRect",
+            "region_of_interest": "strokeRect",
             "training_region": "strokeRect",
             "test_region": "strokeRect"
         },
         "colors": {
             "annotation": "#0080ff",
             "prediction": "#ff4040",
+            "region_of_interest": "#17c44b",
             "training_region": "#ff51eb",
             "test_region": "#ffae00"
         }

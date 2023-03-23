@@ -198,7 +198,7 @@ def run(org_image_sets, diverse_image_sets):
     
 
 
-    for item in [item1, item2]: #[item1, item2]:
+    for item in [item2]: #[item1, item2]:
         item["submission_time"] = int(time.time())
         
         pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", item["model_name"])

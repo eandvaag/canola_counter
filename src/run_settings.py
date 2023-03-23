@@ -79,9 +79,9 @@ class Settings:
         self.img_paths = sorted([os.path.join(self.images_dir, name) for name in os.listdir(self.images_dir) if 
                                  name.endswith("JPG") or name.endswith("jpg") or name.endswith("tif")])
 
-        self.annotated_img_paths = [img_path for img_path in self.img_paths if os.path.exists(img_path[:-3] + "xml")]
+        self.annotated_img_paths = [img_path for img_path in self.img_paths if os.path.exists(img_path.split(".")[0] + ".xml")]
 
-        self.unannotated_img_paths = [img_path for img_path in self.img_paths if not os.path.exists(img_path[:-3] + "xml")]
+        self.unannotated_img_paths = [img_path for img_path in self.img_paths if not os.path.exists(img_path.split(".")[0] + ".xml")]
 
 
 

@@ -1435,7 +1435,7 @@ def create_boxplot_comparison(image_set, methods, metric, num_replications, out_
 def create_global_comparison(methods, metric, out_path, xpositions="num_annotations", colors=None):
 
     if colors is None:
-        colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+        colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:brown", "tab:purple", "tab:pink", "tab:gray"]
     chart_data = [] #{}
     # for rep_num in range(num_replications):
     # chart_data[rep_num] = []

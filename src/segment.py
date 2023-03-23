@@ -51,10 +51,8 @@ def segment(image_path, out_path, threshold):
     desired_width = int(out_array.shape[1] * scale)
     resized = cv2.resize(out_array, (desired_width, desired_height))
 
-    #img_dzi_path = out_path[:-4]
-    #os.system("./MagickSlicer/magick-slicer.sh '" + out_path + "' '" + img_dzi_path + "'")
 
-    low_res_out_path = out_path[:-4] + "_low_res.png"
+    low_res_out_path = out_path.split(".")[0] + "_low_res.png"
     cv2.imwrite(low_res_out_path, cv2.cvtColor(resized, cv2.COLOR_RGB2BGR))
 
     #cv2.imwrite(out_path, cv2.cvtColor(binary_array, cv2.COLOR_RGB2BGR))

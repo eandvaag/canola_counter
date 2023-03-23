@@ -162,7 +162,7 @@ def convert_xml_files_to_w3c(xml_dir, class_map):
 
     for xml_file in xml_files:
 
-        extensionless_name = xml_file[:-4]
+        extensionless_name = os.path.basename(xml_file)[0]
         res[extensionless_name] = []
 
         xml_path = os.path.join(xml_dir, xml_file)

@@ -228,7 +228,7 @@ def update_training_patches(image_set_dir, annotations, updated_patch_size):
                     image, 
                     updated_patch_size,
                     image_annotations=None,
-                    patch_overlap_percent=50, #50, 
+                    patch_overlap_percent=50, #0, #50, #0, #50, #0, #50, 
                     include_patch_arrays=False,
                     regions=annotations[image_name]["training_regions"],
                     is_ortho=is_ortho,
@@ -748,10 +748,6 @@ def extract_box_patches(image_path, boxes, patch_size, is_ortho):
         patches.append(patch_data)
 
     return patches
-
-
-    
-
 
 
 
