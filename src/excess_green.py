@@ -174,23 +174,27 @@ def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record,
     vegetation_record[image_name]["sel_val"] = excess_green_record[image_name]["sel_val"]
     vegetation_record[image_name]["vegetation_percentage"] = {}
     vegetation_record[image_name]["obj_vegetation_percentage"] = {}
+    vegetation_record[image_name]["area_pixel_counts"] = {}
     vegetation_record[image_name]["vegetation_percentage"]["image"] = 0
     vegetation_record[image_name]["obj_vegetation_percentage"]["image"] = 0
     for region_key in region_keys:
         vegetation_record[image_name]["vegetation_percentage"][region_key] = []
         vegetation_record[image_name]["obj_vegetation_percentage"][region_key] = []
+        vegetation_record[image_name]["area_pixel_counts"][region_key] = []
         # vegetation_record[image_name][region_key + "_coordinates"] = annotations[image_name][region_key]
         for i in range(len(annotations[image_name][region_key])):
             vegetation_record[image_name]["vegetation_percentage"][region_key].append(0)
             vegetation_record[image_name]["obj_vegetation_percentage"][region_key].append(0)
+            vegetation_record[image_name]["area_pixel_counts"][region_key].append(0)
 
     for result in results:
-        vegetation_record[image_name]["vegetation_percentage"]["image"] += result["vegetation_percentage"]["chunk"]
-        vegetation_record[image_name]["obj_vegetation_percentage"]["image"] += result["obj_vegetation_percentage"]["chunk"]
+        vegetation_record[image_name]["vegetation_percentage"]["image"] += result["vegetation_pixel_counts"]["chunk"]
+        vegetation_record[image_name]["obj_vegetation_percentage"]["image"] += result["obj_vegetation_pixel_counts"]["chunk"]
         for region_key in region_keys:
             for i in range(len(annotations[image_name][region_key])):
-                vegetation_record[image_name]["vegetation_percentage"][region_key][i] += result["vegetation_percentage"][region_key][i]
-                vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] += result["obj_vegetation_percentage"][region_key][i]
+                vegetation_record[image_name]["vegetation_percentage"][region_key][i] += result["vegetation_pixel_counts"][region_key][i]
+                vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] += result["obj_vegetation_pixel_counts"][region_key][i]
+                vegetation_record[image_name]["area_pixel_counts"][region_key][i] += result["area_pixel_counts"][region_key][i]
                 # vegetation_record[image_name][region_key][i] += result[region_key][i]
         
     # print("vegetation_record image pixel count", vegetation_record[image_name]["image"])
@@ -198,10 +202,11 @@ def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record,
     vegetation_record[image_name]["obj_vegetation_percentage"]["image"] = round(float((vegetation_record[image_name]["obj_vegetation_percentage"]["image"] / (w * h)) * 100), 2)
     for region_key in region_keys:
         for i, region in enumerate(annotations[image_name][region_key]):
-            if region_key == "regions_of_interest":
-                region_area = poly_utils.get_poly_area(region)
-            else:
-                region_area = (region[2] - region[0]) * (region[3] - region[1])
+            # if region_key == "regions_of_interest":
+            #     region_area = poly_utils.get_poly_area(region)
+            # else:
+            #     region_area = (region[2] - region[0]) * (region[3] - region[1])
+            region_area = vegetation_record[image_name]["area_pixel_counts"][region_key][i]
             vegetation_record[image_name]["vegetation_percentage"][region_key][i] = round(float((vegetation_record[image_name]["vegetation_percentage"][region_key][i] / region_area) * 100), 2)
             vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] = round(float((vegetation_record[image_name]["obj_vegetation_percentage"][region_key][i] / region_area) * 100), 2)
 
@@ -245,24 +250,44 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
     obj_chunk_vegetation_pixel_count = int(np.sum(obj_exg_array > sel_val))
 
 
-    result = {
+    # result = {
 
-        "vegetation_percentage": {
+    #     "vegetation_percentage": {
+    #         "chunk": chunk_vegetation_pixel_count,
+    #         "regions_of_interest": [],
+    #         "training_regions": [],
+    #         "test_regions": []
+    #         # "tiles": []
+    #     },
+    #     "obj_vegetation_percentage": {
+    #         "chunk": obj_chunk_vegetation_pixel_count,
+    #         "regions_of_interest": [],
+    #         "training_regions": [],
+    #         "test_regions": []
+    #         # "tiles": []
+    #     }
+    # }
+
+
+    result = {
+        "vegetation_pixel_counts": {
             "chunk": chunk_vegetation_pixel_count,
             "regions_of_interest": [],
             "training_regions": [],
             "test_regions": []
-            # "tiles": []
         },
-        "obj_vegetation_percentage": {
+        "obj_vegetation_pixel_counts": {
             "chunk": obj_chunk_vegetation_pixel_count,
             "regions_of_interest": [],
             "training_regions": [],
             "test_regions": []
-            # "tiles": []
+        },
+        "area_pixel_counts": {
+            "regions_of_interest": [],
+            "training_regions": [],
+            "test_regions": []
         }
     }
-
 
     # tile_min_y = chunk_coords[0]
     # tile_min_x = chunk_coords[1]
@@ -320,8 +345,8 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
             else:
                 intersects, intersect_region = box_utils.get_intersection_rect(region, chunk_coords)
             if not intersects:
-                result["vegetation_percentage"][region_key].append(0)
-                result["obj_vegetation_percentage"][region_key].append(0)
+                result["vegetation_pixel_counts"][region_key].append(0)
+                result["obj_vegetation_pixel_counts"][region_key].append(0)
             else:
                 # index_coords = [
                 #     intersect_region[0] - chunk_coords[0],
@@ -362,12 +387,18 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
                 vegetation_pixel_count = int(np.sum(intersect_vals > sel_val)) # / intersect_vals.size)
                 # print("intersect_region for {}-{}: {} ({}) (v. c. {} / {}) {}".format(
                 # region, chunk_coords, intersect_region, index_coords, vegetation_pixel_count, intersect_vals.size, exg_array.size))
-                result["vegetation_percentage"][region_key].append(vegetation_pixel_count)
+                # result["vegetation_percentage"][region_key].append(vegetation_pixel_count)
 
 
                 obj_vegetation_pixel_count = int(np.sum(obj_intersect_vals > sel_val))
 
-                result["obj_vegetation_percentage"][region_key].append(obj_vegetation_pixel_count)
+                # result["obj_vegetation_percentage"][region_key].append(obj_vegetation_pixel_count)
+
+
+                result["vegetation_pixel_counts"][region_key].append(vegetation_pixel_count)
+                result["obj_vegetation_pixel_counts"][region_key].append(obj_vegetation_pixel_count)
+                result["area_pixel_counts"][region_key].append(intersect_vals.size)
+
 
     return result
 
