@@ -347,6 +347,7 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
             if not intersects:
                 result["vegetation_pixel_counts"][region_key].append(0)
                 result["obj_vegetation_pixel_counts"][region_key].append(0)
+                result["area_pixel_counts"][region_key].append(0)
             else:
                 # index_coords = [
                 #     intersect_region[0] - chunk_coords[0],
