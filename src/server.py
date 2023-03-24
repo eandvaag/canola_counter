@@ -726,7 +726,7 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     annotations = annotation_utils.load_annotations(annotations_src_path)
 
     isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.COLLECTING_METRICS)
-    metrics = inference_metrics.collect_image_set_metrics(image_set_dir, full_predictions, annotations) #, config)
+    metrics = inference_metrics.collect_image_set_metrics(full_predictions, annotations) #, config)
     # metrics = fast_metrics #{}
     # metric_keys = list(fast_metrics.keys()) + list(slow_metrics.keys())
     

@@ -512,7 +512,7 @@ def get_positives_and_negatives(annotated_boxes, predicted_boxes, iou_thresh):
 
 
 
-def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
+def collect_image_set_metrics(full_predictions, annotations):
 
 
     logger = logging.getLogger(__name__)
@@ -524,8 +524,8 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
 
     # image_metrics = {}
 
-    metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
-    metadata = json_io.load_json(metadata_path)
+    # metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    # metadata = json_io.load_json(metadata_path)
     # is_ortho = metadata["is_ortho"] == "yes"
 
     # if is_ortho:
@@ -572,44 +572,53 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
         pred_scores = np.array(full_predictions[image_name]["scores"])
 
 
-        image_w = metadata["images"][image_name]["width_px"]
-        image_h = metadata["images"][image_name]["height_px"]
-
-        fully_annotated = annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h)
-
-
-
-        for region_key in ["training_regions", "test_regions"]:
+        for region_key in ["regions_of_interest", "training_regions", "test_regions"]:
             for metric_key in metric_keys:
                 metrics[metric_key][image_name][region_key] = []
 
             for region in annotations[image_name][region_key]:
-                if fully_annotated:
-                    region_annotated_boxes = annotated_boxes
-                    region_pred_boxes = pred_boxes
-                    region_pred_scores = pred_scores
+                annotated_centres = (annotated_boxes[..., :2] + annotated_boxes[..., 2:]) / 2.0
+                predicted_centres = (pred_boxes[..., :2] + pred_boxes[..., 2:]) / 2.0
+                    
+                if region_key == "regions_of_interest":
+                    annotated_inds = poly_utils.get_contained_inds_for_points(annotated_centres, [region])
+                    predicted_inds = poly_utils.get_contained_inds_for_points(predicted_centres, [region])
                 else:
-                    # region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
-                    # region_annotated_boxes = annotated_boxes[region_annotated_inds]
-                    # # region_annotated_classes = np.zeros(shape=(region_annotated_boxes.shape[0]))
+                    annotated_inds = box_utils.get_contained_inds_for_points(annotated_centres, [region])
+                    predicted_inds = box_utils.get_contained_inds_for_points(predicted_centres, [region])
+
+                region_annotated_boxes = annotated_boxes[annotated_inds]
+                region_pred_boxes = pred_boxes[predicted_inds]
+                region_pred_scores = pred_scores[predicted_inds]
+
+
+
+                # if fully_annotated:
+                #     region_annotated_boxes = annotated_boxes
+                #     region_pred_boxes = pred_boxes
+                #     region_pred_scores = pred_scores
+                # else:
+                #     # region_annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                #     # region_annotated_boxes = annotated_boxes[region_annotated_inds]
+                #     # # region_annotated_classes = np.zeros(shape=(region_annotated_boxes.shape[0]))
                     
 
-                    # region_pred_inds = box_utils.get_contained_inds(pred_boxes, [region])
-                    # region_pred_boxes = pred_boxes[region_pred_inds]
-                    # region_pred_scores = pred_scores[region_pred_inds]
+                #     # region_pred_inds = box_utils.get_contained_inds(pred_boxes, [region])
+                #     # region_pred_boxes = pred_boxes[region_pred_inds]
+                #     # region_pred_scores = pred_scores[region_pred_inds]
 
 
-                    # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
-                    annotated_centres = (annotated_boxes[..., :2] + annotated_boxes[..., 2:]) / 2.0
-                    annotated_inds = box_utils.get_contained_inds_for_points(annotated_centres, [region])
-                    region_annotated_boxes = annotated_boxes[annotated_inds]
+                #     # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
+                #     annotated_centres = (annotated_boxes[..., :2] + annotated_boxes[..., 2:]) / 2.0
+                #     annotated_inds = box_utils.get_contained_inds_for_points(annotated_centres, [region])
+                #     region_annotated_boxes = annotated_boxes[annotated_inds]
 
-                    # predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
-                    predicted_centres = (pred_boxes[..., :2] + pred_boxes[..., 2:]) / 2.0
-                    predicted_inds = box_utils.get_contained_inds_for_points(predicted_centres, [region])
-                    region_pred_boxes = pred_boxes[predicted_inds]
+                #     # predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
+                #     predicted_centres = (pred_boxes[..., :2] + pred_boxes[..., 2:]) / 2.0
+                #     predicted_inds = box_utils.get_contained_inds_for_points(predicted_centres, [region])
+                #     region_pred_boxes = pred_boxes[predicted_inds]
 
-                    region_pred_scores = pred_scores[predicted_inds]
+                #     region_pred_scores = pred_scores[predicted_inds]
 
                     
                 
@@ -646,11 +655,13 @@ def collect_image_set_metrics(image_set_dir, full_predictions, annotations):
                 
                 num_predicted = sel_region_pred_boxes.shape[0]
                 num_annotated = region_annotated_boxes.shape[0]
+                # print("num_predicted: {}, num_annotated: {}".format(num_predicted, num_annotated))
 
                 if num_predicted > 0:
                     if num_annotated > 0:
-                        true_positive, false_positive, false_negative = get_positives_and_negatives(annotated_boxes, sel_region_pred_boxes, 0.50)
-                        print(true_positive, false_positive, false_negative)
+                        true_positive, false_positive, false_negative = get_positives_and_negatives(region_annotated_boxes, sel_region_pred_boxes, 0.50)
+                        print("anno: {}, pred: {}, tp: {}, fp: {}, fn: {}".format(
+                            num_predicted, num_annotated, true_positive, false_positive, false_negative))
                         precision_050 = true_positive / (true_positive + false_positive)
                         recall_050 = true_positive / (true_positive + false_negative)
                         if precision_050 == 0 and recall_050 == 0:
@@ -1758,13 +1769,13 @@ def create_regions_sheet(args, updated_metrics):
                 annotated_count = region_annotated_boxes.shape[0]
                 predicted_count = np.sum(region_predicted_scores > 0.50)
 
-                if region_type == "regions_of_interest":
-                    percent_count_error = "NA"
+                # if region_type == "regions_of_interest":
+                #     percent_count_error = "NA"
+                # else:
+                if annotated_count > 0:
+                    percent_count_error = round(abs((predicted_count - annotated_count) / (annotated_count)) * 100, 2)
                 else:
-                    if annotated_count > 0:
-                        percent_count_error = round(abs((predicted_count - annotated_count) / (annotated_count)) * 100, 2)
-                    else:
-                        percent_count_error = "NA" #"undefined"
+                    percent_count_error = "NA" #"undefined"
 
                 d["Username"].append(username)
                 d["Farm Name"].append(farm_name)
@@ -1816,13 +1827,13 @@ def create_regions_sheet(args, updated_metrics):
                 # d["MS_COCO_mAP"].append(round(MS_COCO_mAP, 2))
 
                 for metric in metrics_lst:
-                    if region_type == "regions_of_interest":
-                        metric_val = "NA"
-                    else:
-                        metric_val = updated_metrics[metric][image_name][region_type][i]
+                    # if region_type == "regions_of_interest":
+                    #     metric_val = "NA"
+                    # else:
+                    metric_val = updated_metrics[metric][image_name][region_type][i]
 
-                        if isinstance(metric_val, float):
-                            metric_val = round(metric_val, 2)
+                    if isinstance(metric_val, float):
+                        metric_val = round(metric_val, 2)
                     d[metric].append(metric_val)
 
                 # metrics["MS COCO mAP"][image_name][region_type + "_regions"].append(MS_COCO_mAP)
@@ -1884,10 +1895,10 @@ def create_stats_sheet(args, regions_df):
 
     if len(regions_df.index) > 0:
 
-        for region_type in ["training_regions", "test_regions"]: #["interest", "training", "test"]:
-            # if region_type == "regions_of_interest":
-            #     disp_region_type = "interest"
-            if region_type == "training_regions":
+        for region_type in ["regions_of_interest", "training_regions", "test_regions"]: #["interest", "training", "test"]:
+            if region_type == "regions_of_interest":
+                disp_region_type = "interest"
+            elif region_type == "training_regions":
                 disp_region_type = "fine_tuning"
             else:
                 disp_region_type = "test"
