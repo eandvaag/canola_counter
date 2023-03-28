@@ -231,7 +231,10 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
 
 
     pred_mask = np.full((chunk_array.shape[0], chunk_array.shape[1]), True)
-    pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    if image_name in full_predictions:
+        pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    else:
+        pred_boxes = mp.array([])
     inds = box_utils.get_contained_inds(pred_boxes, [chunk_coords])
     pred_boxes = pred_boxes[inds]
     adj_pred_boxes = np.stack([
@@ -446,7 +449,10 @@ def get_vegetation_percentages_for_image(image_set_dir, excess_green_record, ann
     exg_array = image_utils.excess_green(image_array)
 
     pred_mask = np.full((image_array.shape[0], image_array.shape[1]), True)
-    pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    if image_name in full_predictions:
+        pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    else:
+        pred_boxes = np.array([])
     for pred_box in pred_boxes:
         pred_mask[pred_box[0]:pred_box[2], pred_box[1]:pred_box[3]] = False
 

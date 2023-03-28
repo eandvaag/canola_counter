@@ -558,7 +558,8 @@ def collect_image_set_metrics(full_predictions, annotations):
     # for image_name in annotations.keys():
     #     for metric_key in metric_keys:
 
-    for image_name in tqdm.tqdm(annotations.keys(), desc="Calculating Metrics"):
+    for image_name in tqdm.tqdm(full_predictions.keys(), desc="Calculating Metrics"):
+
 
         # print("collect_image_set_metrics", image_name)
         for metric_key in metric_keys:
@@ -935,7 +936,7 @@ def calculate_area_m2(camera_specs, metadata, area_px):
     
 
 
-def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_date, result_uuid, download_uuid): #, annotation_version):
+def create_spreadsheet(results_dir, regions_only=False): #username, farm_name, field_name, mission_date, result_uuid, download_uuid): #, annotation_version):
 
     path_pieces = results_dir.split("/")
     username = path_pieces[2]
@@ -985,7 +986,10 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
 
     annotations = annotation_utils.load_annotations(annotations_path) #w3c_io.load_annotations(annotations_path, {"plant": 0})
     # excess_green_record = json_io.load_json(excess_green_record_path)
-    vegetation_record = json_io.load_json(vegetation_record_path)
+    if os.path.exists(vegetation_record_path):
+        vegetation_record = json_io.load_json(vegetation_record_path)
+    else:
+        vegetation_record = None
     # if os.path.exists(excess_green_record_path):
     #     excess_green_record = json_io.load_json(excess_green_record_path)
     # else:
@@ -1014,7 +1018,8 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
     # else:
     #     updated_metrics = collect_image_set_metrics(full_predictions, annotations)
 
-    images_df = create_images_sheet(args, updated_metrics)
+    if not regions_only:
+        images_df = create_images_sheet(args, updated_metrics)
     regions_df = create_regions_sheet(args, updated_metrics)
     stats_df = create_stats_sheet(args, regions_df)
 
@@ -1027,11 +1032,13 @@ def create_spreadsheet(results_dir): #username, farm_name, field_name, mission_d
     # with pd.ExcelWriter(out_path) as writer:
     #     images_df.to_excel(writer, sheet_name="Images")
 
-    sheet_name_to_df = {
-        "Images": images_df,
-        "Regions": regions_df,
-        "Stats": stats_df
-    }
+    sheet_name_to_df = {}
+
+    if not regions_only:
+        sheet_name_to_df["Images"] = images_df
+    sheet_name_to_df["Regions"] = regions_df
+    sheet_name_to_df["Stats"] = stats_df
+
     writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
     fmt = writer.book.add_format({"font_name": "Courier New"})
 
@@ -1140,14 +1147,18 @@ def create_images_sheet(args, updated_metrics):
         columns.extend(["Area (Square Metres)"])
 
     # if excess_green_record is not None:
+
     columns.extend([
         "Percent Count Error",
-        "Excess Green Threshold",
-        "Vegetation Percentage",
-        "Percentage of Vegetation Belonging to Objects",
-        "Percentage of Vegetation Belonging to Non-Objects"
     ])
 
+    if vegetation_record is not None:
+        columns.extend([
+            "Excess Green Threshold",
+            "Vegetation Percentage",
+            "Percentage of Vegetation Belonging to Objects",
+            "Percentage of Vegetation Belonging to Non-Objects"
+        ])
     # columns.append("MS_COCO_mAP")
 
     metrics_lst = [
@@ -1179,7 +1190,7 @@ def create_images_sheet(args, updated_metrics):
 
     # new_metrics = {}
 
-    for image_name in annotations.keys():
+    for image_name in predictions.keys():
 
         image_abs_boxes = annotations[image_name]["boxes"]
         regions_of_interest = annotations[image_name]["regions_of_interest"]
@@ -1259,18 +1270,19 @@ def create_images_sheet(args, updated_metrics):
 
         # if excess_green_record is not None:
         d["Percent Count Error"].append(percent_count_error)
-        d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
-        vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"]["image"]
-        obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"]["image"]
-        if vegetation_percentage == 0:
-            obj_percentage = "NA"
-            non_obj_percentage = "NA"
-        else:
-            obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
-            non_obj_percentage = round(100 - obj_percentage, 2)
-        d["Vegetation Percentage"].append(vegetation_percentage)
-        d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
-        d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
+        if vegetation_record is not None:
+            d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
+            vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"]["image"]
+            obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"]["image"]
+            if vegetation_percentage == 0:
+                obj_percentage = "NA"
+                non_obj_percentage = "NA"
+            else:
+                obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
+                non_obj_percentage = round(100 - obj_percentage, 2)
+            d["Vegetation Percentage"].append(vegetation_percentage)
+            d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
+            d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
 
         if fully_annotated == "no":
             for metric in metrics_lst:
@@ -1322,7 +1334,7 @@ def create_images_sheet(args, updated_metrics):
     return df
 
 
-def create_areas_spreadsheet(results_dir):
+def create_areas_spreadsheet(results_dir, regions_only=False):
 
     logger = logging.getLogger(__name__)
 
@@ -1388,7 +1400,7 @@ def create_areas_spreadsheet(results_dir):
     object_entries = []
     voronoi_entries = []
     
-    for image_name in annotations.keys():
+    for image_name in predictions.keys():
         predicted_boxes = predictions[image_name]["boxes"]
         predicted_scores = predictions[image_name]["scores"]
         
@@ -1477,7 +1489,7 @@ def create_areas_spreadsheet(results_dir):
 
     object_entries = []
     voronoi_entries = []
-    for image_name in annotations.keys():
+    for image_name in predictions.keys():
 
         predicted_boxes = predictions[image_name]["boxes"]
         predicted_scores = predictions[image_name]["scores"]
@@ -1599,13 +1611,19 @@ def create_areas_spreadsheet(results_dir):
 
     out_path = os.path.join(results_dir, "areas.xlsx")
 
-    sheet_name_to_df = {
-        "Image Object Areas": object_images_df,
-        "Region Object Areas": object_regions_df,
-        "Image Voronoi Areas": voronoi_images_df,
-        "Region Voronoi Areas": voronoi_regions_df
-        # "Stats": stats_df
-    }
+    if regions_only:
+        sheet_name_to_df = {
+            "Region Object Areas": object_regions_df,
+            "Region Voronoi Areas": voronoi_regions_df
+        }
+    else:
+        sheet_name_to_df = {
+            "Image Object Areas": object_images_df,
+            "Region Object Areas": object_regions_df,
+            "Image Voronoi Areas": voronoi_images_df,
+            "Region Voronoi Areas": voronoi_regions_df
+            # "Stats": stats_df
+        }
     writer = pd.ExcelWriter(out_path, engine="xlsxwriter")
     fmt = writer.book.add_format({"font_name": "Courier New"})
 
@@ -1687,12 +1705,15 @@ def create_regions_sheet(args, updated_metrics):
     # if excess_green_record is not None:
     # columns.append("ground_cover_percentage")
     columns.extend([
-        "Percent Count Error",
-        "Excess Green Threshold",
-        "Vegetation Percentage",
-        "Percentage of Vegetation Belonging to Objects",
-        "Percentage of Vegetation Belonging to Non-Objects"
+        "Percent Count Error"
     ])
+    if vegetation_record is not None:
+        columns.extend([
+            "Excess Green Threshold",
+            "Vegetation Percentage",
+            "Percentage of Vegetation Belonging to Objects",
+            "Percentage of Vegetation Belonging to Non-Objects"
+        ])
 
     metrics_lst = [
         "True Positives (IoU=.50, conf>.50)",
@@ -1714,7 +1735,7 @@ def create_regions_sheet(args, updated_metrics):
 
 
 
-    for image_name in annotations.keys():
+    for image_name in predictions.keys():
 
         annotated_boxes = annotations[image_name]["boxes"]
         predicted_boxes = predictions[image_name]["boxes"]
@@ -1805,19 +1826,20 @@ def create_regions_sheet(args, updated_metrics):
 
 
                 d["Percent Count Error"].append(percent_count_error)
-                d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
-                vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"][region_type][i]
-                obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"][region_type][i]
-                if vegetation_percentage == 0:
-                    obj_percentage = "NA"
-                    non_obj_percentage = "NA"
-                else:
-                    obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
-                    non_obj_percentage = round(100 - obj_percentage, 2)
-                
-                d["Vegetation Percentage"].append(vegetation_percentage)
-                d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
-                d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
+                if vegetation_record is not None:
+                    d["Excess Green Threshold"].append(vegetation_record[image_name]["sel_val"])
+                    vegetation_percentage = vegetation_record[image_name]["vegetation_percentage"][region_type][i]
+                    obj_vegetation_percentage = vegetation_record[image_name]["obj_vegetation_percentage"][region_type][i]
+                    if vegetation_percentage == 0:
+                        obj_percentage = "NA"
+                        non_obj_percentage = "NA"
+                    else:
+                        obj_percentage = round((obj_vegetation_percentage / vegetation_percentage) * 100, 2)
+                        non_obj_percentage = round(100 - obj_percentage, 2)
+                    
+                    d["Vegetation Percentage"].append(vegetation_percentage)
+                    d["Percentage of Vegetation Belonging to Objects"].append(obj_percentage)
+                    d["Percentage of Vegetation Belonging to Non-Objects"].append(non_obj_percentage)
 
 
                 # d["Vegetation Percentage"].append(vegetation_percentage)

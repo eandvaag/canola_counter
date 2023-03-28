@@ -12,6 +12,8 @@ import tensorflow as tf
 import uuid
 import cv2
 from osgeo import gdal
+from PIL import Image as PILImage
+from PIL import ImageDraw as PILImageDraw
 
 # from mean_average_precision import MetricBuilder
 
@@ -29,7 +31,8 @@ from models.common import inference_metrics, \
                           driver_utils, \
                           model_keys, \
                           annotation_utils, \
-                          box_utils
+                          box_utils, \
+                          poly_utils
 
 from image_set import Image
 
@@ -260,6 +263,8 @@ def get_number_of_prediction_batches(request, patch_size, overlap_px, config):
         for region in request["regions"][i]:
 
             # print("region", region)
+            if type(region[0]) is list:
+                region = poly_utils.get_poly_bbox(region)
 
             region_width = region[3] - region[1]
             region_height = region[2] - region[0]
@@ -455,9 +460,10 @@ def predict(sch_ctx, image_set_dir, request): #, q):
 
             # logger.info("load_on_demand?: {}".format(load_on_demand))
 
-
-
-
+            is_poly = type(region[0]) is list
+            if is_poly:
+                poly_region = region
+                region = poly_utils.get_poly_bbox(region)
 
             batch_patch_arrays = []
             batch_ratios = []
@@ -494,18 +500,61 @@ def predict(sch_ctx, image_set_dir, request): #, q):
                     else:
                         patch_array[0:(max_content_y-patch_min_y), 0:(max_content_x-patch_min_x)] = image_array[patch_min_y:max_content_y, patch_min_x:max_content_x]
 
+                    skip = False
+                    if is_poly:
+                        patch_poly = [
+                            [patch_min_y, patch_min_x],
+                            [patch_min_y, patch_max_x],
+                            [patch_max_y, patch_max_x],
+                            [patch_max_y, patch_min_x]
+                        ]
+                        intersects, intersect_regions = poly_utils.get_intersection_polys(poly_region, patch_poly)
 
-                    # patch_data = {}
-                    
+                        # patch_w = patch_max_x - patch_min_x
+                        # patch_h = patch_max_y - patch_min_y
+                        # print("patch_w", patch_w)
+                        # print("patch_h", patch_h)
 
-                    patch_array = tf.cast(patch_array, dtype=tf.float32)
-                    patch_ratio = np.array(patch_array.shape[:2]) / np.array(config["arch"]["input_image_shape"][:2])
-                    patch_array = tf.image.resize(images=patch_array, size=config["arch"]["input_image_shape"][:2])
-                    # patch_data["patch"] = patch_array
+                        
 
-                    batch_patch_coords.append(patch_coords)
-                    batch_patch_arrays.append(patch_array)
-                    batch_ratios.append(patch_ratio)
+                        # print("intersect_regions: {}".format(intersect_regions))
+                        if intersects:
+                            tmp_img = PILImage.new("L", (patch_size, patch_size))
+                            skip = False
+                            for intersect_region in intersect_regions:
+                                polygon = []
+                                for coord in intersect_region:
+                                    polygon.append((min(patch_size, max(0, round(coord[1] - patch_min_x))), 
+                                                    min(patch_size, max(0, round(coord[0] - patch_min_y)))))
+                                # print("chunk_min_y: {}. chunk_min_x: {}, polygon: {}".format(chunk_coords[0], chunk_coords[1], polygon))
+                                
+                                # print("\tpolygon: {}".format(polygon))
+                                if len(polygon) == 1:
+                                    PILImageDraw.Draw(tmp_img).point(polygon, fill=1)
+                                else:
+                                    PILImageDraw.Draw(tmp_img).polygon(polygon, outline=1, fill=1)
+                            mask = np.array(tmp_img) != 1
+                            patch_array[mask] = [0, 0, 0]
+                        else:
+                            skip = True
+
+
+
+
+                    if not skip:
+
+
+                        # patch_data = {}
+                        
+
+                        patch_array = tf.cast(patch_array, dtype=tf.float32)
+                        patch_ratio = np.array(patch_array.shape[:2]) / np.array(config["arch"]["input_image_shape"][:2])
+                        patch_array = tf.image.resize(images=patch_array, size=config["arch"]["input_image_shape"][:2])
+                        # patch_data["patch"] = patch_array
+
+                        batch_patch_coords.append(patch_coords)
+                        batch_patch_arrays.append(patch_array)
+                        batch_ratios.append(patch_ratio)
 
                     if len(batch_patch_arrays) == config["inference"]["batch_size"] or (row_covered and col_covered):
 
@@ -656,11 +705,6 @@ def predict(sch_ctx, image_set_dir, request): #, q):
         }
 
 
-
-
-
-
-
         # predictions_w3c_path = os.path.join(image_predictions_dir, "predictions_w3c.json")
         # w3c_io.save_predictions(predictions_w3c_path, {image_name: image_predictions[image_name]}, config)
 
@@ -704,11 +748,20 @@ def predict(sch_ctx, image_set_dir, request): #, q):
         if os.path.exists(predictions_path):
             existing_predictions = json_io.load_json(predictions_path)
 
+            # print("region: {}".format(request["regions"][image_index]))
+
             existing_boxes = np.array(existing_predictions[image_name]["boxes"])
+            existing_box_centres = (existing_boxes[..., :2] + existing_boxes[..., 2:]) / 2.0
             existing_scores = np.array(existing_predictions[image_name]["scores"])
-            inds = box_utils.get_contained_inds(existing_boxes, request["regions"][image_index])
-            existing_boxes = np.delete(existing_boxes, inds, axis=0)
-            existing_scores = np.delete(existing_scores, inds)
+            mask = np.full(existing_boxes.shape[0], True)
+            for region in request["regions"][image_index]:
+                if type(region[0]) is list:
+                    inds = poly_utils.get_contained_inds_for_points(existing_box_centres, [region])
+                else:
+                    inds = box_utils.get_contained_inds_for_points(existing_box_centres, [region])
+                mask[inds] = False
+            existing_boxes = existing_boxes[mask] #np.delete(existing_boxes, inds, axis=0)
+            existing_scores = existing_scores[mask] #np.delete(existing_scores, inds)
             # existing_scores = np.round(existing_scores, 2)
             new_predictions[image_name]["boxes"] = existing_boxes.tolist()
             new_predictions[image_name]["scores"] = existing_scores.tolist()

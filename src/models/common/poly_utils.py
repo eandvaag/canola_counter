@@ -79,3 +79,8 @@ def get_intersection_polys(a, b):
 
 def get_poly_area(p):
     return Polygon(p).area
+
+
+def get_poly_bbox(p):
+    p_arr = np.array(p)
+    return [int(np.min(p_arr[:, 0])), int(np.min(p_arr[:, 1])), int(np.max(p_arr[:, 0])), int(np.max(p_arr[:, 1]))]

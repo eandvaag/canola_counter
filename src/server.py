@@ -713,6 +713,9 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     field_name = path_pieces[5]
     mission_date = path_pieces[6]
 
+    request_path = os.path.join(results_dir, "request.json")
+    request = json_io.load_json(request_path)
+
     full_predictions_path = os.path.join(results_dir, "full_predictions.json")
     full_predictions = json_io.load_json(full_predictions_path)
 
@@ -740,7 +743,6 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     metrics_path = os.path.join(results_dir, "metrics.json")
     json_io.save_json(metrics_path, metrics)
 
-
     excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
     excess_green_record = json_io.load_json(excess_green_record_src_path)
     # image_set_results_dir = os.path.join(results_dir, str(end_time))
@@ -756,15 +758,17 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     # print("running collect_image_set_metrics")
 
 
+    calculate_vegetation_coverage = "calculate_vegetation_coverage" in request and request["calculate_vegetation_coverage"]
 
-    isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.CALCULATING_VEGETATION_COVERAGE)
-    vegetation_record = create_vegetation_record(image_set_dir, excess_green_record, annotations, full_predictions)
+    if calculate_vegetation_coverage:
+        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.CALCULATING_VEGETATION_COVERAGE)
+        vegetation_record = create_vegetation_record(image_set_dir, excess_green_record, annotations, full_predictions)
 
-    # vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
-    # json_io.save_json(vegetation_record_path, updated_vegetation_record)
+        # vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
+        # json_io.save_json(vegetation_record_path, updated_vegetation_record)
 
-    results_vegetation_record_path = os.path.join(results_dir, "vegetation_record.json")
-    json_io.save_json(results_vegetation_record_path, vegetation_record)
+        results_vegetation_record_path = os.path.join(results_dir, "vegetation_record.json")
+        json_io.save_json(results_vegetation_record_path, vegetation_record)
 
     # excess_green_record_src_path = os.path.join(image_set_dir, "excess_green", "record.json")
     # if os.path.exists(excess_green_record_src_path):
@@ -781,8 +785,12 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     annotation_utils.save_annotations(annotations_dst_path, annotations)
     # shutil.copyfile(annotations_src_path, annotations_dst_path)
 
+
+
+    regions_only = "regions_only" in request and request["regions_only"]
+
     
-    inference_metrics.create_spreadsheet(results_dir)
+    inference_metrics.create_spreadsheet(results_dir, regions_only=regions_only)
 
 
 
@@ -794,7 +802,7 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
 
     if inference_metrics.can_calculate_density(metadata, camera_specs):
         isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.CALCULATING_VORONOI_AREAS)
-        inference_metrics.create_areas_spreadsheet(results_dir)
+        inference_metrics.create_areas_spreadsheet(results_dir, regions_only=regions_only)
 
     raw_outputs_dir = os.path.join(results_dir, "raw_outputs")
     os.makedirs(raw_outputs_dir)
@@ -989,6 +997,8 @@ def process_predict(item):
                 if request["save_result"]:
                     
                     results_dir = os.path.join(model_dir, "results", request["request_uuid"])
+                    saved_request_path = os.path.join(results_dir, "request.json")
+                    json_io.save_json(saved_request_path, request)
                     # os.makedirs(results_dir)
 
                     # q = mp.Queue()
@@ -1004,9 +1014,10 @@ def process_predict(item):
 
 
                     # collect_results(image_set_dir, results_dir, predictions, full_predictions)
+                    request = json_io.load_json(saved_request_path)
                     end_time = int(time.time())
                     request["end_time"] = end_time
-                    json_io.save_json(os.path.join(results_dir, "request.json"), request)
+                    json_io.save_json(saved_request_path, request)
 
                 os.remove(prediction_request_path)
 

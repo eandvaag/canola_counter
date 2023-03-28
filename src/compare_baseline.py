@@ -399,50 +399,60 @@ def run():
 
     baselines = [
 
-        # {
-        #     "model_name": "set_of_1_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 1
-        # },
-        # {
-        #     "model_name": "set_of_3_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 3
-        # },
-        # {
-        #     "model_name": "set_of_6_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 6
-        # },
+        {
+            "model_name": "set_of_1_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "set_of_3_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 3
+        },
+        {
+            "model_name": "set_of_6_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 6
+        },
         {
             "model_name": "set_of_12_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 12
         },
+        {
+            "model_name": "set_of_18_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 18
+        }
     ]
 
     diverse_baselines = [
 
-        # {
-        #     "model_name": "diverse_set_of_27_match_1_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 1
-        # },
-        # {
-        #     "model_name": "diverse_set_of_27_match_3_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 3
-        # },
-        # {
-        #     "model_name": "diverse_set_of_27_match_6_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 6
-        # },
-        # {
-        #     "model_name": "diverse_set_of_27_match_12_no_overlap",
-        #     "model_creator": "erik",
-        #     "num_training_sets": 12
-        # },
+        {
+            "model_name": "diverse_set_of_27_match_1_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "diverse_set_of_27_match_3_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 3
+        },
+        {
+            "model_name": "diverse_set_of_27_match_6_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 6
+        },
+        {
+            "model_name": "diverse_set_of_27_match_12_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 12
+        },
+        {
+            "model_name": "diverse_set_of_27_match_18_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 18
+        }
     ]
 
 
@@ -479,9 +489,9 @@ def run():
     all_baselines.extend(baselines)
     all_baselines.extend(diverse_baselines)
 
-    test(test_sets, all_baselines, num_reps)
+    # test(test_sets, all_baselines, num_reps)
     # plot_my_results(test_sets, baselines, num_reps)
-    # plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps)
+    plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps)
 
 
 if __name__ == "__main__":

@@ -135,7 +135,7 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
     camera_height = metadata["camera_height"]
 
     predictions = json_io.load_json(predictions_path)
-    image_name = list(predictions.keys())[0]
+    image_name = list(metadata["images"].keys())[0]
 
     # raw_image_height_px = metadata["raw_image_height_px"]
     # raw_image_width_px = metadata["raw_image_width_px"]
@@ -168,8 +168,11 @@ def create_interpolation_map_for_ortho(username, farm_name, field_name, mission_
 
     # if pred_path is not None:
     #     predictions = json_io.load_json(pred_path)
-    mask = np.array(predictions[image_name]["scores"]) > 0.50
-    pred_boxes = np.array(predictions[image_name]["boxes"])[mask]
+    if image_name in predictions:
+        mask = np.array(predictions[image_name]["scores"]) > 0.50
+        pred_boxes = np.array(predictions[image_name]["boxes"])[mask]
+    else:
+        pred_boxes = np.array([])
 
     annotated_values = []
     predicted_values = []
@@ -520,7 +523,8 @@ def create_interpolation_map_for_image_set(username, farm_name, field_name, miss
     # completed_points = []
     # annotated_values = []
     # for image_name in annotations.keys():
-    for image_name in predictions.keys():
+    # for image_name in predictions.keys():
+    for image_name in metadata["images"].keys():
         lon = metadata["images"][image_name]["longitude"]
         lat = metadata["images"][image_name]["latitude"]
 
@@ -564,7 +568,10 @@ def create_interpolation_map_for_image_set(username, farm_name, field_name, miss
         #         #predicted_value = len(predictions[image_name]["annotations"]) 
 
         if interpolated_value == "obj_density":
-            predicted_value = np.sum(np.array(predictions[image_name]["scores"]) > 0.50) / area_m2
+            if image_name in predictions:
+                predicted_value = np.sum(np.array(predictions[image_name]["scores"]) > 0.50) / area_m2
+            else:
+                predicted_value = 0
         else:
             perc_veg = vegetation_record[image_name]["vegetation_percentage"]["image"]
             perc_veg_obj = vegetation_record[image_name]["obj_vegetation_percentage"]["image"]

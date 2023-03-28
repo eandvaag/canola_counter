@@ -104,16 +104,18 @@ def extract_metadata(image_set_dir, camera_height=None):
                 # raise RuntimeError("Image set contains multiple camera makes. Established make: {}. Conflicting make: {}".format(
                 #     image_set_metadata["camera_info"]["make"], make
                 # ))
-                logger.warning("Conflicting camera makes within image set. Established make: {}. Conflicting make: {}".format(
-                    image_set_metadata["camera_info"]["make"], make
-                ))
+                exit(1)
+                # logger.warning("Conflicting camera makes within image set. Established make: {}. Conflicting make: {}".format(
+                #     image_set_metadata["camera_info"]["make"], make
+                # ))
             if model != image_set_metadata["camera_info"]["model"]:
                 # raise RuntimeError("Image set contains multiple camera models. Established model: {}. Conflicting model: {}".format(
                 #     image_set_metadata["camera_info"]["model"], model
                 # ))
-                logger.warning("Conflicting camera models within image set. Established model: {}. Conflicting model: {}".format(
-                    image_set_metadata["camera_info"]["model"], model
-                ))
+                exit(2)
+                # logger.warning("Conflicting camera models within image set. Established model: {}. Conflicting model: {}".format(
+                #     image_set_metadata["camera_info"]["model"], model
+                # ))
 
 
 
