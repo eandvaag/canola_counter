@@ -697,7 +697,7 @@ def run_random_images_models():
     prev_models = glob.glob(os.path.join(models_dir, "pending", "random_images_*"))
     prev_models.sort()
     for prev_model in prev_models:
-        log_path = os.path.join(prev_model, "log", "log.json")
+        log_path = os.path.join(prev_model, "log.json")
         log = json_io.load_json(log_path)
         log["submission_time"] = int(time.time())
         json_io.save_json(log_path, log)
