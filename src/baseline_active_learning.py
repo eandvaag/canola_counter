@@ -413,7 +413,7 @@ def active_patch_selection(prev_active_model_log, rand_img_log_to_match, trainin
                 
             # random_image_set_str = random.choice
 
-    if prev_active_model_log is None:
+    if prev_active_model_log is not None:
         print("\n\n--- FINAL CHECK---\n\n")
         cur_num_patches = 0
         cur_num_annotations = 0
