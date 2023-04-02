@@ -182,43 +182,43 @@ def active_patch_selection(prev_active_model_log, rand_img_log_to_match, trainin
                 "mission_date": mission_date
             }
 
-            # switch_processed = False
-            # isa.process_switch(item)
-            # while not switch_processed:
-            #     print("Waiting for process switch")
-            #     time.sleep(3)
-            #     if not os.path.exists(switch_req_path):
-            #         switch_processed = True
+            switch_processed = False
+            isa.process_switch(item)
+            while not switch_processed:
+                print("Waiting for process switch")
+                time.sleep(3)
+                if not os.path.exists(switch_req_path):
+                    switch_processed = True
 
 
         
-            # request_uuid = str(uuid.uuid4())
-            # request = {
-            #     "request_uuid": request_uuid,
-            #     "start_time": int(time.time()),
-            #     "image_names": [image_name for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
-            #     "regions": [[[0, 0, metadata["images"][image_name]["height_px"], metadata["images"][image_name]["width_px"]]] for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
-            #     "save_result": True,
-            #     "regions_only": True,
-            #     "calculate_vegetation_record": False,
-            #     "results_name": "active_learning_iter_" + str(iteration_number),
-            #     "results_message": ""
-            # }
+            request_uuid = str(uuid.uuid4())
+            request = {
+                "request_uuid": request_uuid,
+                "start_time": int(time.time()),
+                "image_names": [image_name for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
+                "regions": [[[0, 0, metadata["images"][image_name]["height_px"], metadata["images"][image_name]["width_px"]]] for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
+                "save_result": True,
+                "regions_only": True,
+                "calculate_vegetation_record": False,
+                "results_name": "active_learning_iter_" + str(iteration_number),
+                "results_message": ""
+            }
 
-            # request_path = os.path.join(image_set_dir, "model", "prediction", 
-            #                             "image_set_requests", "pending", request_uuid + ".json")
+            request_path = os.path.join(image_set_dir, "model", "prediction", 
+                                        "image_set_requests", "pending", request_uuid + ".json")
 
-            # json_io.save_json(request_path, request)
-            # print("running process_predict")
-            # server.process_predict(item)
+            json_io.save_json(request_path, request)
+            print("running process_predict")
+            server.process_predict(item)
 
-            result_dirs = glob.glob(os.path.join(image_set_dir, "model", "results", "*"))
-            if len(result_dirs) > 1:
-                raise RuntimeError("More than one result dir")
-            results_dir = result_dirs[0]
+            # result_dirs = glob.glob(os.path.join(image_set_dir, "model", "results", "*"))
+            # if len(result_dirs) > 1:
+            #     raise RuntimeError("More than one result dir")
+            # results_dir = result_dirs[0]
 
 
-            # results_dir = os.path.join(image_set_dir, "model", "results", request_uuid)
+            results_dir = os.path.join(image_set_dir, "model", "results", request_uuid)
             predictions_path = os.path.join(results_dir, "predictions.json")
             predictions = json_io.load_json(predictions_path)
 
