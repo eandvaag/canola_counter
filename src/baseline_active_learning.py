@@ -738,7 +738,7 @@ def run_my_random_test(training_image_sets, run_models):
 def run_my_active_test(training_image_sets):
 
     models_dir = os.path.join("usr", "data", "erik", "models")
-    for i in range(1, 2):
+    for i in range(16):
         if i == 0:
             prev_active_model_log = None
         else:
