@@ -249,12 +249,14 @@ def process_baseline(item):
 
             all_records = []
             for image_set_index, image_set in enumerate(log["image_sets"]):
-                logger.info("Baseline: Preparing patches from {}".format(image_set))
 
                 username = image_set["username"]
                 farm_name = image_set["farm_name"]
                 field_name = image_set["field_name"]
                 mission_date = image_set["mission_date"]
+                logger.info("Baseline: Preparing patches from {} {} {} {}".format(
+                    username, farm_name, field_name, mission_date))
+                
                 image_set_dir = os.path.join("usr", "data", username, "image_sets", 
                                             farm_name, field_name, mission_date)
                 images_dir = os.path.join(image_set_dir, "images")
