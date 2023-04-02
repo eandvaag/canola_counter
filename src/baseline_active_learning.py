@@ -413,25 +413,25 @@ def active_patch_selection(prev_active_model_log, rand_img_log_to_match, trainin
                 
             # random_image_set_str = random.choice
 
+    if prev_active_model_log is None:
+        print("\n\n--- FINAL CHECK---\n\n")
+        cur_num_patches = 0
+        cur_num_annotations = 0
+        for image_set_str in taken_patches.keys():
+            for image_name in taken_patches[image_set_str]:
+                annotations = image_set_info[image_set_str]["annotations"]
+                cur_num_patches += len(taken_patches[image_set_str][image_name])
+                cur_num_annotations += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_patches[image_set_str][image_name]).size
+                # for patch_region in taken_patches[image_set_str][image_name]:
+                #     if patch_region.shape[0] == 0:
+                #         raise RuntimeError("BAD!")
 
-    print("\n\n--- FINAL CHECK---\n\n")
-    cur_num_patches = 0
-    cur_num_annotations = 0
-    for image_set_str in taken_patches.keys():
-        for image_name in taken_patches[image_set_str]:
-            annotations = image_set_info[image_set_str]["annotations"]
-            cur_num_patches += len(taken_patches[image_set_str][image_name])
-            cur_num_annotations += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_patches[image_set_str][image_name]).size
-            # for patch_region in taken_patches[image_set_str][image_name]:
-            #     if patch_region.shape[0] == 0:
-            #         raise RuntimeError("BAD!")
-
-    print("cur_num_patches", cur_num_patches)
-    print("patches_to_match", patches_to_match)
+        print("cur_num_patches", cur_num_patches)
+        print("patches_to_match", patches_to_match)
 
 
-    print("cur_num_annotations", cur_num_annotations)
-    print("annotations_to_match", annotations_to_match)
+        print("cur_num_annotations", cur_num_annotations)
+        print("annotations_to_match", annotations_to_match)
 
     log = {}
     log["image_sets"] = []
