@@ -635,7 +635,8 @@ def rand_img_selection(prev_log, training_image_sets, num_images_to_select, iter
                 "farm_name": farm_name,
                 "field_name": field_name,
                 "mission_date": mission_date,
-                "taken_regions": {image_name: [[0, 0, image_height, image_width]]} # for image_name in processed_taken.keys()}
+                "taken_regions": {image_name: [[0, 0, image_height, image_width]]}, # for image_name in processed_taken.keys()}
+                "patch_overlap_percent": 0
             })
 
             
