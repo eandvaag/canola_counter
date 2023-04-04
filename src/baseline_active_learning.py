@@ -8,6 +8,7 @@ import time
 import uuid
 import math as m
 import numpy as np
+from natsort import natsorted
 
 from models.common import annotation_utils, box_utils
 from io_utils import json_io
@@ -698,8 +699,8 @@ def rand_img_selection(prev_log, training_image_sets, num_images_to_select, iter
 def run_random_images_models():
     models_dir = os.path.join("usr", "data", "erik", "models")
     prev_models = glob.glob(os.path.join(models_dir, "pending", "random_images_*"))
-    prev_models.sort()
-    for prev_model in prev_models:
+    sorted_prev_models = natsorted(prev_models)
+    for prev_model in sorted_prev_models:
         log_path = os.path.join(prev_model, "log.json")
         log = json_io.load_json(log_path)
         log["submission_time"] = int(time.time())
