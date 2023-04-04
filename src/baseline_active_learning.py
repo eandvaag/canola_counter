@@ -294,10 +294,8 @@ def active_patch_selection(prev_active_model_log, rand_img_log_to_match, trainin
                 #         taken_patches[image_set_str][image_name] = []
                 #     taken_patches[image_set_str][image_name].append(patch)
 
-                
+                cur_total = 0
                 if not already_taken:
-
-                    cur_total = 0
                     for image_set_str in taken_patches.keys():
                         annotations = image_set_info[image_set_str]["annotations"]
                         for image_name in taken_patches[image_set_str].keys():
@@ -428,10 +426,14 @@ def active_patch_selection(prev_active_model_log, rand_img_log_to_match, trainin
 
         print("cur_num_patches", cur_num_patches)
         print("patches_to_match", patches_to_match)
+        if cur_num_patches != patches_to_match:
+            raise RuntimeError("cur_num_patches != patches_to_match")
 
 
         print("cur_num_annotations", cur_num_annotations)
         print("annotations_to_match", annotations_to_match)
+        if cur_num_annotations != annotations_to_match:
+            raise RuntimeError("cur_num_annotations != annotations_to_match")
 
     log = {}
     log["image_sets"] = []
@@ -776,7 +778,28 @@ def remove_previous_iter_results(training_image_sets):
         #     raise RuntimeError("oh no")
         result_dir = os.path.join(image_set_dir, "model", "results")
         shutil.rmtree(result_dir)
-        os.makedirs(result_dir)        
+        os.makedirs(result_dir)
+
+def remove_specific_iter_results(training_image_sets, result_name):
+    for image_set in training_image_sets:
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+        # result_dirs = glob.glob(os.path.join(image_set_dir, "model", "results", "*"))
+        # if len(result_dirs) != 1:
+        #     raise RuntimeError("oh no")
+        result_dirs = glob.glob(os.path.join(image_set_dir, "model", "results", "*"))
+        for result_dir in result_dirs:
+            request_path = os.path.join(result_dir, "request.json")
+            request = json_io.load_json(request_path)
+            if request["results_name"] == result_name:
+                shutil.rmtree(result_dir)
 
 
 if __name__ == "__main__":
