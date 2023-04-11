@@ -215,7 +215,7 @@ def process_baseline(item):
                 logger.info("Not training baseline: baseline_aborted_dir exists")
             return False #raise RuntimeError("A baseline with the same name already exists!")
 
-        logging.info("Starting to train baseline {}".format(item))
+        logging.info("Starting to train baseline {}".format(item["model_name"]))
         # isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING)
 
         patches_dir = os.path.join(baseline_pending_dir, "patches")

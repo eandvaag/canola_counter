@@ -20,7 +20,7 @@ from lock_queue import LockQueue
 import image_set_actions as isa
 
 
-def run_weed_test(training_image_sets, model_name):
+def run_weed_test(training_image_sets, weed_image_sets, model_name, num_weed_patches_to_add):
 
     log = {}
     log["model_creator"] = "erik"
@@ -30,10 +30,139 @@ def run_weed_test(training_image_sets, model_name):
     log["public"] = "yes"
     # log["image_sets"] = image_sets
     log["image_sets"] = []
+    # for image_set in training_image_sets:
+    #     image_set["patch_overlap_percent"] = 0
+    #     log["image_sets"].append(image_set)
+    
+
+
+    for image_set in weed_image_sets:
+        image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+                                     image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+        
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        image_names = list(annotations.keys())
+        image_w = metadata["images"][image_names[0]]["width_px"]
+        image_h = metadata["images"][image_names[0]]["height_px"]
+
+        patch_size = 416 #annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+        num_annotated = diversity_test.get_num_fully_annotated_images(annotations, image_w, image_h)
+
+        num_patches_per_image = diversity_test.get_num_patches_per_image(annotations, metadata, patch_size, patch_overlap_percent=0)
+
+        image_set["num_patches"] = num_patches_per_image * num_annotated
+
+
+    capacities = []
+    for image_set in weed_image_sets:
+        capacities.append(image_set["num_patches"])
+        # diverse_image_sets_patch_num += image_set["num_patches"]
+
+    capacities = np.array(capacities)
+    org_capacities = np.copy(capacities)
+    num_to_match = num_weed_patches_to_add
+    print("num_to_match", num_to_match)
+    print("total capacity", np.sum(capacities))
+    print("capacities", capacities)
+
+    satisfied = False
+    while not satisfied:
+
+        min_capacity_this_iteration = min(capacities[capacities != 0])
+        desired_num_to_take_this_iteration = num_to_match // np.sum(capacities != 0)
+
+        num_actually_taken_this_iteration = min(min_capacity_this_iteration, desired_num_to_take_this_iteration)
+        for i in range(capacities.size):
+            if capacities[i] > 0:
+                capacities[i] -= num_actually_taken_this_iteration
+                num_to_match -= num_actually_taken_this_iteration
+ 
+        if min_capacity_this_iteration >= desired_num_to_take_this_iteration:
+            satisfied = True
+
+    i = 0
+    while num_to_match > 0:
+        if capacities[i] > 0:
+            capacities[i] -= 1
+            num_to_match -= 1
+        i += 1
+
+    taken = org_capacities - capacities
+    print("Taken: {}".format(taken))
+
+    for i, image_set in enumerate(weed_image_sets):
+        image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+                                     image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        image_names = list(annotations.keys())
+        image_w = metadata["images"][image_names[0]]["width_px"]
+        image_h = metadata["images"][image_names[0]]["height_px"]
+
+        patch_size = 416 #annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+            
+        patch_overlap_percent = 0
+        overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+        incr = patch_size - overlap_px
+        w_covered = max(image_w - patch_size, 0)
+        num_w_patches = m.ceil(w_covered / incr) + 1
+
+        h_covered = max(image_h - patch_size, 0)
+        num_h_patches = m.ceil(h_covered / incr) + 1
+
+        # num_patches = num_w_patches * num_h_patches
+
+        annotated_image_names = []
+        for image_name in annotations.keys():
+            if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
+                annotated_image_names.append(image_name)
+        
+        num_taken = 0
+        taken_regions = {}
+        while num_taken < taken[i]:
+            
+            image_name = random.sample(annotated_image_names, 1)[0]
+            
+            w_index = random.randrange(0, num_w_patches)
+            h_index = random.randrange(0, num_h_patches)
+
+            patch_coords = [
+                patch_size * h_index,
+                patch_size * w_index,
+                min((patch_size * h_index) + patch_size, image_h),
+                min((patch_size * w_index) + patch_size, image_w)
+            ]
+
+            if image_name not in taken_regions:
+                taken_regions[image_name] = []
+                taken_regions[image_name].append(patch_coords)
+                num_taken += 1
+            elif patch_coords not in taken_regions[image_name]:
+                taken_regions[image_name].append(patch_coords)
+                num_taken += 1
+
+        image_set["taken_regions"] = taken_regions
+        image_set["patch_overlap_percent"] = 0
+
     for image_set in training_image_sets:
         image_set["patch_overlap_percent"] = 0
-        log["image_sets"].append(image_set)
-    
+
+    log["image_sets"].extend(training_image_sets)
+    log["image_sets"].extend(weed_image_sets)
+
 
 
     # for item in [item2]: #[item1, item2]:
@@ -1108,7 +1237,9 @@ if __name__ == "__main__":
     # run_my_random_test(training_image_sets, run_models=False)
     # run_my_active_test(training_image_sets)
 
-    training_image_sets.extend(weed_image_sets)
+    # training_image_sets.extend(weed_image_sets)
 
 
-    run_weed_test(training_image_sets, "MORSE_Nasser_2022-05-27_and_WeedAI")
+    # run_weed_test(training_image_sets, "MORSE_Nasser_2022-05-27_and_WeedAI")
+
+    run_weed_test(training_image_sets, weed_image_sets, "MORSE_Nasser_2022-05-27_and_10000_weed", 10000)
