@@ -349,14 +349,28 @@ def process_baseline(item):
                 image_set_annotations_path = os.path.join(image_set_annotations_dir, "annotations.json")
                 annotation_utils.save_annotations(image_set_annotations_path, annotations)
 
+            average_box_areas = []
+            average_box_heights = []
+            average_box_widths = []
+            for i in range(len(log["image_sets"])):
+                average_box_area = log["image_sets"][i]["average_box_area"]
+                average_box_height = log["image_sets"][i]["average_box_height"]
+                average_box_width = log["image_sets"][i]["average_box_width"]
+                patch_size = log["image_sets"][i]["patch_size"]
+                if not isinstance(average_box_area, str):
+                    average_box_areas.append(average_box_area)
+                    average_box_heights.append(average_box_height)
+                    average_box_widths.append(average_box_widths)
+                patch_sizes.append(patch_size)
 
-            average_box_areas = [log["image_sets"][i]["average_box_area"] for i in range(len(log["image_sets"]))]
-            average_box_heights = [log["image_sets"][i]["average_box_height"] for i in range(len(log["image_sets"]))]
-            average_box_widths = [log["image_sets"][i]["average_box_width"] for i in range(len(log["image_sets"]))]
-            patch_sizes = [log["image_sets"][i]["patch_size"] for i in range(len(log["image_sets"]))]
-            log["average_box_area"] = np.mean(average_box_areas)
-            log["average_box_height"] = np.mean(average_box_heights)
-            log["average_box_width"] = np.mean(average_box_widths)
+            if len(average_box_areas) > 0:
+                log["average_box_area"] = np.mean(average_box_areas)
+                log["average_box_height"] = np.mean(average_box_heights)
+                log["average_box_width"] = np.mean(average_box_widths)
+            else:
+                log["average_box_area"] = "NA"
+                log["average_box_height"] = "NA"
+                log["average_box_width"] = "NA"
             log["average_patch_size"] = np.mean(patch_sizes)
 
             patch_records = np.array(all_records)
