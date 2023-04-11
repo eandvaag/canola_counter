@@ -285,14 +285,18 @@ def process_baseline(item):
                     # if annotations[image_name]["status"] == "completed_for_training" or annotations[image_name]["status"] == "completed_for_testing":
                     #     image_names.append(image_name)
                     #     num_annotations += annotations[image_name]["boxes"].shape[0]
+                if num_annotations > 0:
+                    average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+                    average_box_height = annotation_utils.get_average_box_height(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+                    average_box_width = annotation_utils.get_average_box_width(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+                    
 
-                average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
-                average_box_height = annotation_utils.get_average_box_height(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
-                average_box_width = annotation_utils.get_average_box_width(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
-                
-
-                patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
-
+                    patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
+                else:
+                    average_box_area = "NA"
+                    average_box_height = "NA"
+                    average_box_width = "NA"
+                    patch_size = 416
                 # log["image_sets"][image_set_index]["image_names"] = image_names
                 log["image_sets"][image_set_index]["num_annotations"] = num_annotations
 
