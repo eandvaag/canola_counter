@@ -352,6 +352,7 @@ def process_baseline(item):
             average_box_areas = []
             average_box_heights = []
             average_box_widths = []
+            patch_sizes = []
             for i in range(len(log["image_sets"])):
                 average_box_area = log["image_sets"][i]["average_box_area"]
                 average_box_height = log["image_sets"][i]["average_box_height"]
