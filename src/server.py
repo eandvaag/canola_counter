@@ -361,7 +361,7 @@ def process_baseline(item):
                 if not isinstance(average_box_area, str):
                     average_box_areas.append(average_box_area)
                     average_box_heights.append(average_box_height)
-                    average_box_widths.append(average_box_widths)
+                    average_box_widths.append(average_box_width)
                 patch_sizes.append(patch_size)
 
             if len(average_box_areas) > 0:
