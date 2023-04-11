@@ -1028,7 +1028,79 @@ if __name__ == "__main__":
             "farm_name": "CottonWeedDet12",
             "field_name": "CottonWeedDet12",
             "mission_date": "2023-04-10"
-        }
+        },
+        {
+            "username": "erik",
+            "farm_name": "blue_lupins",
+            "field_name": "blue_lupins",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "turnipweed_in_wheat",
+            "field_name": "turnipweed_in_wheat",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "chickpea_BFLY",
+            "field_name": "chickpea_BFLY",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "chickpea_BFLYS",
+            "field_name": "chickpea_BFLYS",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "20200827_wheat_BFLY",
+            "field_name": "20200827_wheat_BFLY",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "20201014_wheat_BFLY",
+            "field_name": "20201014_wheat_BFLY",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "wheat_BFLYS",
+            "field_name": "wheat_BFLYS",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "radish_in_wheat",
+            "field_name": "radish_in_wheat",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "narrabri_wheat",
+            "field_name": "narrabri_wheat",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "broadleaf_weeds",
+            "field_name": "broadleaf_weeds",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "sustainable_ag_2021",
+            "field_name": "sustainable_ag_2021",
+            "mission_date": "2023-04-11"
+        },
+        {
+            "username": "erik",
+            "farm_name": "wild_carrot_canola",
+            "field_name": "wild_carrot_canola",
+            "mission_date": "2023-04-11"
+        },      
     ]
 
     # remove_previous_iter_results(training_image_sets)
@@ -1039,4 +1111,4 @@ if __name__ == "__main__":
     training_image_sets.extend(weed_image_sets)
 
 
-    run_weed_test(training_image_sets, "MORSE_Nasser_2022-05-27_and_CottonWeedDet12")
+    run_weed_test(training_image_sets, "MORSE_Nasser_2022-05-27_and_WeedAI")
