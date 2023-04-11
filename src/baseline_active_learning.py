@@ -29,8 +29,10 @@ def run_weed_test(training_image_sets, model_name):
     log["model_object"] = "canola_seedling"
     log["public"] = "yes"
     # log["image_sets"] = image_sets
+    log["image_sets"] = []
     for image_set in training_image_sets:
         image_set["patch_overlap_percent"] = 0
+        log["image_sets"].append(image_set)
     
 
 
