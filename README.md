@@ -60,3 +60,10 @@ python3.8 -m venv plant_detection/plant_detection_venv
 source plant_detection/plant_detection_venv/bin/activate
 /home/erik/Documents/plant_detection/plant_detection_venv/bin/python3.8 -m pip install --upgrade pip
 pip3 install -r ./plant_detection/src/requirements.txt
+
+# install gdal
+sudo apt install libgdal-dev gdal-bin
+sudo apt install python3.8-dev
+
+# run gdalinfo --version, then get matching pygdal version
+pip install pygdal==${matching_pygdal_version}

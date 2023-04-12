@@ -2,6 +2,7 @@ import os
 import glob
 import shutil
 import time
+import math as m
 import random
 import uuid
 import urllib3
@@ -15,6 +16,7 @@ from io_utils import json_io
 import fine_tune_eval
 
 from lock_queue import LockQueue
+import diversity_test
 
 def test(test_sets, baselines, num_reps):
 
@@ -33,7 +35,7 @@ def test(test_sets, baselines, num_reps):
             annotations_path = os.path.join(org_image_set_dir, "annotations", "annotations.json")
             annotations = annotation_utils.load_annotations(annotations_path)
 
-            num_iterations = 2
+            num_iterations = 1 #2
             image_names = list(annotations.keys())
 
             metadata_path = os.path.join(org_image_set_dir, "metadata", "metadata.json")
@@ -180,24 +182,27 @@ def test(test_sets, baselines, num_reps):
                     server.process_predict(item)
 
 
-def plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps):
+def plot_my_results_alt(test_sets, all_baselines, num_reps):
 
-    all_baselines = {
-        "org_baselines": baselines,
-        "diverse_baselines": diverse_baselines
-    }
+    # all_baselines = {
+    #     "org_baselines": baselines,
+    #     "diverse_baselines": diverse_baselines
+    # }
 
 
     for rep_num in range(num_reps):
 
         for test_set in test_sets:
-            direct_application_org_results = []
-            direct_application_diverse_results = []
-            fine_tune_org_results = []
-            fine_tune_diverse_results = []
+            # direct_application_org_results = []
+            # direct_application_diverse_results = []
+            # fine_tune_org_results = []
+            # fine_tune_diverse_results = []
+            results = {}
 
-            methods = []
+            # methods = []
             for k in all_baselines.keys():
+                # label = k
+                results[k] = []
                 for baseline in all_baselines[k]:
                     baseline_username = test_set["username"]
                     baseline_farm_name = "BASELINE_TEST:" + baseline["model_creator"] + ":" + baseline["model_name"] + ":" + test_set["farm_name"] + "_rep_" + str(rep_num)
@@ -227,13 +232,15 @@ def plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps):
                     global_accuracy = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
 
                     x = baseline["num_training_sets"]
+                    # x = baseline["num_training_patches"]
                     y = global_accuracy
                     # c = "red" if k == "org_baselines" else "blue"
                     # methods.append()
-                    if k == "org_baselines":
-                        direct_application_org_results.append((x, y))
-                    else:
-                        direct_application_diverse_results.append((x, y))
+                    # if k == "org_baselines":
+                    #     direct_application_org_results.append((x, y))
+                    # else:
+                    #     direct_application_diverse_results.append((x, y))
+                    results[k].append((x, y))
 
                     if len(result_pairs) > 1:
                         fine_tune_result_dir = result_pairs[1][0]
@@ -244,16 +251,23 @@ def plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps):
 
                         global_accuracy = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
 
-                        x = baseline["num_training_sets"]
+                        x = baseline["num_training_sets"] #patches"]
                         y = global_accuracy
                         # c = "red" if k == "org_baselines" else "blue"
                         # methods.append()
                         # fine_tune_results.append((x, y, c))
 
-                        if k == "org_baselines":
-                            fine_tune_org_results.append((x, y))
-                        else:
-                            fine_tune_diverse_results.append((x, y))
+                        fine_tune_k = k + "_fine_tuned_on_5_images"
+                        if fine_tune_k not in results:
+                            results[fine_tune_k] = []
+
+
+                        results[fine_tune_k].append((x, y))
+
+                        # if k == "org_baselines":
+                        #     fine_tune_org_results.append((x, y))
+                        # else:
+                        #     fine_tune_diverse_results.append((x, y))
 
 
 
@@ -271,32 +285,55 @@ def plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps):
                     # )
                 
             # test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
-            print(direct_application_org_results)
-            print(fine_tune_org_results)
-            print(direct_application_diverse_results)
-            print(fine_tune_diverse_results)
+            # print(direct_application_org_results)
+            # print(fine_tune_org_results)
+            # print(direct_application_diverse_results)
+            # print(fine_tune_diverse_results)
 
             fig = plt.figure(figsize=(8, 6))
 
-            label = "direct_application"
-            plt.plot([x[0] for x in direct_application_org_results], [x[1] for x in direct_application_org_results], c="red", marker="o", label=label, linestyle="dashed", linewidth=1)
-            if len(fine_tune_org_results) > 0:
-                label = "fine_tune_on_5"
-                plt.plot([x[0] for x in fine_tune_org_results], [x[1] for x in fine_tune_org_results], c="red", marker="x", label=label, linestyle="dashed", linewidth=1)
+            colors = {}
+            color_list = ["red", "green", "blue", "purple", "orange", "grey", "pink"]
+            c_index = 0
+            for k in results.keys():
+                if k.endswith("_fine_tuned_on_5_images"):
+                    colors[k] = colors[k[:(-1) * len("_fine_tuned_on_5_images")]]
+                else:
+                    colors[k] = color_list[c_index]
+                    c_index += 1
 
-            if len(diverse_baselines) > 0:
-                label = "direct_application_diverse"
-                plt.plot([x[0] for x in direct_application_diverse_results], [x[1] for x in direct_application_diverse_results], c="blue", marker="o", label=label, linestyle="dashed", linewidth=1)
-                if len(fine_tune_diverse_results) > 0:
-                    label = "fine_tune_on_5_diverse"
-                    plt.plot([x[0] for x in fine_tune_diverse_results], [x[1] for x in fine_tune_diverse_results], c="blue", marker="x", label=label, linestyle="dashed", linewidth=1)
+            for k in results.keys():
+                if k.endswith("_fine_tuned_on_5_images"):
+                    marker = "x"
+                else:
+                    marker = "o"
+                plt.plot([x[0] for x in results[k]], [x[1] for x in results[k]], color=colors[k], marker=marker, label=k, linestyle="dashed", linewidth=1)
+
+            # label = "direct_application"
+            # label = "random_images"
+            # # label = "overlap_50%_direct_application"
+            # plt.plot([x[0] for x in direct_application_org_results], [x[1] for x in direct_application_org_results], c="red", marker="o", label=label, linestyle="dashed", linewidth=1)
+            # if len(fine_tune_org_results) > 0:
+            #     label = "fine_tune_on_5"
+            #     # label = "overlap_50%_fine_tune_on_5"
+            #     plt.plot([x[0] for x in fine_tune_org_results], [x[1] for x in fine_tune_org_results], c="red", marker="x", label=label, linestyle="dashed", linewidth=1)
+
+            # if len(diverse_baselines) > 0:
+            #     label = "direct_application_diverse"
+            #     label = "selected_patches"
+            #     # label = "overlap_0%_direct_application"
+            #     plt.plot([x[0] for x in direct_application_diverse_results], [x[1] for x in direct_application_diverse_results], c="blue", marker="o", label=label, linestyle="dashed", linewidth=1)
+            #     if len(fine_tune_diverse_results) > 0:
+            #         label = "fine_tune_on_5_diverse"
+            #         # label = "overlap_0%_fine_tune_on_5"
+            #         plt.plot([x[0] for x in fine_tune_diverse_results], [x[1] for x in fine_tune_diverse_results], c="blue", marker="x", label=label, linestyle="dashed", linewidth=1)
 
             plt.legend()
-            plt.xlabel("Number of Image Sets Trained On")
+            plt.xlabel("Number of Training Patches")
             plt.ylabel("Accuracy")
 
             test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
-            out_path = os.path.join("baseline_charts", "no_overlap_comparisons_alt", test_set_str, "global", "accuracy", "rep_" + str(rep_num) + ".svg")
+            out_path = os.path.join("baseline_charts", "weed_comparison", test_set_str, "global", "accuracy", "rep_" + str(rep_num) + ".svg")
             out_dir = os.path.dirname(out_path)
             os.makedirs(out_dir, exist_ok=True)
             plt.savefig(out_path)
@@ -341,6 +378,73 @@ def plot_my_results(test_sets, baselines, num_reps):
 
 
 
+def add_num_training_patches(baselines):
+    for baseline in baselines:
+        model_dir = os.path.join("usr", "data", baseline["model_creator"], "models", "available", "public", baseline["model_name"])
+        log_path = os.path.join(model_dir, "log.json")
+        log = json_io.load_json(log_path)
+        total_num_patches = 0
+        for image_set in log["image_sets"]:
+            username = image_set["username"]
+            farm_name = image_set["farm_name"]
+            field_name = image_set["field_name"]
+            mission_date = image_set["mission_date"]
+            image_set_dir = os.path.join("usr", "data", 
+                                        username, "image_sets",
+                                        farm_name,
+                                        field_name,
+                                        mission_date)
+            
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            annotations = annotation_utils.load_annotations(annotations_path)
+
+            metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+            metadata = json_io.load_json(metadata_path)
+
+            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+            if "patch_overlap_percent" in image_set:
+                patch_overlap_percent = image_set["patch_overlap_percent"]
+            else:
+                patch_overlap_percent = 50
+
+            if "taken_regions" in image_set:
+                for image_name in image_set["taken_regions"].keys():
+                    for region in image_set["taken_regions"][image_name]:
+
+                        region_width = region[3] - region[1]
+                        region_height = region[2] - region[0]
+
+                        overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+                        incr = patch_size - overlap_px
+                        w_covered = max(region_width - patch_size, 0)
+                        num_w_patches = m.ceil(w_covered / incr) + 1
+
+                        h_covered = max(region_height - patch_size, 0)
+                        num_h_patches = m.ceil(h_covered / incr) + 1
+
+                        num_patches = num_w_patches * num_h_patches
+
+                        total_num_patches += num_patches #len(image_set["taken_regions"][image_name])
+            else:
+                # annotations = image_set_info[image_set_str]["annotations"]
+                # image_shape = image_set_info[image_set_str]["image_shape"]
+                # image_height = metadata["images"][list(annotations.keys())[0]]["height_px"]
+                # image_width = metadata["images"][list(annotations.keys())[0]]["width_px"]
+                # image_height = image_shape[0]
+                # image_width = image_shape[1]
+                
+                num_patches_per_image = diversity_test.get_num_patches_per_image(annotations, metadata, patch_size, patch_overlap_percent=patch_overlap_percent)
+                
+                for image_name in annotations.keys():
+                    if len(annotations[image_name]["test_regions"]) > 0:
+                        total_num_patches += num_patches_per_image
+
+
+        baseline["num_training_patches"] = total_num_patches
+                        
+
+
 def run():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     logging.basicConfig(level=logging.INFO)
@@ -352,52 +456,52 @@ def run():
     server.sch_ctx["training_queue"] = LockQueue()
     server.sch_ctx["baseline_queue"] = LockQueue()
 
-    # baselines = [
+    overlap_baselines = [
 
-    #     {
-    #         "model_name": "MORSE_Nasser_2022-05-27",
-    #         "model_creator": "erik",
-    #         "num_training_sets": 1
-    #     },
-    #     {
-    #         "model_name": "set_of_3",
-    #         "model_creator": "kaylie",
-    #         "num_training_sets": 3
-    #     },
-    #     {
-    #         "model_name": "set_of_6",
-    #         "model_creator": "kaylie",
-    #         "num_training_sets": 6
-    #     },
-    #     {
-    #         "model_name": "set_of_12",
-    #         "model_creator": "kaylie",
-    #         "num_training_sets": 12
-    #     },
-    #     {
-    #         "model_name": "set_of_18",
-    #         "model_creator": "kaylie",
-    #         "num_training_sets": 18
-    #     },
-    #     # {
-    #     #     "model_name": "p2irc_symposium_2022",
-    #     #     "model_creator": "kaylie",
-    #     #     "num_training_sets": 16
-    #     # },
-    #     {
-    #         "model_name": "all_stages",
-    #         "model_creator": "kaylie",
-    #         "num_training_sets": 27
-    #     }
-    # ]
-
-
+        {
+            "model_name": "MORSE_Nasser_2022-05-27",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "set_of_3",
+            "model_creator": "kaylie",
+            "num_training_sets": 3
+        },
+        {
+            "model_name": "set_of_6",
+            "model_creator": "kaylie",
+            "num_training_sets": 6
+        },
+        {
+            "model_name": "set_of_12",
+            "model_creator": "kaylie",
+            "num_training_sets": 12
+        },
+        {
+            "model_name": "set_of_18",
+            "model_creator": "kaylie",
+            "num_training_sets": 18
+        },
+        # {
+        #     "model_name": "p2irc_symposium_2022",
+        #     "model_creator": "kaylie",
+        #     "num_training_sets": 16
+        # },
+        {
+            "model_name": "all_stages",
+            "model_creator": "kaylie",
+            "num_training_sets": 27
+        }
+    ]
 
 
 
 
 
-    baselines = [
+
+
+    no_overlap_baselines = [
 
         {
             "model_name": "set_of_1_no_overlap",
@@ -423,6 +527,11 @@ def run():
             "model_name": "set_of_18_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 18
+        },
+        {
+            "model_name": "set_of_27_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 27
         }
     ]
 
@@ -452,8 +561,50 @@ def run():
             "model_name": "diverse_set_of_27_match_18_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 18
+        },
+        {
+            "model_name": "diverse_set_of_27_match_27_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 27
         }
     ]
+
+    CottonWeedDet12_baselines = [
+        {
+            "model_name": "MORSE_Nasser_2022-05-27_and_CottonWeedDet12_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "set_of_3_and_CottonWeedDet12_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 3
+        }
+    ]
+
+    weed_ai_10000_baselines = [
+        {
+            "model_name": "MORSE_Nasser_2022-05-27_and_10000_weed",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }
+    ]
+
+
+    active_baselines = []
+    for i in range(0, 13):
+        active_baselines.append({
+            "model_name": "selected_patches_" + str(i),
+            "model_creator": "erik"
+        })
+    
+    random_image_baselines = []
+    for i in range(0, 11):
+        random_image_baselines.append({
+            "model_name": "random_images_" + str(i),
+            "model_creator": "erik"
+        })
+
 
 
     test_sets = [
@@ -486,13 +637,30 @@ def run():
     num_reps = 1
 
     all_baselines = []
-    all_baselines.extend(baselines)
-    all_baselines.extend(diverse_baselines)
+    # all_baselines.extend(active_baselines)
+    # all_baselines.extend(random_image_baselines)
+    # all_baselines.extend(diverse_baselines)
+    all_baselines.extend(no_overlap_baselines)
+    all_baselines.extend(CottonWeedDet12_baselines)
+    all_baselines.extend(weed_ai_10000_baselines)
 
     # test(test_sets, all_baselines, num_reps)
     # plot_my_results(test_sets, baselines, num_reps)
-    plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps)
+    # plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps)
 
+    # add_num_training_patches(all_baselines)
+    # plot_my_results_alt(test_sets, no_overlap_baselines, diverse_baselines, num_reps)
+
+    # test(test_sets, all_baselines, num_reps)
+    all_baselines = {
+        "full_image_sets": no_overlap_baselines,
+        "CottonWeedDet12_supplemented": CottonWeedDet12_baselines, 
+        "WeedAI_10000_supplemented": weed_ai_10000_baselines, 
+        # "random_images": random_image_baselines,
+        # "uniformly_selected_patches": diverse_baselines,
+        # "selected_patches": active_baselines
+    }
+    plot_my_results_alt(test_sets, all_baselines, num_reps)
 
 if __name__ == "__main__":
     run()
