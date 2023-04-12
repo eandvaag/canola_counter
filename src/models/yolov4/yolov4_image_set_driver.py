@@ -53,6 +53,8 @@ from models.yolov4.encode import Decoder
 EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10 #20
 TRAINING_TIME_SESSION_CEILING = 5000000           # number of seconds before current session is stopped in order to give others a chance
 
+TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS = False
+NUM_EPOCHS_TO_TRAIN = 100
 # MAX_IN_MEMORY_IMAGE_SIZE = 5e+8     # 500 megabytes
 
 
@@ -1431,18 +1433,31 @@ def train_baseline(sch_ctx, root_dir):
         loss_record_path = os.path.join(training_dir, "loss_record.json")
         loss_record = json_io.load_json(loss_record_path)
 
-        epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
 
-        isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING,
-                                    extra_items={"epochs_since_improvement": epochs_since_substantial_improvement}) 
+        if TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS:
+            num_epochs_trained = len(loss_record["training_loss"]["values"][-1]) - 1
+            logger.info("{} / {} epochs completed.".format(num_epochs_trained, NUM_EPOCHS_TO_TRAIN))
+            if num_epochs_trained >= NUM_EPOCHS_TO_TRAIN:
+                logger.info("Finished training!")
+                shutil.copyfile(best_weights_path, cur_weights_path)
+                return True
+            
+        else:
+            epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
+
+            isa.set_scheduler_status(username, "---", "---", "---", isa.TRAINING,
+                                        extra_items={"epochs_since_improvement": epochs_since_substantial_improvement}) 
 
 
-        logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
+            logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
+            
+            if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
+                shutil.copyfile(best_weights_path, cur_weights_path)
+                # q.put(True)
+                return True
 
-        if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
-            shutil.copyfile(best_weights_path, cur_weights_path)
-            # q.put(True)
-            return True
+
+
 
 
         # logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
@@ -1817,7 +1832,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
     # steps_taken = 0
     # epochs_since_substantial_improvement = 0
-    num_epochs_trained = 0
+    # num_epochs_trained = 0
 
     while True:
         # train_steps_per_epoch = np.sum([1 for _ in train_dataset])
@@ -1833,21 +1848,29 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
         loss_record_path = os.path.join(training_dir, "loss_record.json")
         loss_record = json_io.load_json(loss_record_path)
 
-        epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
+        if TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS:
+            num_epochs_trained = len(loss_record["training_loss"]["values"][-1]) - 1
+            logger.info("{} / {} epochs completed.".format(num_epochs_trained, NUM_EPOCHS_TO_TRAIN))
+            if num_epochs_trained >= NUM_EPOCHS_TO_TRAIN:
+                logger.info("Finished training!")
+                shutil.copyfile(best_weights_path, cur_weights_path)
+                return (True, False)
+            
+        else:
+            epochs_since_substantial_improvement = get_epochs_since_substantial_improvement(loss_record)
 
-        logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
+            logger.info("Epochs since substantial training loss improvement: {}".format(epochs_since_substantial_improvement))
 
-        isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING,
-                                    extra_items={"epochs_since_improvement": epochs_since_substantial_improvement}) 
+            isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.FINE_TUNING,
+                                        extra_items={"epochs_since_improvement": epochs_since_substantial_improvement}) 
 
-
-        if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
-            # print("num_epochs_trained: {}. NUM_EPOCHS_TO_TRAIN: {}".format(num_epochs_trained, NUM_EPOCHS_TO_TRAIN))
-            # print("done?: {}".format(num_epochs_trained > NUM_EPOCHS_TO_TRAIN))
-            # if num_epochs_trained > NUM_EPOCHS_TO_TRAIN:
-            shutil.copyfile(best_weights_path, cur_weights_path)
-            # q.put((True, False))
-            return (True, False)
+            if epochs_since_substantial_improvement >= EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE:
+                # print("num_epochs_trained: {}. NUM_EPOCHS_TO_TRAIN: {}".format(num_epochs_trained, NUM_EPOCHS_TO_TRAIN))
+                # print("done?: {}".format(num_epochs_trained > NUM_EPOCHS_TO_TRAIN))
+                # if num_epochs_trained > NUM_EPOCHS_TO_TRAIN:
+                shutil.copyfile(best_weights_path, cur_weights_path)
+                # q.put((True, False))
+                return (True, False)
 
 
         # logger.info("Epochs since validation loss improvement: {}".format(loss_record["validation_loss"]["epochs_since_improvement"]))
@@ -1902,7 +1925,7 @@ def train(sch_ctx, root_dir): #farm_name, field_name, mission_date):
 
         train_loss_metric.reset_states()
 
-        num_epochs_trained += 1
+        # num_epochs_trained += 1
 
 
         # val_bar = tqdm.tqdm(val_dataset, total=val_steps_per_epoch)
