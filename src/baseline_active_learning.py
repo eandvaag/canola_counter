@@ -19,6 +19,45 @@ from lock_queue import LockQueue
 
 import image_set_actions as isa
 
+def run_full_image_set_model(training_image_sets, model_name):
+    log = {}
+    log["model_creator"] = "erik"
+    # log["model_name"] = str(num_images_to_select) ##"set_of_" + str(len(org_image_sets)) + "_no_overlap"
+    log["model_name"] = model_name #"random_images_" + str(iteration_number) #cur_num)
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    # log["image_sets"] = image_sets
+    log["image_sets"] = []
+
+    for image_set in training_image_sets:
+        image_set["patch_overlap_percent"] = 0
+        log["image_sets"].append(image_set)
+
+
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+
+    server.sch_ctx["baseline_queue"].enqueue(log)
+
+    baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+    while baseline_queue_size > 0:
+    
+        log = server.sch_ctx["baseline_queue"].dequeue()
+        re_enqueue = server.process_baseline(log)
+        if re_enqueue:
+            server.sch_ctx["baseline_queue"].enqueue(log)
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+
 
 def run_weed_test(training_image_sets, weed_image_sets, model_name, num_weed_patches_to_add):
 
@@ -1083,12 +1122,12 @@ if __name__ == "__main__":
         #     "field_name": "River",
         #     "mission_date": "2021-06-09"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Lake",
-        #     "mission_date": "2021-06-09"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Lake",
+            "mission_date": "2021-06-09"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "BlaineLake",
@@ -1137,12 +1176,12 @@ if __name__ == "__main__":
         #     "field_name": "Dennis2",
         #     "mission_date": "2021-06-12"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Serhienko10",
-        #     "mission_date": "2022-06-14"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Serhienko10",
+            "mission_date": "2022-06-14"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "BlaineLake",
@@ -1242,4 +1281,7 @@ if __name__ == "__main__":
 
     # run_weed_test(training_image_sets, "MORSE_Nasser_2022-05-27_and_WeedAI")
 
-    run_weed_test(training_image_sets, weed_image_sets, "MORSE_Nasser_2022-05-27_and_10000_weed", 10000)
+    # run_weed_test(training_image_sets, weed_image_sets, "MORSE_Nasser_2022-05-27_and_10000_weed", 10000)
+
+
+    run_full_image_set_model(training_image_sets, "fixed_epoch_set_of_3_no_overlap")

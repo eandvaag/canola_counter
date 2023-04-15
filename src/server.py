@@ -10,6 +10,9 @@ import multiprocessing as mp
 import threading
 import random
 import tensorflow as tf
+# from tensorflow import keras
+# from tensorflow.keras import layers
+# from tensorflow.keras import mixed_precision
 import numpy as np
 
 import image_set_aux
@@ -33,6 +36,7 @@ MAX_STORED_SCHEDULER_UPDATES = 10
 cv = threading.Condition()
 sch_ctx = {}
 
+# mixed_precision.set_global_policy('mixed_float16')
 
 app = Flask(__name__)
 
@@ -426,6 +430,9 @@ def process_baseline(item):
             
             shutil.move(os.path.join(weights_dir, "best_weights.h5"),
                         os.path.join(baseline_pending_dir, "weights.h5"))
+            
+            shutil.move(os.path.join(training_dir, "loss_record.json"),
+                        os.path.join(baseline_pending_dir, "loss_record.json"))
 
             shutil.rmtree(patches_dir)
             shutil.rmtree(model_dir)
