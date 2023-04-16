@@ -750,6 +750,16 @@ def run():
             "model_creator": "erik",
             "num_training_sets": 1
         },
+        {
+            "model_name": "fixed_epoch_set_of_3_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 3
+        },
+        {
+            "model_name": "fixed_epoch_set_of_6_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 6
+        },
     ]
 
 
@@ -802,7 +812,7 @@ def run():
     add_num_training_patches(all_baselines)
     # plot_my_results_alt(test_sets, no_overlap_baselines, diverse_baselines, num_reps)
 
-    test(test_sets, all_baselines, num_reps)
+    # test(test_sets, all_baselines, num_reps)
     all_baselines = {
         "full_image_sets": no_overlap_baselines,
         # "diverse_baselines": diverse_baselines,
@@ -816,7 +826,7 @@ def run():
         # "selected_patches": active_baselines
         "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines
     }
-    # plot_my_results_alt(test_sets, all_baselines, num_reps)
+    plot_my_results_alt(test_sets, all_baselines, num_reps)
 
     # plot_my_combined_results_alt(test_sets, all_baselines, num_reps, "num_training_patches")
 

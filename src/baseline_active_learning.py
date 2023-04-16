@@ -19,6 +19,176 @@ from lock_queue import LockQueue
 
 import image_set_actions as isa
 
+def get_num_patches_used_by_model(model_dir):
+
+    log_path = os.path.join(model_dir, "log.json")
+    log = json_io.load_json(log_path)
+    total_num_patches = 0
+    for image_set in log["image_sets"]:
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+        
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+        if "patch_overlap_percent" in image_set:
+            patch_overlap_percent = image_set["patch_overlap_percent"]
+        else:
+            patch_overlap_percent = 50
+
+        if "taken_regions" in image_set:
+            for image_name in image_set["taken_regions"].keys():
+                for region in image_set["taken_regions"][image_name]:
+
+                    region_width = region[3] - region[1]
+                    region_height = region[2] - region[0]
+
+                    overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+                    incr = patch_size - overlap_px
+                    w_covered = max(region_width - patch_size, 0)
+                    num_w_patches = m.ceil(w_covered / incr) + 1
+
+                    h_covered = max(region_height - patch_size, 0)
+                    num_h_patches = m.ceil(h_covered / incr) + 1
+
+                    num_patches = num_w_patches * num_h_patches
+
+                    total_num_patches += num_patches
+        else:
+            
+            num_patches_per_image = diversity_test.get_num_patches_per_image(annotations, metadata, patch_size, patch_overlap_percent=patch_overlap_percent)
+            
+            for image_name in annotations.keys():
+                if len(annotations[image_name]["test_regions"]) > 0:
+                    total_num_patches += num_patches_per_image
+
+
+    return total_num_patches
+                    
+
+
+def run_diverse_model(training_image_sets, model_name, model_dir_to_match):
+
+    num_patches_to_take = get_num_patches_used_by_model(model_dir_to_match)
+
+    candidates = []
+    for image_set in training_image_sets:
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+
+
+        image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+                                     image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        image_names = list(annotations.keys())
+        image_w = metadata["images"][image_names[0]]["width_px"]
+        image_h = metadata["images"][image_names[0]]["height_px"]
+
+        patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+            
+        patch_overlap_percent = 0
+        overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+        incr = patch_size - overlap_px
+        w_covered = max(image_w - patch_size, 0)
+        num_w_patches = m.ceil(w_covered / incr) + 1
+
+        h_covered = max(image_h - patch_size, 0)
+        num_h_patches = m.ceil(h_covered / incr) + 1
+
+        for image_name in annotations.keys():
+            image_w = metadata["images"][image_name]["width_px"]
+            image_h = metadata["images"][image_name]["height_px"]
+            if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
+                for h_index in range(num_h_patches):
+                    for w_index in range(num_w_patches):
+
+                        patch_coords = [
+                            patch_size * h_index,
+                            patch_size * w_index,
+                            min((patch_size * h_index) + patch_size, image_h),
+                            min((patch_size * w_index) + patch_size, image_w)
+                        ]
+
+                        candidates.append((username, farm_name, field_name, mission_date, image_name, patch_coords))
+
+                
+    taken_candidates = random.sample(candidates, num_patches_to_take)
+    s = {}
+    for taken_candidate in taken_candidates:
+        key = taken_candidate[0] + "/" + taken_candidate[1] + "/" + taken_candidate[2] + "/" + taken_candidate[3]
+        if key not in s:
+            s[key] = {}
+
+        image_name = taken_candidate[4]
+        if image_name not in s[key]:
+            s[key][image_name] = []
+
+        s[key][image_name].append(taken_candidate[5])
+
+    log = {}
+    log["model_creator"] = "erik"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["image_sets"] = []
+
+    for key in s:
+        pieces = key.split("/")
+        log["image_sets"].append({
+            "username": pieces[0],
+            "farm_name": pieces[1],
+            "field_name": pieces[2],
+            "mission_date": pieces[3],
+            "taken_regions": s[key],
+            "patch_overlap_percent": 0
+        })
+
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+
+    server.sch_ctx["baseline_queue"].enqueue(log)
+
+    baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+    while baseline_queue_size > 0:
+    
+        log = server.sch_ctx["baseline_queue"].dequeue()
+        re_enqueue = server.process_baseline(log)
+        if re_enqueue:
+            server.sch_ctx["baseline_queue"].enqueue(log)
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+
 def run_full_image_set_model(training_image_sets, model_name):
     log = {}
     log["model_creator"] = "erik"
@@ -1032,36 +1202,36 @@ if __name__ == "__main__":
         #     "field_name": "nasser",
         #     "mission_date": "2021-06-01"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "row_spacing",
-        #     "field_name": "brown",
-        #     "mission_date": "2021-06-01"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "row_spacing",
+            "field_name": "brown",
+            "mission_date": "2021-06-01"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "UNI",
         #     "field_name": "Dugout",
         #     "mission_date": "2022-05-30"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "MORSE",
-        #     "field_name": "Dugout",
-        #     "mission_date": "2022-05-27"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "MORSE",
+            "field_name": "Dugout",
+            "mission_date": "2022-05-27"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "UNI",
         #     "field_name": "Brown",
         #     "mission_date": "2021-06-05"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "Sutherland",
-        #     "mission_date": "2021-06-05"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Sutherland",
+            "mission_date": "2021-06-05"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "row_spacing",
@@ -1086,36 +1256,36 @@ if __name__ == "__main__":
         #     "field_name": "Norheim4",
         #     "mission_date": "2022-05-24"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim5",
-        #     "mission_date": "2022-05-24"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim5",
+            "mission_date": "2022-05-24"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "Saskatoon",
         #     "field_name": "Norheim1",
         #     "mission_date": "2021-05-26"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim2",
-        #     "mission_date": "2021-05-26"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim2",
+            "mission_date": "2021-05-26"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "Biggar",
         #     "field_name": "Dennis1",
         #     "mission_date": "2021-06-04"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Biggar",
-        #     "field_name": "Dennis3",
-        #     "mission_date": "2021-06-04"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "Biggar",
+            "field_name": "Dennis3",
+            "mission_date": "2021-06-04"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "BlaineLake",
@@ -1140,36 +1310,36 @@ if __name__ == "__main__":
         #     "field_name": "LowN1",
         #     "mission_date": "2021-06-07"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Serhienko9N",
-        #     "mission_date": "2022-06-07"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Serhienko9N",
+            "mission_date": "2022-06-07"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "Saskatoon",
         #     "field_name": "Norheim1",
         #     "mission_date": "2021-06-02"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "row_spacing",
-        #     "field_name": "brown",
-        #     "mission_date": "2021-06-08"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "row_spacing",
+            "field_name": "brown",
+            "mission_date": "2021-06-08"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "SaskatoonEast",
         #     "field_name": "Stevenson5NW",
         #     "mission_date": "2022-06-20"
         # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "Vaderstad",
-        #     "mission_date": "2022-06-16"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Vaderstad",
+            "mission_date": "2022-06-16"
+        },
         # {
         #     "username": "kaylie",
         #     "farm_name": "Biggar",
@@ -1284,4 +1454,8 @@ if __name__ == "__main__":
     # run_weed_test(training_image_sets, weed_image_sets, "MORSE_Nasser_2022-05-27_and_10000_weed", 10000)
 
 
-    run_full_image_set_model(training_image_sets, "fixed_epoch_set_of_3_no_overlap")
+    run_full_image_set_model(training_image_sets, "fixed_epoch_set_of_12_no_overlap")
+
+
+
+    # model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", model_name)

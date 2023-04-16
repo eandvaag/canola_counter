@@ -507,7 +507,80 @@ def get_percent_count_errors(annotations, full_predictions, assessment_images):
     # print(errors)
     return errors
 
-    
+
+def get_global_accuracy_multiple_image_sets(annotations_lst, full_predictions_lst, assessment_images_lst):
+
+    total_true_positives = 0
+    total_false_positives = 0
+    total_false_negatives = 0
+
+    for (annotations, full_predictions, assessment_images) in zip(annotations_lst, full_predictions_lst, assessment_images_lst):
+
+        for image_name in assessment_images:
+            annotated_boxes = annotations[image_name]["boxes"]
+            pred_boxes = np.array(full_predictions[image_name]["boxes"])
+            pred_scores = np.array(full_predictions[image_name]["scores"])
+
+            sel_pred_boxes = pred_boxes[pred_scores > 0.50]
+
+            num_predicted = sel_pred_boxes.shape[0]
+            num_annotated = annotated_boxes.shape[0]
+
+            if num_predicted > 0:
+                if num_annotated > 0:
+                    true_positive, false_positive, false_negative = inference_metrics.get_positives_and_negatives(annotated_boxes, sel_pred_boxes, 0.50)
+                    # print(true_positive, false_positive, false_negative)
+                    # precision_050 = true_positive / (true_positive + false_positive)
+                    # recall_050 = true_positive / (true_positive + false_negative)
+                    # if precision_050 == 0 and recall_050 == 0:
+                    #     f1_iou_050 = 0
+                    # else:
+                    #     f1_iou_050 = (2 * precision_050 * recall_050) / (precision_050 + recall_050)
+                    # acc_050 = true_positive / (true_positive + false_positive + false_negative)
+                    # true_positive, false_positive, false_negative = get_positives_and_negatives(annotated_boxes, sel_region_pred_boxes, 0.75)
+                    # precision = true_positive / (true_positive + false_positive)
+                    # recall = true_positive / (true_positive + false_negative)
+                    # f1_iou_075 = (2 * precision * recall) / (precision + recall)                        
+
+                    
+                
+                else:
+                    true_positive = 0
+                    false_positive = num_predicted
+                    false_negative = 0
+
+                    # precision_050 = 0.0
+                    # recall_050 = 0.0
+                    # f1_iou_050 = 0.0
+                    # acc_050 = 0.0
+            else:
+                if num_annotated > 0:
+                    true_positive = 0
+                    false_positive = 0
+                    false_negative = num_annotated
+
+                    # precision_050 = 0.0
+                    # recall_050 = 0.0
+                    # f1_iou_050 = 0.0
+                    # acc_050 = 0.0
+                else:
+                    true_positive = 0
+                    false_positive = 0
+                    false_negative = 0
+
+                    # precision_050 = 1.0
+                    # recall_050 = 1.0
+                    # f1_iou_050 = 1.0
+                    # acc_050 = 1.0
+            total_true_positives += true_positive
+            total_false_positives += false_positive
+            total_false_negatives += false_negative
+
+
+        # accuracies.append(acc_050)
+    global_accuracy = total_true_positives / (total_true_positives + total_false_positives + total_false_negatives)
+    return global_accuracy
+
 
 def get_global_accuracy(annotations, full_predictions, assessment_images):
     # accuracies = []
