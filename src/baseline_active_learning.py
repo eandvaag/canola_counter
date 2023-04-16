@@ -161,7 +161,7 @@ def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_
     taken_candidates = random.sample(candidates, num_patches_to_take)
 
     for taken_candidate in taken_candidates:
-        key = taken_candidates[0]
+        key = taken_candidate[0]
         if key not in s:
             s[key] = {}
 
