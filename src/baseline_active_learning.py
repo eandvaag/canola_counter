@@ -1461,11 +1461,10 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                 pred_scores = np.array(predictions[image_name]["scores"])
                 sel_pred_boxes = pred_boxes[pred_scores > 0.5]
 
-                for pred_box in sel_pred_boxes:
-                    exg_array[pred_box[0]:pred_box[2], pred_box[1]:pred_box[3]] = -10
-
                 exg_array[exg_array < 0] = 0
 
+                for pred_box in sel_pred_boxes:
+                    exg_array[pred_box[0]:pred_box[2], pred_box[1]:pred_box[3]] = -10
 
 
                 image_w = metadata["images"][image_name]["width_px"]
