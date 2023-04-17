@@ -1490,29 +1490,29 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                                 (image_set_str, image_name, patch_coords, score)
                             )
                             
-                            
-            candidates.sort(key=lambda x: x[3])
+                        
+        candidates.sort(key=lambda x: x[3])
 
 
-            num_patches_to_take = patches_to_match - num_patches_prev_taken
+        num_patches_to_take = patches_to_match - num_patches_prev_taken
 
-            print("Patch count to match: {}".format(patches_to_match))
-            print("Num patches previously taken: {}".format(num_patches_prev_taken))
-            print("Num patches to take: {}".format(num_patches_to_take))
+        print("Patch count to match: {}".format(patches_to_match))
+        print("Num patches previously taken: {}".format(num_patches_prev_taken))
+        print("Num patches to take: {}".format(num_patches_to_take))
 
-            taken_candidates = candidates[:num_patches_to_take]
+        taken_candidates = candidates[:num_patches_to_take]
 
-            for candidate in taken_candidates:
-                image_set_str = candidate[0]
-                image_name = candidate[1]
-                patch_coords = candidate[2]
-                if image_set_str not in taken_patches:
-                    taken_patches[image_set_str] = {}
-                if image_name not in taken_patches[image_set_str]:
-                    taken_patches[image_set_str][image_name] = []
+        for candidate in taken_candidates:
+            image_set_str = candidate[0]
+            image_name = candidate[1]
+            patch_coords = candidate[2]
+            if image_set_str not in taken_patches:
+                taken_patches[image_set_str] = {}
+            if image_name not in taken_patches[image_set_str]:
+                taken_patches[image_set_str][image_name] = []
 
                 
-                taken_patches[image_set_str][image_name].append(patch_coords)
+            taken_patches[image_set_str][image_name].append(patch_coords)
 
 
 
@@ -2198,6 +2198,10 @@ if __name__ == "__main__":
     # run_diverse_model(training_image_sets, "fixed_epoch_diverse_set_of_27_match_27_no_overlap", model_dir_to_match, prev_model_dir)
 
 
-    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap")
+    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap")
 
-    exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_1_no_overlap", model_dir_to_match, prev_model_dir=None)
+    # exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_1_no_overlap", model_dir_to_match, prev_model_dir=None)
+
+
+    model_dir = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_diverse_set_of_27_match_12_no_overlap")
+    run_pending_model(model_dir)
