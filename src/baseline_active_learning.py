@@ -1497,7 +1497,7 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                             )
                             
                         
-        candidates.sort(key=lambda x: x[3])
+        candidates.sort(key=lambda x: x[3], reverse=True)
 
 
         num_patches_to_take = patches_to_match - num_patches_prev_taken
