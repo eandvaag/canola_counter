@@ -1461,6 +1461,9 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                 pred_scores = np.array(predictions[image_name]["scores"])
                 sel_pred_boxes = pred_boxes[pred_scores > 0.5]
 
+                for pred_box in sel_pred_boxes:
+                    exg_array[pred_box[0]:pred_box[2], pred_box[1]:pred_box[3]] = -10
+
 
 
                 image_w = metadata["images"][image_name]["width_px"]
@@ -1478,15 +1481,14 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                             # if image_set_str in taken_patches and image_name in taken_patches[image_set_str] and patch_coords not in taken_patches[image_set_str][image_name]:
 
                             
-                            inds = box_utils.get_contained_inds(sel_pred_boxes, [patch_coords])
-                            patch_boxes = sel_pred_boxes[inds]
-                            for patch_box in patch_boxes:
-                                exg_array[min(0, patch_box[0]-patch_coords[0]):min(0, patch_box[2]-patch_coords[0]),
-                                          min(0, patch_box[1]-patch_coords[1]):min(0, patch_box[3]-patch_coords[1])] = -10
+                            # inds = box_utils.get_contained_inds(sel_pred_boxes, [patch_coords])
+                            # patch_boxes = sel_pred_boxes[inds]
+                            # for patch_box in patch_boxes:
+                            #     exg_array[min(0, patch_box[0]-patch_coords[0]):min(0, patch_box[2]-patch_coords[0]),
+                            #               min(0, patch_box[1]-patch_coords[1]):min(0, patch_box[3]-patch_coords[1])] = -10
                             
-                            
-                            outside_inds = exg_array != -10
-                            sel_vals = exg_array[outside_inds]
+                            exg_patch = exg_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+                            sel_vals = exg_patch[exg_patch != -10]
                             score = np.sum(sel_vals) / sel_vals.size
 
                             
