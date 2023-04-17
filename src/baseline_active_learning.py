@@ -1322,24 +1322,24 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
         candidates = []
         taken_patches = {}
 
-        patches_to_match = 0
-        for image_set in log_to_match["image_sets"]:
-            username = image_set["username"]
-            farm_name = image_set["farm_name"]
-            field_name = image_set["field_name"]
-            mission_date = image_set["mission_date"]
-            image_set_dir = os.path.join("usr", "data", 
-                                        username, "image_sets",
-                                        farm_name,
-                                        field_name,
-                                        mission_date)
+        patches_to_match = get_num_patches_used_by_model(model_dir_to_match) #0
+        # for image_set in log_to_match["image_sets"]:
+        #     username = image_set["username"]
+        #     farm_name = image_set["farm_name"]
+        #     field_name = image_set["field_name"]
+        #     mission_date = image_set["mission_date"]
+        #     image_set_dir = os.path.join("usr", "data", 
+        #                                 username, "image_sets",
+        #                                 farm_name,
+        #                                 field_name,
+        #                                 mission_date)
         
-            # annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-            # annotations = annotation_utils.load_annotations(annotations_path)
+        #     # annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        #     # annotations = annotation_utils.load_annotations(annotations_path)
 
-            for image_name in image_set["taken_regions"].keys():
-                # cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], image_set["taken_regions"][image_name]).size
-                patches_to_match += len(image_set["taken_regions"][image_name])
+        #     for image_name in image_set["taken_regions"].keys():
+        #         # cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], image_set["taken_regions"][image_name]).size
+        #         patches_to_match += len(image_set["taken_regions"][image_name])
 
 
 
@@ -2192,7 +2192,12 @@ if __name__ == "__main__":
 
 
 
-    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_set_of_27_no_overlap")
-    prev_model_dir = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_diverse_set_of_27_match_18_no_overlap")
+    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_set_of_27_no_overlap")
+    # prev_model_dir = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_diverse_set_of_27_match_18_no_overlap")
 
-    run_diverse_model(training_image_sets, "fixed_epoch_diverse_set_of_27_match_27_no_overlap", model_dir_to_match, prev_model_dir)
+    # run_diverse_model(training_image_sets, "fixed_epoch_diverse_set_of_27_match_27_no_overlap", model_dir_to_match, prev_model_dir)
+
+
+    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap")
+
+    exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_1_no_overlap", model_dir_to_match, prev_model_dir=None)
