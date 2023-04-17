@@ -760,6 +760,11 @@ def run():
             "model_creator": "erik",
             "num_training_sets": 6
         },
+        {
+            "model_name": "fixed_epoch_set_of_12_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 12
+        },
     ]
 
 

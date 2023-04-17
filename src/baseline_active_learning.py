@@ -4,6 +4,7 @@ import glob
 import shutil
 import random
 import urllib3
+import tqdm
 import time
 import uuid
 import math as m
@@ -13,6 +14,9 @@ from natsort import natsorted
 from models.common import annotation_utils, box_utils
 from io_utils import json_io
 import diversity_test
+from image_set import Image
+import image_utils
+
 
 import server
 from lock_queue import LockQueue
@@ -199,6 +203,26 @@ def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_
     json_io.save_json(log_path, log)
 
 
+    # server.sch_ctx["baseline_queue"].enqueue(log)
+
+    # baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+    # while baseline_queue_size > 0:
+    
+    #     log = server.sch_ctx["baseline_queue"].dequeue()
+    #     re_enqueue = server.process_baseline(log)
+    #     if re_enqueue:
+    #         server.sch_ctx["baseline_queue"].enqueue(log)
+    #     baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+def run_pending_model(model_dir):
+
+    log_path = os.path.join(model_dir, "log.json")
+    log = json_io.load_json(log_path)
+    log["submission_time"] = int(time.time())
+    json_io.save_json(log_path, log)
+
+
     server.sch_ctx["baseline_queue"].enqueue(log)
 
     baseline_queue_size = server.sch_ctx["baseline_queue"].size()
@@ -209,8 +233,6 @@ def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_
         if re_enqueue:
             server.sch_ctx["baseline_queue"].enqueue(log)
         baseline_queue_size = server.sch_ctx["baseline_queue"].size()
-
-
 
 
 def run_full_image_set_model(training_image_sets, model_name):
@@ -423,7 +445,10 @@ def run_weed_test(training_image_sets, weed_image_sets, model_name, num_weed_pat
             server.sch_ctx["baseline_queue"].enqueue(log)
         baseline_queue_size = server.sch_ctx["baseline_queue"].size()
 
-def active_patch_selection(prev_active_model_log, rand_img_log_to_match, training_image_sets, iteration_number):
+
+
+
+def active_patch_selection_old(prev_active_model_log, rand_img_log_to_match, training_image_sets, iteration_number):
     all_pred_boxes = []
     all_pred_scores = []
     all_pred_image_sets = []
@@ -881,6 +906,691 @@ def active_patch_selection(prev_active_model_log, rand_img_log_to_match, trainin
         if re_enqueue:
             server.sch_ctx["baseline_queue"].enqueue(log)
         baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+
+def active_patch_selection(training_image_sets, model_name, model_dir_to_match, prev_model_dir): #prev_active_model_log, rand_img_log_to_match, training_image_sets, iteration_number):
+    all_pred_boxes = []
+    all_pred_scores = []
+    all_pred_image_sets = []
+    all_pred_images = []
+    # image_set_str_to_image_shape = {}
+    # image_set_str_to_patch_size = {}
+    image_set_info = {}
+
+
+    log_to_match_path = os.path.join(model_dir_to_match, "log.json")
+    log_to_match = json_io.load_json(log_to_match_path)
+
+
+    log = {}
+    
+    annotations_to_match = 0
+    patches_to_match = 0
+    # if rand_img_log_to_match is not None:
+    for image_set in log_to_match["image_sets"]:
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+    
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        # metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        # metadata = json_io.load_json(metadata_path)
+
+        # patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+        # num_patches_per_image = diversity_test.get_num_patches_per_image(annotations, metadata, patch_size, patch_overlap_percent=0)
+        # for image_name in image_set["taken_regions"].keys():
+        #     annotations_to_match += len(annotations[image_name]["boxes"])
+        #     patches_to_match += (num_patches_per_image)
+
+
+        for image_name in image_set["taken_regions"].keys():
+            cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], image_set["taken_regions"][image_name]).size
+            patches_to_match += len(image_set["taken_regions"][image_name])
+
+    taken_patches = {}
+
+    if prev_model_dir is None:
+        log["image_sets"] = log_to_match["image_sets"]
+
+    else:
+        prev_active_model_log_path = os.path.join(prev_model_dir, "log.json")
+        prev_active_model_log = json_io.load_json(prev_active_model_log_path)
+        for image_set in training_image_sets:
+            username = image_set["username"]
+            farm_name = image_set["farm_name"]
+            field_name = image_set["field_name"]
+            mission_date = image_set["mission_date"]
+            image_set_dir = os.path.join("usr", "data", 
+                                        username, "image_sets",
+                                        farm_name,
+                                        field_name,
+                                        mission_date)
+            
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            annotations = annotation_utils.load_annotations(annotations_path)
+
+            metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+            metadata = json_io.load_json(metadata_path)
+
+            print("switching to model")
+            model_dir = os.path.join(image_set_dir, "model")
+            switch_req_path = os.path.join(model_dir, "switch_request.json")
+            switch_req = {
+                "model_name": prev_active_model_log["model_name"],
+                "model_creator": prev_active_model_log["model_creator"]
+            }
+            json_io.save_json(switch_req_path, switch_req)
+
+            item = {
+                "username": username,
+                "farm_name": farm_name,
+                "field_name": field_name,
+                "mission_date": mission_date
+            }
+
+            switch_processed = False
+            isa.process_switch(item)
+            while not switch_processed:
+                print("Waiting for process switch")
+                time.sleep(3)
+                if not os.path.exists(switch_req_path):
+                    switch_processed = True
+
+
+        
+            request_uuid = str(uuid.uuid4())
+            request = {
+                "request_uuid": request_uuid,
+                "start_time": int(time.time()),
+                "image_names": [image_name for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
+                "regions": [[[0, 0, metadata["images"][image_name]["height_px"], metadata["images"][image_name]["width_px"]]] for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
+                "save_result": True,
+                "regions_only": True,
+                "calculate_vegetation_record": False,
+                "results_name": "active_learning_eval",
+                "results_message": ""
+            }
+
+            request_path = os.path.join(image_set_dir, "model", "prediction", 
+                                        "image_set_requests", "pending", request_uuid + ".json")
+
+            json_io.save_json(request_path, request)
+            print("running process_predict")
+            server.process_predict(item)
+
+            # result_dirs = glob.glob(os.path.join(image_set_dir, "model", "results", "*"))
+            # if len(result_dirs) > 1:
+            #     raise RuntimeError("More than one result dir")
+            # results_dir = result_dirs[0]
+
+
+            results_dir = os.path.join(image_set_dir, "model", "results", request_uuid)
+            predictions_path = os.path.join(results_dir, "predictions.json")
+            predictions = json_io.load_json(predictions_path)
+
+            image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+
+
+            image_set_info[image_set_str] = {}
+            image_set_info[image_set_str]["image_shape"] = [metadata["images"][list(annotations.keys())[0]]["height_px"], metadata["images"][list(annotations.keys())[0]]["width_px"]]
+            
+            
+            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+            image_set_info[image_set_str]["patch_size"] = patch_size
+
+            image_set_info[image_set_str]["annotations"] = annotations
+            
+            for image_name in predictions.keys():
+
+                for i in range(len(predictions[image_name]["scores"])):
+                    all_pred_boxes.append(predictions[image_name]["boxes"][i])
+                    all_pred_scores.append(predictions[image_name]["scores"][i])
+                    all_pred_image_sets.append(image_set_str)
+                    all_pred_images.append(image_name)
+
+
+
+
+
+        # if prev_active_model_log is not None:
+        for image_set in prev_active_model_log["image_sets"]:
+            image_set_str = image_set["username"] + " " + image_set["farm_name"] + " " + image_set["field_name"] + " " + image_set["mission_date"]
+            taken_patches[image_set_str] = image_set["taken_regions"]
+
+
+
+
+        print(taken_patches.keys())
+        
+        for q_score in np.arange(0, 51, 1):
+            print("q_score: {}".format(q_score))
+            image_q_scores = (abs(0.5 -np.array(all_pred_scores)) * 100).astype(np.int64)
+            # q_score_mask = image_q_scores == q_score
+            q_score_inds = np.where(image_q_scores == q_score)[0]
+            np.random.shuffle(q_score_inds)
+            for q_score_ind in q_score_inds:
+                candidate_box = np.array(all_pred_boxes[q_score_ind])
+                centre = (candidate_box[..., :2] + candidate_box[..., 2:]) / 2.0
+                candidate_image_set_str = all_pred_image_sets[q_score_ind]
+                candidate_image_name = all_pred_images[q_score_ind]
+                image_shape = image_set_info[candidate_image_set_str]["image_shape"]
+                image_height = image_shape[0]
+                image_width = image_shape[1]
+                patch_size = image_set_info[candidate_image_set_str]["patch_size"]
+
+
+                patch_min_y = int((centre[0] // patch_size) * patch_size)
+                patch_min_x = int((centre[1] // patch_size) * patch_size)
+                patch_max_y = int(min(patch_min_y + patch_size, image_height))
+                patch_max_x = int(min(patch_min_x + patch_size, image_width))
+                patch = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+                already_taken = False
+                # if prev_active_model_log is not None:
+                    # for image_set in prev_active_model_log["image_sets"]:
+                        # if image_set["username"] == username and image_set["farm_name"] == farm_name and image_set["field_name"] == "field_name" and image_set["mission_date"] == "mission_date":
+                if candidate_image_set_str not in taken_patches:
+                    taken_patches[candidate_image_set_str] = {}
+                if candidate_image_name not in taken_patches[candidate_image_set_str]:
+                    taken_patches[candidate_image_set_str][candidate_image_name] = []
+                if patch in taken_patches[candidate_image_set_str][candidate_image_name]:
+                    already_taken = True
+                # if not already_taken:
+                #     if image_name not in taken_patches[image_set_str]:
+                #         taken_patches[image_set_str][image_name] = []
+                #     taken_patches[image_set_str][image_name].append(patch)
+
+                cur_total = 0
+                if not already_taken:
+                    for image_set_str in taken_patches.keys():
+                        annotations = image_set_info[image_set_str]["annotations"]
+                        for image_name in taken_patches[image_set_str].keys():
+
+                            if image_set_str == candidate_image_set_str and image_name == candidate_image_name:
+                                l = taken_patches[image_set_str][image_name].copy() #annotations[candidate_image_name]["training_regions"].copy()
+                                l.append(patch)
+                                cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                            else:
+                                cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_patches[image_set_str][image_name]).size
+                    
+                    if cur_total <= annotations_to_match:
+                        taken_patches[candidate_image_set_str][candidate_image_name].append(patch)
+
+                    print(cur_total, annotations_to_match, len(taken_patches[candidate_image_set_str][candidate_image_name]))
+                        # added_candidates.append((candidates[i][0], candidates[i][1]))
+                    
+                    # for image_name in image_names:
+                    #     if image_name != candidates[i][0]:
+                    #         if len(annotations[image_name]["training_regions"]) > 0:
+                    #             cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                    # l = annotations[candidates[i][0]]["training_regions"].copy()
+                    # l.append(candidates[i][1])
+                    # cur_total += box_utils.get_contained_inds(annotations[candidates[i][0]]["boxes"], l).size
+                    # if cur_total <= total_to_match:
+                    #     annotations[candidates[i][0]]["training_regions"].append(candidates[i][1])
+                    #     added_candidates.append((candidates[i][0], candidates[i][1]))
+                if cur_total == annotations_to_match:
+                    break
+            if cur_total == annotations_to_match:
+                break
+
+        cur_num_patches = 0
+        for image_set_str in taken_patches.keys():
+            for image_name in taken_patches[image_set_str]:
+                cur_num_patches += len(taken_patches[image_set_str][image_name])
+
+        print("cur_num_patches", cur_num_patches)
+        print("patches_to_match", patches_to_match)
+        num_to_add = patches_to_match - cur_num_patches
+        if cur_num_patches < patches_to_match:
+            all_patch_candidates = []
+            for image_set_str in image_set_info.keys():
+                annotations = image_set_info[image_set_str]["annotations"]
+                # for image_name in taken_patches[image_set_str]:
+                image_shape = image_set_info[image_set_str]["image_shape"]
+                image_height = image_shape[0]
+                image_width = image_shape[1]
+                patch_size = image_set_info[image_set_str]["patch_size"]
+
+                incr = patch_size #- overlap_px
+                w_covered = max(image_width - patch_size, 0)
+                num_w_patches = m.ceil(w_covered / incr) + 1
+
+                h_covered = max(image_height - patch_size, 0)
+                num_h_patches = m.ceil(h_covered / incr) + 1
+
+
+
+                for image_name in annotations.keys():
+
+                    if len(annotations[image_name]["test_regions"]) > 0:
+                        for i in range(0, num_w_patches):
+                            for j in range(0, num_h_patches):
+                                patch_min_y = (patch_size) * j
+                                patch_min_x = (patch_size) * i
+
+                                patch_max_y = min(patch_min_y + patch_size, image_height)
+                                patch_max_x = min(patch_min_x + patch_size, image_width)
+
+                                patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+                                if image_set_str in taken_patches and image_name in taken_patches[image_set_str]:
+                                    # if patch_region not in taken_patches[image_set_str][image_name]:
+                                        # possible = True
+                                        # all_patch_candidates.append(
+
+                                        # )
+                                    if patch_region not in taken_patches[image_set_str][image_name]: #patch_region not in annotations[image_name]["training_regions"]:
+                                        num_without = box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_patches[image_set_str][image_name]).size
+                                        l = taken_patches[image_set_str][image_name].copy()
+                                        l.append(patch_region)
+                                        num_with = box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                                        if num_without == num_with:
+                                            all_patch_candidates.append((image_set_str, image_name, patch_region))
+
+
+                                else:
+                                    num_contained = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_region]).size
+                                    if num_contained == 0:
+                                        all_patch_candidates.append((
+                                            image_set_str,
+                                            image_name,
+                                            patch_region
+                                        ))
+
+            print("picking {} from {} candidates".format(num_to_add, len(all_patch_candidates)))
+            extra_patches = random.sample(all_patch_candidates, num_to_add)
+            for extra_patch in extra_patches:
+                image_set_str = extra_patch[0]
+                image_name = extra_patch[1]
+                extra_patch_coords = extra_patch[2]
+                if image_set_str not in taken_patches:
+                    taken_patches[image_set_str] = {}
+                if image_name not in taken_patches[image_set_str]:
+                    taken_patches[image_set_str][image_name] = []
+
+                taken_patches[image_set_str][image_name].append(extra_patch_coords)
+
+                
+        elif cur_num_patches > patches_to_match:
+            raise RuntimeError("too many patches -- not implemented")
+                
+            # random_image_set_str = random.choice
+
+
+        print("\n\n--- FINAL CHECK---\n\n")
+        cur_num_patches = 0
+        cur_num_annotations = 0
+        for image_set_str in taken_patches.keys():
+            for image_name in taken_patches[image_set_str]:
+                annotations = image_set_info[image_set_str]["annotations"]
+                cur_num_patches += len(taken_patches[image_set_str][image_name])
+                cur_num_annotations += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_patches[image_set_str][image_name]).size
+                # for patch_region in taken_patches[image_set_str][image_name]:
+                #     if patch_region.shape[0] == 0:
+                #         raise RuntimeError("BAD!")
+
+        print("cur_num_patches", cur_num_patches)
+        print("patches_to_match", patches_to_match)
+        if cur_num_patches != patches_to_match:
+            raise RuntimeError("cur_num_patches != patches_to_match")
+
+
+        print("cur_num_annotations", cur_num_annotations)
+        print("annotations_to_match", annotations_to_match)
+        if cur_num_annotations != annotations_to_match:
+            raise RuntimeError("cur_num_annotations != annotations_to_match")
+
+
+        log["image_sets"] = []
+        for image_set_str in taken_patches.keys():
+            pieces = image_set_str.split(" ")
+            username = pieces[0]
+            farm_name = pieces[1]
+            field_name = pieces[2]
+            mission_date = pieces[3]
+
+            log["image_sets"].append({
+                "username": username,
+                "farm_name": farm_name,
+                "field_name": field_name,
+                "mission_date": mission_date,
+                "taken_regions": taken_patches[image_set_str]
+            })
+
+
+    log["model_creator"] = "erik"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+    server.sch_ctx["baseline_queue"].enqueue(log)
+
+    baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+    print("baseline_queue_size", baseline_queue_size)
+    while baseline_queue_size > 0:
+    
+        log = server.sch_ctx["baseline_queue"].dequeue()
+        re_enqueue = server.process_baseline(log)
+        if re_enqueue:
+            server.sch_ctx["baseline_queue"].enqueue(log)
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_match, prev_model_dir): #prev_active_model_log, rand_img_log_to_match, training_image_sets, iteration_number):
+    # all_pred_boxes = []
+    # all_pred_scores = []
+    # all_pred_image_sets = []
+    # all_pred_images = []
+    # image_set_str_to_image_shape = {}
+    # image_set_str_to_patch_size = {}
+    # image_set_info = {}
+
+
+    log_to_match_path = os.path.join(model_dir_to_match, "log.json")
+    log_to_match = json_io.load_json(log_to_match_path)
+
+
+    log = {}
+    
+
+
+    if prev_model_dir is None:
+        log["image_sets"] = log_to_match["image_sets"]
+
+    else:
+        candidates = []
+        taken_patches = {}
+
+        patches_to_match = 0
+        for image_set in log_to_match["image_sets"]:
+            username = image_set["username"]
+            farm_name = image_set["farm_name"]
+            field_name = image_set["field_name"]
+            mission_date = image_set["mission_date"]
+            image_set_dir = os.path.join("usr", "data", 
+                                        username, "image_sets",
+                                        farm_name,
+                                        field_name,
+                                        mission_date)
+        
+            # annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            # annotations = annotation_utils.load_annotations(annotations_path)
+
+            for image_name in image_set["taken_regions"].keys():
+                # cur_total += box_utils.get_contained_inds(annotations[image_name]["boxes"], image_set["taken_regions"][image_name]).size
+                patches_to_match += len(image_set["taken_regions"][image_name])
+
+
+
+        prev_active_model_log_path = os.path.join(prev_model_dir, "log.json")
+        prev_active_model_log = json_io.load_json(prev_active_model_log_path)
+
+
+        num_patches_prev_taken = 0
+        for image_set in prev_active_model_log["image_sets"]:
+            image_set_str = image_set["username"] + " " + image_set["farm_name"] + " " + image_set["field_name"] + " " + image_set["mission_date"]
+            taken_patches[image_set_str] = image_set["taken_regions"]
+            for image_name in image_set["taken_regions"]:
+                num_patches_prev_taken += len(image_set["taken_regions"][image_name])
+
+
+        for image_set in training_image_sets:
+            username = image_set["username"]
+            farm_name = image_set["farm_name"]
+            field_name = image_set["field_name"]
+            mission_date = image_set["mission_date"]
+            image_set_str = image_set["username"] + " " + image_set["farm_name"] + " " + image_set["field_name"] + " " + image_set["mission_date"]
+            image_set_dir = os.path.join("usr", "data", 
+                                        username, "image_sets",
+                                        farm_name,
+                                        field_name,
+                                        mission_date)
+            
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            annotations = annotation_utils.load_annotations(annotations_path)
+
+            metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+            metadata = json_io.load_json(metadata_path)
+
+
+            image_names = list(annotations.keys())
+            image_w = metadata["images"][image_names[0]]["width_px"]
+            image_h = metadata["images"][image_names[0]]["height_px"]
+
+            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+                
+            patch_overlap_percent = 0
+            overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+            incr = patch_size - overlap_px
+            w_covered = max(image_w - patch_size, 0)
+            num_w_patches = m.ceil(w_covered / incr) + 1
+
+            h_covered = max(image_h - patch_size, 0)
+            num_h_patches = m.ceil(h_covered / incr) + 1
+
+
+            print("switching to model")
+            model_dir = os.path.join(image_set_dir, "model")
+            switch_req_path = os.path.join(model_dir, "switch_request.json")
+            switch_req = {
+                "model_name": prev_active_model_log["model_name"],
+                "model_creator": prev_active_model_log["model_creator"]
+            }
+            json_io.save_json(switch_req_path, switch_req)
+
+            item = {
+                "username": username,
+                "farm_name": farm_name,
+                "field_name": field_name,
+                "mission_date": mission_date
+            }
+
+            switch_processed = False
+            isa.process_switch(item)
+            while not switch_processed:
+                print("Waiting for process switch")
+                time.sleep(3)
+                if not os.path.exists(switch_req_path):
+                    switch_processed = True
+
+
+        
+            request_uuid = str(uuid.uuid4())
+            request = {
+                "request_uuid": request_uuid,
+                "start_time": int(time.time()),
+                "image_names": [image_name for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
+                "regions": [[[0, 0, metadata["images"][image_name]["height_px"], metadata["images"][image_name]["width_px"]]] for image_name in annotations.keys() if len(annotations[image_name]["test_regions"]) > 0],
+                "save_result": True,
+                "regions_only": True,
+                "calculate_vegetation_record": False,
+                "results_name": "active_learning_eval",
+                "results_message": ""
+            }
+
+            request_path = os.path.join(image_set_dir, "model", "prediction", 
+                                        "image_set_requests", "pending", request_uuid + ".json")
+
+            json_io.save_json(request_path, request)
+            print("running process_predict")
+            server.process_predict(item)
+
+            # result_dirs = glob.glob(os.path.join(image_set_dir, "model", "results", "*"))
+            # if len(result_dirs) > 1:
+            #     raise RuntimeError("More than one result dir")
+            # results_dir = result_dirs[0]
+
+
+            results_dir = os.path.join(image_set_dir, "model", "results", request_uuid)
+            predictions_path = os.path.join(results_dir, "predictions.json")
+            predictions = json_io.load_json(predictions_path)
+
+
+            for image_name in tqdm.tqdm(list(predictions.keys()), desc="Collecting excess green scores"):
+                image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+                image = Image(image_path)
+                image_array = image.load_image_array()
+                exg_array = image_utils.excess_green(image_array)
+
+                pred_boxes = np.array(predictions[image_name]["boxes"])
+                pred_scores = np.array(predictions[image_name]["scores"])
+                sel_pred_boxes = pred_boxes[pred_scores > 0.5]
+
+
+
+                image_w = metadata["images"][image_name]["width_px"]
+                image_h = metadata["images"][image_name]["height_px"]
+                for h_index in range(num_h_patches):
+                    for w_index in range(num_w_patches):
+
+                        patch_coords = [
+                            patch_size * h_index,
+                            patch_size * w_index,
+                            min((patch_size * h_index) + patch_size, image_h),
+                            min((patch_size * w_index) + patch_size, image_w)
+                        ]
+
+                        if image_set_str in taken_patches and image_name in taken_patches[image_set_str] and patch_coords in taken_patches[image_set_str][image_name]:
+
+                            
+                            inds = box_utils.get_contained_inds(sel_pred_boxes, [patch_coords])
+                            patch_boxes = sel_pred_boxes[inds]
+                            for patch_box in patch_boxes:
+                                exg_array[min(0, patch_box[0]-patch_coords[0]):min(0, patch_box[2]-patch_coords[0]),
+                                          min(0, patch_box[1]-patch_coords[1]):min(0, patch_box[3]-patch_coords[1])] = -10
+                            
+                            sel_vals = exg_array != -10
+                            score = np.sum(sel_vals) / sel_vals.size
+
+                            
+                            candidates.append(
+                                (image_set_str, image_name, patch_coords, score)
+                            )
+                            
+                            
+            candidates.sort(key=lambda x: x[3])
+
+
+            num_patches_to_take = patches_to_match - num_patches_prev_taken
+
+            print("Patch count to match: {}".format(patches_to_match))
+            print("Num patches previously taken: {}".format(num_patches_prev_taken))
+            print("Num patches to take: {}".format(num_patches_to_take))
+
+            taken_candidates = candidates[:num_patches_to_take]
+
+            for candidate in taken_candidates:
+                image_set_str = candidate[0]
+                image_name = candidate[1]
+                patch_coords = candidate[2]
+                if image_set_str not in taken_patches:
+                    taken_patches[image_set_str] = {}
+                if image_name not in taken_patches[image_set_str]:
+                    taken_patches[image_set_str][image_name] = []
+
+                
+                taken_patches[image_set_str][image_name].append(patch_coords)
+
+
+
+        print("\n\n--- FINAL CHECK---\n\n")
+        cur_num_patches = 0
+        # cur_num_annotations = 0
+        for image_set_str in taken_patches.keys():
+            for image_name in taken_patches[image_set_str]:
+                # annotations = image_set_info[image_set_str]["annotations"]
+                cur_num_patches += len(taken_patches[image_set_str][image_name])
+                # cur_num_annotations += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_patches[image_set_str][image_name]).size
+                # for patch_region in taken_patches[image_set_str][image_name]:
+                #     if patch_region.shape[0] == 0:
+                #         raise RuntimeError("BAD!")
+
+        print("cur_num_patches", cur_num_patches)
+        print("patches_to_match", patches_to_match)
+        if cur_num_patches != patches_to_match:
+            raise RuntimeError("cur_num_patches != patches_to_match")
+
+
+        # print("cur_num_annotations", cur_num_annotations)
+        # print("annotations_to_match", annotations_to_match)
+        # if cur_num_annotations != annotations_to_match:
+        #     raise RuntimeError("cur_num_annotations != annotations_to_match")
+
+
+        log["image_sets"] = []
+        for image_set_str in taken_patches.keys():
+            pieces = image_set_str.split(" ")
+            username = pieces[0]
+            farm_name = pieces[1]
+            field_name = pieces[2]
+            mission_date = pieces[3]
+
+            log["image_sets"].append({
+                "username": username,
+                "farm_name": farm_name,
+                "field_name": field_name,
+                "mission_date": mission_date,
+                "taken_regions": taken_patches[image_set_str],
+                "patch_overlap_percent": 0
+            })
+
+
+    log["model_creator"] = "erik"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+    server.sch_ctx["baseline_queue"].enqueue(log)
+
+    baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+    print("baseline_queue_size", baseline_queue_size)
+    while baseline_queue_size > 0:
+    
+        log = server.sch_ctx["baseline_queue"].dequeue()
+        re_enqueue = server.process_baseline(log)
+        if re_enqueue:
+            server.sch_ctx["baseline_queue"].enqueue(log)
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1482,7 +2192,7 @@ if __name__ == "__main__":
 
 
 
-    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_set_of_3_no_overlap")
-    prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_1_no_overlap")
+    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_set_of_27_no_overlap")
+    prev_model_dir = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_diverse_set_of_27_match_18_no_overlap")
 
-    run_diverse_model(training_image_sets, "fixed_epoch_diverse_set_of_27_match_3_no_overlap", model_dir_to_match, prev_model_dir)
+    run_diverse_model(training_image_sets, "fixed_epoch_diverse_set_of_27_match_27_no_overlap", model_dir_to_match, prev_model_dir)
