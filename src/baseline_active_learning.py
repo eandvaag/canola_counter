@@ -1484,7 +1484,9 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                                 exg_array[min(0, patch_box[0]-patch_coords[0]):min(0, patch_box[2]-patch_coords[0]),
                                           min(0, patch_box[1]-patch_coords[1]):min(0, patch_box[3]-patch_coords[1])] = -10
                             
-                            sel_vals = exg_array != -10
+                            
+                            outside_inds = exg_array != -10
+                            sel_vals = exg_array[outside_inds]
                             score = np.sum(sel_vals) / sel_vals.size
 
                             
