@@ -1578,13 +1578,14 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
             image_set_str = candidate[0]
             image_name = candidate[1]
             patch_coords = candidate[2]
+            score = candidate[3]
             if image_set_str not in restructured_taken_candidates:
                 restructured_taken_candidates[image_set_str] = {}
             if image_name not in restructured_taken_candidates[image_set_str]:
                 restructured_taken_candidates[image_set_str][image_name] = []
 
                 
-            restructured_taken_candidates[image_set_str][image_name].append(patch_coords)
+            restructured_taken_candidates[image_set_str][image_name].append((patch_coords, score))
 
 
         for image_set_str in restructured_taken_candidates:
@@ -1607,7 +1608,9 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                 image = Image(image_path)
                 image_array = image.load_image_array()
 
-                for patch_coords in restructured_taken_candidates[image_set_str][image_name]:
+                for item in restructured_taken_candidates[image_set_str][image_name]:
+                    patch_coords = item[0]
+                    score = item[1]
                     patch_path = os.path.join(candidates_dir, str(score) + ".png")
                     image_patch = image_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
                     cv2.imwrite(patch_path, cv2.cvtColor(image_patch, cv2.COLOR_RGB2BGR))
