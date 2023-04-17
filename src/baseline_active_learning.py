@@ -2254,5 +2254,12 @@ if __name__ == "__main__":
     # exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_1_no_overlap", model_dir_to_match, prev_model_dir=None)
 
 
-    model_dir = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_diverse_set_of_27_match_12_no_overlap")
-    run_pending_model(model_dir)
+    # model_dir = os.path.join("usr", "data", "erik", "models", "pending", "fixed_epoch_diverse_set_of_27_match_12_no_overlap")
+    # run_pending_model(model_dir)
+
+
+    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_3_no_overlap")
+
+    prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_exg_active_match_1_no_overlap")
+
+    exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_3_no_overlap", model_dir_to_match, prev_model_dir)
