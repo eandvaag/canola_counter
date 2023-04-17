@@ -9,6 +9,7 @@ import time
 import uuid
 import math as m
 import numpy as np
+import cv2
 from natsort import natsorted
 
 from models.common import annotation_utils, box_utils
@@ -16,6 +17,7 @@ from io_utils import json_io
 import diversity_test
 from image_set import Image
 import image_utils
+
 
 
 import server
@@ -1472,8 +1474,8 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                             min((patch_size * h_index) + patch_size, image_h),
                             min((patch_size * w_index) + patch_size, image_w)
                         ]
-
-                        if image_set_str in taken_patches and image_name in taken_patches[image_set_str] and patch_coords not in taken_patches[image_set_str][image_name]:
+                        if image_set_str not in taken_patches or image_name not in taken_patches[image_set_str] or patch_coords not in taken_patches[image_set_str][image_name]:
+                            # if image_set_str in taken_patches and image_name in taken_patches[image_set_str] and patch_coords not in taken_patches[image_set_str][image_name]:
 
                             
                             inds = box_utils.get_contained_inds(sel_pred_boxes, [patch_coords])
@@ -1514,7 +1516,7 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
 
                 
             taken_patches[image_set_str][image_name].append(patch_coords)
-
+            
 
 
         print("\n\n--- FINAL CHECK---\n\n")
@@ -1563,13 +1565,58 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
     log["model_name"] = model_name
     log["model_object"] = "canola_seedling"
     log["public"] = "yes"
-    log["submission_time"] = int(time.time())
     
     pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
 
     os.makedirs(pending_model_path, exist_ok=False)
-    
+
+    if prev_model_dir is not None:
+        candidates_dir = os.path.join(pending_model_path, "added_candidates")
+        os.makedirs(candidates_dir)
+        restructured_taken_candidates = {}
+        for candidate in taken_candidates:
+            image_set_str = candidate[0]
+            image_name = candidate[1]
+            patch_coords = candidate[2]
+            if image_set_str not in restructured_taken_candidates:
+                restructured_taken_candidates[image_set_str] = {}
+            if image_name not in restructured_taken_candidates[image_set_str]:
+                restructured_taken_candidates[image_set_str][image_name] = []
+
+                
+            restructured_taken_candidates[image_set_str][image_name].append(patch_coords)
+
+
+        for image_set_str in restructured_taken_candidates:
+            
+            pieces = image_set_str.split(" ")
+            username = pieces[0]
+            farm_name = pieces[1]
+            field_name = pieces[2]
+            mission_date = pieces[3]
+            image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+
+
+            for image_name in restructured_taken_candidates[image_set_str]:
+
+                image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+                image = Image(image_path)
+                image_array = image.load_image_array()
+
+                for patch_coords in restructured_taken_candidates[image_set_str][image_name]:
+                    patch_path = os.path.join(candidates_dir, str(score) + ".png")
+                    image_patch = image_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+                    cv2.imwrite(patch_path, cv2.cvtColor(image_patch, cv2.COLOR_RGB2BGR))
+
+
+
+
     log_path = os.path.join(pending_model_path, "log.json")
+    log["submission_time"] = int(time.time())
     json_io.save_json(log_path, log)
 
     server.sch_ctx["baseline_queue"].enqueue(log)
