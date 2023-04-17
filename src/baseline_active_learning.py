@@ -1473,7 +1473,7 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
                             min((patch_size * w_index) + patch_size, image_w)
                         ]
 
-                        if image_set_str in taken_patches and image_name in taken_patches[image_set_str] and patch_coords in taken_patches[image_set_str][image_name]:
+                        if image_set_str in taken_patches and image_name in taken_patches[image_set_str] and patch_coords not in taken_patches[image_set_str][image_name]:
 
                             
                             inds = box_utils.get_contained_inds(sel_pred_boxes, [patch_coords])
@@ -1499,6 +1499,7 @@ def exg_active_patch_selection(training_image_sets, model_name, model_dir_to_mat
         print("Patch count to match: {}".format(patches_to_match))
         print("Num patches previously taken: {}".format(num_patches_prev_taken))
         print("Num patches to take: {}".format(num_patches_to_take))
+        print("Num candidates: {}".format(len(candidates)))
 
         taken_candidates = candidates[:num_patches_to_take]
 
