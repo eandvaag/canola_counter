@@ -85,6 +85,16 @@ def get_num_patches_used_by_model(model_dir):
                     
 
 
+def run_single_and_diverse_test(training_image_set, all_training_image_sets):
+
+    model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
+    full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
+
+    run_full_image_set_model([training_image_set], full_model_name)
+    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
+    run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", model_dir_to_match, prev_model_dir=None)
+
+
 def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_model_dir):
 
     s = {}
@@ -205,16 +215,16 @@ def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_
     json_io.save_json(log_path, log)
 
 
-    # server.sch_ctx["baseline_queue"].enqueue(log)
+    server.sch_ctx["baseline_queue"].enqueue(log)
 
-    # baseline_queue_size = server.sch_ctx["baseline_queue"].size()
-    # while baseline_queue_size > 0:
+    baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+    while baseline_queue_size > 0:
     
-    #     log = server.sch_ctx["baseline_queue"].dequeue()
-    #     re_enqueue = server.process_baseline(log)
-    #     if re_enqueue:
-    #         server.sch_ctx["baseline_queue"].enqueue(log)
-    #     baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+        log = server.sch_ctx["baseline_queue"].dequeue()
+        re_enqueue = server.process_baseline(log)
+        if re_enqueue:
+            server.sch_ctx["baseline_queue"].enqueue(log)
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
 
 
 def run_pending_model(model_dir):
@@ -2263,8 +2273,11 @@ if __name__ == "__main__":
     # run_pending_model(model_dir)
 
 
-    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_3_no_overlap")
+    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_3_no_overlap")
 
-    prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_exg_active_match_1_no_overlap")
+    # prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_exg_active_match_1_no_overlap")
 
-    exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_3_no_overlap", model_dir_to_match, prev_model_dir)
+    # exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_3_no_overlap", model_dir_to_match, prev_model_dir)
+
+
+    run_single_and_diverse_test(training_image_sets[17], training_image_sets)

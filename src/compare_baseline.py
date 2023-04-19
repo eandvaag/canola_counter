@@ -3,6 +3,8 @@ import glob
 import shutil
 import time
 import math as m
+import numpy as np
+from scipy.spatial.distance import cosine
 import random
 import uuid
 import urllib3
@@ -215,6 +217,7 @@ def plot_my_combined_results_alt(test_sets, all_baselines, num_reps, xaxis_key):
                 full_predictions_lst = []
                 annotations_lst = []
                 assessment_images_lst = []
+                all_dics = []
                 for test_set in test_sets:
                     baseline_username = test_set["username"]
                     baseline_farm_name = "BASELINE_TEST:" + baseline["model_creator"] + ":" + baseline["model_name"] + ":" + test_set["farm_name"] + "_rep_" + str(rep_num)
@@ -245,7 +248,10 @@ def plot_my_combined_results_alt(test_sets, all_baselines, num_reps, xaxis_key):
                     annotations_lst.append(annotations)
                     assessment_images_lst.append(list(annotations.keys()))
 
+                    # all_dics.extend(fine_tune_eval.get_dics(annotations, full_predictions, list(annotations.keys())))
+
                 global_accuracy = fine_tune_eval.get_global_accuracy_multiple_image_sets(annotations_lst, full_predictions_lst, assessment_images_lst)
+                # ave_abs_dic = np.mean(np.abs(all_dics))
 
                 results[k].append((baseline[xaxis_key], global_accuracy))
 
@@ -290,16 +296,239 @@ def plot_my_combined_results_alt(test_sets, all_baselines, num_reps, xaxis_key):
 
             plt.legend()
             plt.xlabel(xaxis_key)
-            plt.ylabel("Accuracy")
+            plt.ylabel("Accuracy") #Ave Abs DiC")
 
             test_set_str = "combined_test_sets" #test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
-            out_path = os.path.join("baseline_charts", "active_learning_comparison", test_set_str, "global", "accuracy", "rep_" + str(rep_num) + ".svg")
+            # out_path = os.path.join("baseline_charts", "active_learning_comparison", test_set_str, "global", "accuracy", "rep_" + str(rep_num) + ".svg")
+            out_path = os.path.join("baseline_charts", "fixed_epoch_comparison", test_set_str, "global", "accuracy", "rep_" + str(rep_num) + ".svg")
             out_dir = os.path.dirname(out_path)
             os.makedirs(out_dir, exist_ok=True)
             plt.savefig(out_path)
 
 
-def plot_my_results_alt(test_sets, all_baselines, num_reps):
+def plot_single_diverse_comparison(test_sets, single_baselines, diverse_baselines):
+
+    # results = {}
+    single_results = []
+    diverse_results = []
+    for rep_num in range(1):
+
+        for (single_baseline, diverse_baseline) in zip(single_baselines, diverse_baselines):
+
+            # results[k] = {}
+
+            baselines = [single_baseline, diverse_baseline]
+
+
+            # for model_type in ["single", "diverse"]:
+            for j in range(len(baselines)):
+                full_predictions_lst = []
+                annotations_lst = []
+                assessment_images_lst = []
+                baseline = baselines[j]
+
+                for test_set in test_sets:
+
+
+
+                    # baseline = all_baseline_pairs[k][model_type]
+                    baseline_username = test_set["username"]
+                    baseline_farm_name = "BASELINE_TEST:" + baseline["model_creator"] + ":" + baseline["model_name"] + ":" + test_set["farm_name"] + "_rep_" + str(rep_num)
+                    baseline_field_name = "BASELINE_TEST:" + baseline["model_creator"] + ":" + baseline["model_name"] + ":" + test_set["field_name"] + "_rep_" + str(rep_num)
+                    baseline_mission_date = test_set["mission_date"]
+
+                    image_set_dir = os.path.join("usr", "data", baseline_username, "image_sets",
+                                                 baseline_farm_name, baseline_field_name, baseline_mission_date)
+                    results_dir = os.path.join(image_set_dir, "model", "results")
+
+                    result_pairs = []
+                    result_dirs = glob.glob(os.path.join(results_dir, "*"))
+                    for result_dir in result_dirs:
+                        request_path = os.path.join(result_dir, "request.json")
+                        request = json_io.load_json(request_path)
+                        end_time = request["end_time"]
+                        result_pairs.append((result_dir, end_time))
+
+                    result_pairs.sort(key=lambda x: x[1])
+
+                    direct_application_result_dir = result_pairs[0][0]
+
+                    annotations = annotation_utils.load_annotations(os.path.join(direct_application_result_dir, "annotations.json"))
+                    full_predictions_path = os.path.join(direct_application_result_dir, "full_predictions.json")
+                    full_predictions = json_io.load_json(full_predictions_path)
+
+
+                    full_predictions_lst.append(full_predictions)
+                    annotations_lst.append(annotations)
+                    assessment_images_lst.append(list(annotations.keys()))
+
+
+                    # y = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
+
+
+                global_accuracy = fine_tune_eval.get_global_accuracy_multiple_image_sets(annotations_lst, full_predictions_lst, assessment_images_lst)
+                # ave_abs_dic = np.mean(np.abs(all_dics))
+
+                if j == 0:
+                    single_results.append(global_accuracy)
+                else:
+                    diverse_results.append(global_accuracy)
+                # results[k].append((baseline[xaxis_key], global_accuracy))
+
+    
+    # plt.plot([x[0] for x in results[k]], [x[1] for x in results[k]], color=colors[k], marker=marker, label=k, linestyle="dashed", linewidth=1)
+    x_items = []
+    for baseline in single_baselines:
+        x_items.append(baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_axes([0.25, 0.05, 0.7, 0.9]) 
+    for i, (x1, x2) in enumerate(zip(single_results, diverse_results)):
+        ax.plot([x1, x2], [i, i], color="black", linestyle="solid", alpha=0.5, linewidth=1, zorder=1)
+    ax.scatter([x for x in single_results], np.arange(0, len(x_items)), color="red", label="Single Image Set", zorder=2)
+    ax.scatter([x for x in diverse_results], np.arange(0, len(x_items)), color="blue", label="Diverse Random Selection", zorder=2)
+
+    ax.set_yticks(np.arange(0, len(x_items)))
+    ax.set_yticklabels(x_items) #, rotation=90, ha="right")
+
+
+    ax.legend()
+    ax.set_xlabel("Test Accuracy")
+
+    # plt.tight_layout()
+    # plt.ylabel("")
+
+    # test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
+    out_path = os.path.join("baseline_charts", "single_diverse_comparisons", "plot.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
+
+
+
+def get_vendi_diversity(model_dir):
+
+
+    log_path = os.path.join(model_dir, "log.json")
+    log = json_io.load_json(log_path)
+
+    taken_patches = {}
+    for image_set in log["image_sets"]:
+
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+
+        image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+        taken_patches[image_set_str] = {}
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+        
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        try:
+            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+        except Exception as e:
+            patch_size = 416
+        if "patch_overlap_percent" in image_set:
+            patch_overlap_percent = image_set["patch_overlap_percent"]
+        else:
+            patch_overlap_percent = 50
+
+        if "taken_regions" in image_set:
+            for image_name in image_set["taken_regions"].keys():
+                taken_patches[image_set_str][image_name] = []
+                image_h = metadata["images"][image_name]["height_px"]
+                image_w = metadata["images"][image_name]["width_px"]
+                for region in image_set["taken_regions"][image_name]:
+
+                    if region[2] != image_h and region[3] != image_w:
+                        taken_patches[image_set_str][image_name].append(region)
+
+        else:
+
+            for image_name in annotations.keys():
+                if len(annotations[image_name]["test_regions"]) > 0:
+                    taken_patches[image_set_str][image_name] = []
+                    for i in range(0, image_h, patch_size):
+                        for j in range(0, image_w, patch_size):
+                            taken_patches[image_set_str][image_name].append([i, j, i+patch_size, j+patch_size])
+            
+
+    patch_arrays = []
+    for image_set_str in taken_patches:
+
+        for image_name in taken_patches[image_set_str]:
+
+            image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+            image = Image(image_path)
+
+            image_array = image.load_image_array()
+
+            for patch_coords in taken_patches[image_set_str][image_name]:
+
+                patch_array = image_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+                patch_arrays.append(patch_array)
+
+
+
+
+
+    batch_size = 256
+
+    patches = np.array(patch_arrays)
+    num_patches = patch_arrays.size
+
+
+    weights = 'imagenet'
+    model = tf.keras.applications.ResNet50( #101( #ResNet50(
+        weights=weights,
+        include_top=False, 
+        input_shape=[None, None, 3],
+        pooling="max"
+    )
+
+    # if extraction_type == "box_patches":
+    #     input_image_shape = np.array([150, 150, 3])
+    # else:
+    input_image_shape = [416, 416] #config.arch["input_image_shape"]
+
+    all_features = []
+    for i in tqdm.trange(0, num_patches, batch_size):
+        batch_patches = []
+        for j in range(i, min(num_patches, i+batch_size)):
+            patch = tf.convert_to_tensor(patch_arrays[j]["patch"], dtype=tf.float32)
+            patch = tf.image.resize(images=patch, size=input_image_shape[:2])
+            batch_patches.append(patch)
+        batch_patches = tf.stack(values=batch_patches, axis=0)
+        
+        features = model.predict(batch_patches)
+        for f in features:
+            f = f.flatten()
+            all_features.append(f)
+
+    all_features = np.array(all_features)
+    print("shape of features matrix is {}".format(all_features.shape))
+    print("calculating similarity matrix...")
+    sim_mat = cosine(all_features, all_features)
+    print("calculating eigenvalues...")
+    w, _ = np.linalg.eig(sim_mat)
+    print("calculating entropy...")
+    ent = entropy(w)
+    print("calculating vendi score")
+    score = math.exp(ent)
+
+    return score
+
+
+def plot_my_results_alt(test_sets, all_baselines, num_reps, include_fine_tune=False):
 
     # all_baselines = {
     #     "org_baselines": baselines,
@@ -346,11 +575,13 @@ def plot_my_results_alt(test_sets, all_baselines, num_reps):
                     full_predictions_path = os.path.join(direct_application_result_dir, "full_predictions.json")
                     full_predictions = json_io.load_json(full_predictions_path)
 
-                    global_accuracy = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
+                    y = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
+                    # y = np.mean(np.abs(fine_tune_eval.get_dics(annotations, full_predictions, list(annotations.keys()))))
+
 
                     x = baseline["num_training_sets"]
                     # x = baseline["num_training_patches"]
-                    y = global_accuracy
+                    # y = global_accuracy
                     # c = "red" if k == "org_baselines" else "blue"
                     # methods.append()
                     # if k == "org_baselines":
@@ -359,47 +590,48 @@ def plot_my_results_alt(test_sets, all_baselines, num_reps):
                     #     direct_application_diverse_results.append((x, y))
                     results[k].append((x, y))
 
-                    if len(result_pairs) > 1:
-                        fine_tune_result_dir = result_pairs[1][0]
+                    if include_fine_tune:
+                        if len(result_pairs) > 1:
+                            fine_tune_result_dir = result_pairs[1][0]
 
-                        annotations = annotation_utils.load_annotations(os.path.join(fine_tune_result_dir, "annotations.json"))
-                        full_predictions_path = os.path.join(fine_tune_result_dir, "full_predictions.json")
-                        full_predictions = json_io.load_json(full_predictions_path)
+                            annotations = annotation_utils.load_annotations(os.path.join(fine_tune_result_dir, "annotations.json"))
+                            full_predictions_path = os.path.join(fine_tune_result_dir, "full_predictions.json")
+                            full_predictions = json_io.load_json(full_predictions_path)
 
-                        global_accuracy = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
+                            global_accuracy = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
 
-                        x = baseline["num_training_sets"] #patches"]
-                        y = global_accuracy
-                        # c = "red" if k == "org_baselines" else "blue"
-                        # methods.append()
-                        # fine_tune_results.append((x, y, c))
+                            x = baseline["num_training_sets"] #patches"]
+                            y = global_accuracy
+                            # c = "red" if k == "org_baselines" else "blue"
+                            # methods.append()
+                            # fine_tune_results.append((x, y, c))
 
-                        fine_tune_k = k + "_fine_tuned_on_5_images"
-                        if fine_tune_k not in results:
-                            results[fine_tune_k] = []
-
-
-                        results[fine_tune_k].append((x, y))
-
-                        # if k == "org_baselines":
-                        #     fine_tune_org_results.append((x, y))
-                        # else:
-                        #     fine_tune_diverse_results.append((x, y))
+                            fine_tune_k = k + "_fine_tuned_on_5_images"
+                            if fine_tune_k not in results:
+                                results[fine_tune_k] = []
 
 
+                            results[fine_tune_k].append((x, y))
 
-                    # method = {
-                    #     "image_set":d {
-                    #         "username": baseline_username,
-                    #         "farm_name": baseline_farm_name,
-                    #         "field_name": baseline_field_name,
-                    #         "mission_date": baseline_mission_date
-                    #     },
-                    #     "methodd_label": baseline["num_training_sets"]
-                    # }
-                    # methods.append(
-                    #     method
-                    # )
+                            # if k == "org_baselines":
+                            #     fine_tune_org_results.append((x, y))
+                            # else:
+                            #     fine_tune_diverse_results.append((x, y))
+
+
+
+                        # method = {
+                        #     "image_set":d {
+                        #         "username": baseline_username,
+                        #         "farm_name": baseline_farm_name,
+                        #         "field_name": baseline_field_name,
+                        #         "mission_date": baseline_mission_date
+                        #     },
+                        #     "methodd_label": baseline["num_training_sets"]
+                        # }
+                        # methods.append(
+                        #     method
+                        # )
                 
             # test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
             # print(direct_application_org_results)
@@ -518,7 +750,10 @@ def add_num_training_patches(baselines):
             metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
             metadata = json_io.load_json(metadata_path)
 
-            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+            try:
+                patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+            except Exception as e:
+                patch_size = 416
             if "patch_overlap_percent" in image_set:
                 patch_overlap_percent = image_set["patch_overlap_percent"]
             else:
@@ -730,6 +965,30 @@ def run():
         }
     ]
 
+    fixed_weed_ai_30000_baselines = [
+        {
+            "model_name": "fixed_epoch_MORSE_Nasser_2022-05-27_and_30000_weed",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }
+    ]
+
+    fixed_weed_ai_40000_baselines = [
+        {
+            "model_name": "fixed_epoch_MORSE_Nasser_2022-05-27_and_40000_weed",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }
+    ]
+
+    fixed_weed_ai_50000_baselines = [
+        {
+            "model_name": "fixed_epoch_MORSE_Nasser_2022-05-27_and_50000_weed",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }
+    ]
+
     active_baselines = []
     for i in range(0, 13):
         active_baselines.append({
@@ -764,6 +1023,85 @@ def run():
             "model_name": "fixed_epoch_set_of_12_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 12
+        },
+        {
+            "model_name": "fixed_epoch_set_of_18_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 18
+        },
+        {
+            "model_name": "fixed_epoch_set_of_27_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 27
+        },
+    ]
+
+    fixed_epoch_diverse_baselines = [
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_1_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_3_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 3
+        },
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_6_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 6
+        },
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_12_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 12
+        },
+
+
+    ]
+
+    single_baselines = [
+        {
+            "model_name": "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_row_spacing_nasser_2021-06-01_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+    ]
+
+    single_diverse_baselines = [
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_1_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }, 
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_row_spacing_nasser_2021-06-01_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }, 
+    ]
+
+    fixed_epoch_exg_baselines = [
+        {
+            "model_name": "fixed_epoch_exg_active_match_1_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_exg_active_match_3_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 3
+        },
+        {
+            "model_name": "fixed_epoch_exg_active_match_6_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 6
         },
     ]
 
@@ -808,7 +1146,15 @@ def run():
     # all_baselines.extend(weed_ai_20000_baselines)
     # all_baselines.extend(fixed_weed_ai_10000_baselines)
     # all_baselines.extend(fixed_weed_ai_20000_baselines)
-    all_baselines.extend(fixed_epoch_no_overlap_baselines)
+    # all_baselines.extend(fixed_weed_ai_30000_baselines)
+    # all_baselines.extend(fixed_weed_ai_40000_baselines)
+    # all_baselines.extend(fixed_weed_ai_50000_baselines)
+    # all_baselines.extend(fixed_epoch_no_overlap_baselines)
+    # all_baselines.extend(fixed_epoch_diverse_baselines)
+    # all_baselines.extend(fixed_epoch_exg_baselines)
+    all_baselines.extend(single_baselines)
+    all_baselines.extend(single_diverse_baselines)
+
 
     # test(test_sets, all_baselines, num_reps)
     # plot_my_results(test_sets, baselines, num_reps)
@@ -820,20 +1166,30 @@ def run():
     # test(test_sets, all_baselines, num_reps)
     all_baselines = {
         "full_image_sets": no_overlap_baselines,
-        # "diverse_baselines": diverse_baselines,
+        "diverse_baselines": diverse_baselines,
         # "CottonWeedDet12_supplemented": CottonWeedDet12_baselines, 
         # "WeedAI_10000_supplemented": weed_ai_10000_baselines,
         # "WeedAI_20000_supplemented": weed_ai_20000_baselines,
         # "fixed_WeedAI_10000_supplemented": fixed_weed_ai_10000_baselines,
         # "fixed_WeedAI_20000_supplemented": fixed_weed_ai_20000_baselines,
+        # "fixed_WeedAI_30000_supplemented": fixed_weed_ai_30000_baselines,
+        # "fixed_WeedAI_40000_supplemented": fixed_weed_ai_40000_baselines,
+        # "fixed_WeedAI_50000_supplemented": fixed_weed_ai_50000_baselines,
+
         # "random_images": random_image_baselines,
         # "uniformly_selected_patches": diverse_baselines,
         # "selected_patches": active_baselines
-        "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines
+        "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines,
+        "fixed_epoch_diverse_baselines": fixed_epoch_diverse_baselines,
+        # "fixed_epoch_exg_baselines": fixed_epoch_exg_baselines,
     }
-    plot_my_results_alt(test_sets, all_baselines, num_reps)
-
+    # plot_my_results_alt(test_sets, all_baselines, num_reps)
+    # print("plotting combined results...")
     # plot_my_combined_results_alt(test_sets, all_baselines, num_reps, "num_training_patches")
+
+
+
+    plot_single_diverse_comparison(test_sets, single_baselines, single_diverse_baselines)
 
 if __name__ == "__main__":
     run()

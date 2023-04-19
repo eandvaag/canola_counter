@@ -234,7 +234,7 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
     if image_name in full_predictions:
         pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
     else:
-        pred_boxes = mp.array([])
+        pred_boxes = np.array([])
     inds = box_utils.get_contained_inds(pred_boxes, [chunk_coords])
     pred_boxes = pred_boxes[inds]
     adj_pred_boxes = np.stack([
