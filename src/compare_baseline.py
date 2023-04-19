@@ -4,6 +4,7 @@ import shutil
 import time
 import math as m
 import numpy as np
+import tensorflow as tf
 from scipy.spatial.distance import cosine
 import random
 import uuid
@@ -457,6 +458,8 @@ def get_vendi_diversity(model_dir):
             for image_name in annotations.keys():
                 if len(annotations[image_name]["test_regions"]) > 0:
                     taken_patches[image_set_str][image_name] = []
+                    image_h = metadata["images"][image_name]["height_px"]
+                    image_w = metadata["images"][image_name]["width_px"]
                     for i in range(0, image_h, patch_size):
                         for j in range(0, image_w, patch_size):
                             taken_patches[image_set_str][image_name].append([i, j, i+patch_size, j+patch_size])
@@ -1160,7 +1163,7 @@ def run():
     # plot_my_results(test_sets, baselines, num_reps)
     # plot_my_results_alt(test_sets, baselines, diverse_baselines, num_reps)
 
-    add_num_training_patches(all_baselines)
+    # add_num_training_patches(all_baselines)
     # plot_my_results_alt(test_sets, no_overlap_baselines, diverse_baselines, num_reps)
 
     # test(test_sets, all_baselines, num_reps)
@@ -1189,7 +1192,13 @@ def run():
 
 
 
-    plot_single_diverse_comparison(test_sets, single_baselines, single_diverse_baselines)
+    # plot_single_diverse_comparison(test_sets, single_baselines, single_diverse_baselines)
+
+
+    model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap")
+    score = get_vendi_diversity(model_dir)
+    print("got vendi score", score)
+
 
 if __name__ == "__main__":
     run()
