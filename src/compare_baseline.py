@@ -1236,6 +1236,10 @@ def run():
     score = get_vendi_diversity(model_dir)
     print("got vendi score", score)
 
+    model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_1_no_overlap")
+    score = get_vendi_diversity(model_dir)
+    print("got vendi score", score)
+
 
 if __name__ == "__main__":
     run()
