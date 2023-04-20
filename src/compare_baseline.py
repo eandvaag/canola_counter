@@ -472,6 +472,19 @@ def get_vendi_diversity(model_dir):
     patch_arrays = []
     for image_set_str in taken_patches:
 
+        pieces = image_set_str.split(" ")
+        username = pieces[0]
+        farm_name = pieces[1]
+        field_name = pieces[2]
+        mission_date = pieces[3]
+
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+
+
         for image_name in taken_patches[image_set_str]:
 
             image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
