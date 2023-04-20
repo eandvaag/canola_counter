@@ -505,10 +505,11 @@ def get_vendi_diversity(model_dir):
 
     patch_arrays = np.array(patch_arrays)
     num_patches = patch_arrays.size
+    print("processing {} patches".format(num_patches))
 
 
     weights = 'imagenet'
-    model = tf.keras.applications.ResNet50( #101( #ResNet50(
+    model = tf.keras.applications.InceptionV3( #101( #ResNet50(
         weights=weights,
         include_top=False, 
         input_shape=[None, None, 3],
