@@ -507,14 +507,24 @@ def get_vendi_diversity(model_dir):
     num_patches = patch_arrays.size
     print("processing {} patches".format(num_patches))
 
+    from models.yolov4.yolov4_image_set_driver import create_default_config
+    config = create_default_config()
 
-    weights = 'imagenet'
-    model = tf.keras.applications.InceptionV3( #101( #ResNet50(
-        weights=weights,
-        include_top=False, 
-        input_shape=[None, None, 3],
-        pooling="max"
-    )
+    from models.yolov4 import yolov4
+
+    model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
+    input_shape = (256, *(config.arch["input_image_shape"]))
+    model.build(input_shape=input_shape)
+    model.load_weights(os.path.join("usr", "data", "erik", "models", "public", "available", 
+                                    "fixed_epoch_set_of_27_no_overlap", "weights.h5"), by_name=False)
+
+    # weights = 'imagenet'
+    # model = tf.keras.applications.InceptionV3( #101( #ResNet50(
+    #     weights=weights,
+    #     include_top=False, 
+    #     input_shape=[None, None, 3],
+    #     pooling="max"
+    # )
 
     # if extraction_type == "box_patches":
     #     input_image_shape = np.array([150, 150, 3])
@@ -835,6 +845,9 @@ def add_num_training_patches(baselines):
 
         baseline["num_training_patches"] = total_num_patches
                         
+
+
+
 
 
 def run():
