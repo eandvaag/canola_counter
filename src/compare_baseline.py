@@ -17,7 +17,7 @@ import tqdm
 
 import image_set_actions as isa
 import server
-from models.common import annotation_utils
+from models.common import annotation_utils, box_utils
 from io_utils import json_io
 import fine_tune_eval
 from image_set import Image
@@ -431,11 +431,20 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
 
 
             # for model_type in ["single", "diverse"]:
-            for j in range(len(baselines)):
+            for j in tqdm.trange(len(baselines), desc="Processing baselines"):
                 full_predictions_lst = []
                 annotations_lst = []
                 assessment_images_lst = []
                 baseline = baselines[j]
+
+                # baseline_model_path = os.path.join("usr", "data", baseline["model_creator"], 
+                # "models", "available", "public", baseline["model_name"])
+                # log_path = os.path.join(baseline_model_path, "log.json")
+                # log = json_io.load_json(log_path)
+                # add_num_training_patches(baseline)
+                # num_annotations = get_num_annotations_used_by_baseline(baseline)
+
+                
 
                 for test_set in test_sets:
 
@@ -463,6 +472,9 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
 
                     direct_application_result_dir = result_pairs[0][0]
 
+
+                    # dataframe_path = os.path.join(direct_application_result_dir, "")
+
                     annotations = annotation_utils.load_annotations(os.path.join(direct_application_result_dir, "annotations.json"))
                     full_predictions_path = os.path.join(direct_application_result_dir, "full_predictions.json")
                     full_predictions = json_io.load_json(full_predictions_path)
@@ -486,10 +498,9 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
                 # results[k].append((baseline[xaxis_key], global_accuracy))
 
     
-    # plt.plot([x[0] for x in results[k]], [x[1] for x in results[k]], color=colors[k], marker=marker, label=k, linestyle="dashed", linewidth=1)
     single_labels = []
     for baseline in single_baselines:
-        single_labels.append(baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
+        single_labels.append(baseline["model_name"][len("fixed_epoch_min_num_diverse_set_of_1_match_"):len(baseline["model_name"])-len("_no_overlap")])
 
     single_results = np.array(single_results)
     single_labels = np.array(single_labels)
@@ -499,8 +510,8 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
 
 
     diverse_labels = []
-    for baseline in single_baselines:
-        diverse_labels.append(baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
+    for baseline in diverse_baselines:
+        diverse_labels.append("diverse") #baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
 
 
     diverse_results = np.array(diverse_results)
@@ -514,6 +525,7 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
     ax = fig.add_axes([0.30, 0.05, 0.65, 0.9]) 
     # for i, (x1, x2) in enumerate(zip(single_results, diverse_results)):
     #     ax.plot([x1, x2], [i, i], color="black", linestyle="solid", alpha=0.5, linewidth=1, zorder=1)
+
     ax.scatter([x for x in single_results], np.arange(0, len(single_labels)), color="red", label="Single Image Set", zorder=2)
     ax.scatter([x for x in diverse_results], np.arange(len(single_labels), len(single_labels)+len(diverse_labels)), color="blue", label="Diverse Random Selection", zorder=2)
 
@@ -521,13 +533,19 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
     ax.set_yticklabels(np.concatenate([single_labels, diverse_labels])) #, rotation=90, ha="right")
 
 
+    # ax = fig.add_axes([0.05, 0.05, 0.9, 0.9]) 
+    # ax.scatter([x[0] for x in single_results], [x[1] for x in single_results], color="red", label="Single Image Set", zorder=2)
+    # ax.scatter([x[0] for x in diverse_results], [x[1] for x in diverse_results], color="blue", label="Diverse Random Selection", zorder=2)
+
+
+
     ax.legend()
     ax.set_xlabel("Test Accuracy")
 
-    # plt.tight_layout()
-    # plt.ylabel("")
 
-    # test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
+    # ax.set_xlabel("Number of Annotations Used")
+    # ax.set_ylabel("Test Accuracy")
+
     out_path = os.path.join("baseline_charts", "single_diverse_comparisons", "plot.svg")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
@@ -908,6 +926,37 @@ def plot_my_results(test_sets, baselines, num_reps):
 
 
 
+def get_num_annotations_used_by_baseline(baseline):
+    model_dir = os.path.join("usr", "data", baseline["model_creator"], "models", "available", "public", baseline["model_name"])
+    log_path = os.path.join(model_dir, "log.json")
+    log = json_io.load_json(log_path)
+
+    num_annotations = 0
+
+    for image_set in log["image_sets"]:
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+        
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        if "taken_regions" in image_set:
+            for image_name in image_set["taken_regions"].keys():
+                num_annotations += box_utils.get_contained_inds(annotations[image_name]["boxes"], image_set["taken_regions"][image_name]).size
+        else:
+            for image_name in annotations.keys():
+                if len(annotations[image_name]["test_regions"]) > 0:
+                    num_annotations += len(annotations[image_name]["boxes"])
+    return num_annotations
+
+
 def add_num_training_patches(baselines):
     for baseline in baselines:
         model_dir = os.path.join("usr", "data", baseline["model_creator"], "models", "available", "public", baseline["model_name"])
@@ -1241,8 +1290,16 @@ def run():
             "model_creator": "erik",
             "num_training_sets": 12
         },
-
-
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_18_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 18
+        },
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_27_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 27
+        },
     ]
 
     single_baselines = [
@@ -1283,36 +1340,117 @@ def run():
 
 
     single_min_num_baselines = [
+
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_River_2021-06-09_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Lake_2021-06-09_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_HornerWest_2021-06-09_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_LowN1_2021-06-07_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Serhienko9N_2022-06-07_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
         {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_River_2021-06-09_no_overlap",
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_row_spacing_nasser_2021-06-01_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 1
         },
         {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Lake_2021-06-09_no_overlap",
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis1_2021-06-04_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 1
         },
         {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_HornerWest_2021-06-09_no_overlap",
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis3_2021-06-04_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 1
         },
         {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_LowN1_2021-06-07_no_overlap",
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_MORSE_Dugout_2022-05-27_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 1
         },
-        {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Serhienko9N_2022-06-07_no_overlap",
-            "model_creator": "erik",
-            "num_training_sets": 1
-        }
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_MORSE_Nasser_2022-05-27_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_row_spacing_brown_2021-06-01_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_row_spacing_nasser2_2022-06-02_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },       
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Saskatoon_Norheim1_2021-05-26_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Saskatoon_Norheim2_2021-05-26_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Saskatoon_Norheim4_2022-05-24_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Saskatoon_Norheim5_2022-05-24_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_Brown_2021-06-05_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_Dugout_2022-05-30_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_LowN2_2021-06-07_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_Sutherland_2021-06-05_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # }
     ]
 
     single_min_num_diverse_baselines = [
         {
             "model_name": "fixed_epoch_min_num_diverse_set_of_27_match_row_spacing_nasser_2021-06-01_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_1_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 1
         },
@@ -1386,7 +1524,7 @@ def run():
     # all_baselines.extend(fixed_epoch_diverse_baselines)
     # all_baselines.extend(fixed_epoch_exg_baselines)
     all_baselines.extend(single_min_num_baselines)
-    all_baselines.extend(single_min_num_diverse_baselines)
+    # all_baselines.extend(single_min_num_diverse_baselines)
 
 
     # test(test_sets, all_baselines, num_reps)
@@ -1412,8 +1550,8 @@ def run():
         # "random_images": random_image_baselines,
         # "uniformly_selected_patches": diverse_baselines,
         # "selected_patches": active_baselines
-        # "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines,
-        # "fixed_epoch_diverse_baselines": fixed_epoch_diverse_baselines,
+        "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines,
+        "fixed_epoch_diverse_baselines": fixed_epoch_diverse_baselines,
         # "fixed_epoch_exg_baselines": fixed_epoch_exg_baselines,
     }
     # plot_my_results_alt(test_sets, all_baselines, num_reps)
@@ -1441,6 +1579,9 @@ def run():
     # model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_1_no_overlap")
     # score = get_vendi_diversity(model_dir)
     # print("got vendi score", score)
+
+
+    # plot_min_num_single_diverse_comparison(test_sets, single_min_num_baselines, single_min_num_diverse_baselines)
 
 
 if __name__ == "__main__":
