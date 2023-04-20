@@ -11,6 +11,7 @@ import uuid
 import urllib3
 import logging
 import matplotlib.pyplot as plt
+import tqdm
 
 import image_set_actions as isa
 import server
