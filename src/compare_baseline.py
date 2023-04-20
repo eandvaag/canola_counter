@@ -487,7 +487,7 @@ def get_vendi_diversity(model_dir):
 
     batch_size = 256
 
-    patches = np.array(patch_arrays)
+    patch_arrays = np.array(patch_arrays)
     num_patches = patch_arrays.size
 
 
