@@ -508,7 +508,10 @@ def get_vendi_diversity(model_dir):
     print("processing {} patches".format(num_patches))
 
     from models.yolov4.yolov4_image_set_driver import create_default_config
+    from models.common import model_keys
     config = create_default_config()
+    model_keys.add_general_keys(config)
+    model_keys.add_specialized_keys(config)
 
     from models.yolov4 import yolov4
 
