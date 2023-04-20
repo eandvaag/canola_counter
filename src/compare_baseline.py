@@ -539,7 +539,7 @@ def get_vendi_diversity(model_dir):
     print("calculating entropy...")
     ent = entropy(w)
     print("calculating vendi score")
-    score = math.exp(ent)
+    score = m.exp(ent)
 
     return score
 
