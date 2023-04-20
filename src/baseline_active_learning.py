@@ -87,15 +87,18 @@ def get_num_patches_used_by_model(model_dir):
 
 def run_single_and_diverse_test(training_image_set, all_training_image_sets):
 
+    min_num = get_min_patch_num_of_sets(all_training_image_sets)
+
     model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
-    full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
+    # full_model_name = "fixed_epoch_min_num_" + model_name + "_no_overlap"
 
-    run_full_image_set_model([training_image_set], full_model_name)
-    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
-    run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", model_dir_to_match, prev_model_dir=None)
+    # run_full_image_set_model([training_image_set], full_model_name)
+    run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_set_of_1_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
+    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
+    # run_diverse_model(all_training_image_sets, "fixed_epoch_min_num_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
 
 
-def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_model_dir):
+def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir):
 
     s = {}
 
@@ -114,7 +117,7 @@ def run_diverse_model(training_image_sets, model_name, model_dir_to_match, prev_
     else:
         num_patches_prev_taken = 0
 
-    num_patches_to_match = get_num_patches_used_by_model(model_dir_to_match)
+    # num_patches_to_match = get_num_patches_used_by_model(model_dir_to_match)
 
     num_patches_to_take = num_patches_to_match - num_patches_prev_taken
 
@@ -1982,6 +1985,80 @@ def remove_specific_iter_results(training_image_sets, result_name):
                 shutil.rmtree(result_dir)
 
 
+def get_min_patch_num_of_sets(image_sets):
+    all_totals = []  
+    for image_set in image_sets:
+        total_num_patches = 0
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+        image_set_dir = os.path.join("usr", "data", 
+                                    username, "image_sets",
+                                    farm_name,
+                                    field_name,
+                                    mission_date)
+        
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        try:
+            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+        except Exception as e:
+            patch_size = 416
+        if "patch_overlap_percent" in image_set:
+            patch_overlap_percent = image_set["patch_overlap_percent"]
+        else:
+            patch_overlap_percent = 50
+
+        if "taken_regions" in image_set:
+            for image_name in image_set["taken_regions"].keys():
+                for region in image_set["taken_regions"][image_name]:
+
+                    region_width = region[3] - region[1]
+                    region_height = region[2] - region[0]
+
+                    overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+                    incr = patch_size - overlap_px
+                    w_covered = max(region_width - patch_size, 0)
+                    num_w_patches = m.ceil(w_covered / incr) + 1
+
+                    h_covered = max(region_height - patch_size, 0)
+                    num_h_patches = m.ceil(h_covered / incr) + 1
+
+                    num_patches = num_w_patches * num_h_patches
+
+                    total_num_patches += num_patches #len(image_set["taken_regions"][image_name])
+        else:
+            # annotations = image_set_info[image_set_str]["annotations"]
+            # image_shape = image_set_info[image_set_str]["image_shape"]
+            # image_height = metadata["images"][list(annotations.keys())[0]]["height_px"]
+            # image_width = metadata["images"][list(annotations.keys())[0]]["width_px"]
+            # image_height = image_shape[0]
+            # image_width = image_shape[1]
+            
+            num_patches_per_image = diversity_test.get_num_patches_per_image(annotations, metadata, patch_size, patch_overlap_percent=patch_overlap_percent)
+            
+            for image_name in annotations.keys():
+                if len(annotations[image_name]["test_regions"]) > 0:
+                    total_num_patches += num_patches_per_image
+
+
+        print("{}: {} patches".format(image_set_str, total_num_patches))
+        all_totals.append(total_num_patches)
+
+
+    print("min: {}".format(np.min(all_totals)))
+    print("max: {}".format(np.max(all_totals)))
+
+    return np.min(all_totals)
+
+
 if __name__ == "__main__":
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -2280,4 +2357,6 @@ if __name__ == "__main__":
     # exg_active_patch_selection(training_image_sets, "fixed_epoch_exg_active_match_3_no_overlap", model_dir_to_match, prev_model_dir)
 
 
-    run_single_and_diverse_test(training_image_sets[17], training_image_sets)
+    
+
+    run_single_and_diverse_test(training_image_sets[0], training_image_sets)
