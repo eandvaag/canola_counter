@@ -98,7 +98,7 @@ def run_single_and_diverse_test(training_image_set, all_training_image_sets):
     # run_diverse_model(all_training_image_sets, "fixed_epoch_min_num_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
 
 
-def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir):
+def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None):
 
     s = {}
 
@@ -124,6 +124,7 @@ def run_diverse_model(training_image_sets, model_name, num_patches_to_match, pre
     print("Num patches to match: {}".format(num_patches_to_match))
     print("Num patches previously taken: {}".format(num_patches_prev_taken))
     print("Num patches to take: {}".format(num_patches_to_take))
+
 
     candidates = []
     for image_set in training_image_sets:
@@ -207,6 +208,12 @@ def run_diverse_model(training_image_sets, model_name, num_patches_to_match, pre
             "taken_regions": s[key],
             "patch_overlap_percent": 0
         })
+
+    
+    if supplementary_weed_image_sets is not None:
+        for image_set in supplementary_weed_image_sets:
+            image_set["patch_overlap_percent"] = 0
+            log["image_sets"].append(image_set)
 
     log["submission_time"] = int(time.time())
     
@@ -2244,78 +2251,78 @@ if __name__ == "__main__":
             "field_name": "CottonWeedDet12",
             "mission_date": "2023-04-10"
         },
-        {
-            "username": "erik",
-            "farm_name": "blue_lupins",
-            "field_name": "blue_lupins",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "turnipweed_in_wheat",
-            "field_name": "turnipweed_in_wheat",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "chickpea_BFLY",
-            "field_name": "chickpea_BFLY",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "chickpea_BFLYS",
-            "field_name": "chickpea_BFLYS",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "20200827_wheat_BFLY",
-            "field_name": "20200827_wheat_BFLY",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "20201014_wheat_BFLY",
-            "field_name": "20201014_wheat_BFLY",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "wheat_BFLYS",
-            "field_name": "wheat_BFLYS",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "radish_in_wheat",
-            "field_name": "radish_in_wheat",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "narrabri_wheat",
-            "field_name": "narrabri_wheat",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "broadleaf_weeds",
-            "field_name": "broadleaf_weeds",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "sustainable_ag_2021",
-            "field_name": "sustainable_ag_2021",
-            "mission_date": "2023-04-11"
-        },
-        {
-            "username": "erik",
-            "farm_name": "wild_carrot_canola",
-            "field_name": "wild_carrot_canola",
-            "mission_date": "2023-04-11"
-        },      
+        # {
+        #     "username": "erik",
+        #     "farm_name": "blue_lupins",
+        #     "field_name": "blue_lupins",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "turnipweed_in_wheat",
+        #     "field_name": "turnipweed_in_wheat",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "chickpea_BFLY",
+        #     "field_name": "chickpea_BFLY",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "chickpea_BFLYS",
+        #     "field_name": "chickpea_BFLYS",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "20200827_wheat_BFLY",
+        #     "field_name": "20200827_wheat_BFLY",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "20201014_wheat_BFLY",
+        #     "field_name": "20201014_wheat_BFLY",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "wheat_BFLYS",
+        #     "field_name": "wheat_BFLYS",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "radish_in_wheat",
+        #     "field_name": "radish_in_wheat",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "narrabri_wheat",
+        #     "field_name": "narrabri_wheat",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "broadleaf_weeds",
+        #     "field_name": "broadleaf_weeds",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "sustainable_ag_2021",
+        #     "field_name": "sustainable_ag_2021",
+        #     "mission_date": "2023-04-11"
+        # },
+        # {
+        #     "username": "erik",
+        #     "farm_name": "wild_carrot_canola",
+        #     "field_name": "wild_carrot_canola",
+        #     "mission_date": "2023-04-11"
+        # },      
     ]
 
     # remove_previous_iter_results(training_image_sets)
@@ -2358,5 +2365,17 @@ if __name__ == "__main__":
 
 
     
+    # for i in range(15, 20):
+    #     run_single_and_diverse_test(training_image_sets[i], training_image_sets)
 
-    run_single_and_diverse_test(training_image_sets[0], training_image_sets)
+
+    min_num = get_min_patch_num_of_sets(training_image_sets)
+
+    model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
+    # full_model_name = "fixed_epoch_min_num_" + model_name + "_no_overlap"
+
+    # run_full_image_set_model([training_image_set], full_model_name)
+    run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_and_CottonWeedDet_no_overlap", min_num, 
+    prev_model_dir=None, supplementary_weed_image_sets=weed_image_sets)
+    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
+    # run_diverse_model(all_training_image_sets, "fixed_epoch_min_num_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)

@@ -386,7 +386,7 @@ def plot_single_diverse_comparison(test_sets, single_baselines, diverse_baseline
     for baseline in single_baselines:
         x_items.append(baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
     fig = plt.figure(figsize=(10,10))
-    ax = fig.add_axes([0.25, 0.05, 0.7, 0.9]) 
+    ax = fig.add_axes([0.30, 0.05, 0.65, 0.9]) 
     for i, (x1, x2) in enumerate(zip(single_results, diverse_results)):
         ax.plot([x1, x2], [i, i], color="black", linestyle="solid", alpha=0.5, linewidth=1, zorder=1)
     ax.scatter([x for x in single_results], np.arange(0, len(x_items)), color="red", label="Single Image Set", zorder=2)
@@ -394,6 +394,131 @@ def plot_single_diverse_comparison(test_sets, single_baselines, diverse_baseline
 
     ax.set_yticks(np.arange(0, len(x_items)))
     ax.set_yticklabels(x_items) #, rotation=90, ha="right")
+
+
+    ax.legend()
+    ax.set_xlabel("Test Accuracy")
+
+    # plt.tight_layout()
+    # plt.ylabel("")
+
+    # test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
+    out_path = os.path.join("baseline_charts", "single_diverse_comparisons", "plot.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
+
+
+
+def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_baselines):
+
+    # results = {}
+    single_results = []
+    diverse_results = []
+    for rep_num in range(1):
+
+        for i in range(2): #single_baseline in single_baselines:
+
+
+            if i == 0:
+                baselines = single_baselines
+            else:
+                baselines = diverse_baselines
+
+            # results[k] = {}
+
+            # baselines = [single_baseline, diverse_baseline]
+
+
+            # for model_type in ["single", "diverse"]:
+            for j in range(len(baselines)):
+                full_predictions_lst = []
+                annotations_lst = []
+                assessment_images_lst = []
+                baseline = baselines[j]
+
+                for test_set in test_sets:
+
+
+
+                    # baseline = all_baseline_pairs[k][model_type]
+                    baseline_username = test_set["username"]
+                    baseline_farm_name = "BASELINE_TEST:" + baseline["model_creator"] + ":" + baseline["model_name"] + ":" + test_set["farm_name"] + "_rep_" + str(rep_num)
+                    baseline_field_name = "BASELINE_TEST:" + baseline["model_creator"] + ":" + baseline["model_name"] + ":" + test_set["field_name"] + "_rep_" + str(rep_num)
+                    baseline_mission_date = test_set["mission_date"]
+
+                    image_set_dir = os.path.join("usr", "data", baseline_username, "image_sets",
+                                                 baseline_farm_name, baseline_field_name, baseline_mission_date)
+                    results_dir = os.path.join(image_set_dir, "model", "results")
+
+                    result_pairs = []
+                    result_dirs = glob.glob(os.path.join(results_dir, "*"))
+                    for result_dir in result_dirs:
+                        request_path = os.path.join(result_dir, "request.json")
+                        request = json_io.load_json(request_path)
+                        end_time = request["end_time"]
+                        result_pairs.append((result_dir, end_time))
+
+                    result_pairs.sort(key=lambda x: x[1])
+
+                    direct_application_result_dir = result_pairs[0][0]
+
+                    annotations = annotation_utils.load_annotations(os.path.join(direct_application_result_dir, "annotations.json"))
+                    full_predictions_path = os.path.join(direct_application_result_dir, "full_predictions.json")
+                    full_predictions = json_io.load_json(full_predictions_path)
+
+
+                    full_predictions_lst.append(full_predictions)
+                    annotations_lst.append(annotations)
+                    assessment_images_lst.append(list(annotations.keys()))
+
+
+                    # y = fine_tune_eval.get_global_accuracy(annotations, full_predictions, list(annotations.keys()))
+
+
+                global_accuracy = fine_tune_eval.get_global_accuracy_multiple_image_sets(annotations_lst, full_predictions_lst, assessment_images_lst)
+                # ave_abs_dic = np.mean(np.abs(all_dics))
+
+                if i == 0:
+                    single_results.append(global_accuracy)
+                else:
+                    diverse_results.append(global_accuracy)
+                # results[k].append((baseline[xaxis_key], global_accuracy))
+
+    
+    # plt.plot([x[0] for x in results[k]], [x[1] for x in results[k]], color=colors[k], marker=marker, label=k, linestyle="dashed", linewidth=1)
+    single_labels = []
+    for baseline in single_baselines:
+        single_labels.append(baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
+
+    single_results = np.array(single_results)
+    single_labels = np.array(single_labels)
+    inds = np.argsort(single_results)
+    single_results = single_results[inds]
+    single_labels = single_labels[inds]
+
+
+    diverse_labels = []
+    for baseline in single_baselines:
+        diverse_labels.append(baseline["model_name"][len("fixed_epoch_"):len(baseline["model_name"])-len("_no_overlap")])
+
+
+    diverse_results = np.array(diverse_results)
+    diverse_labels = np.array(diverse_labels)
+    inds = np.argsort(diverse_results)
+    diverse_results = diverse_results[inds]
+    diverse_labels = diverse_labels[inds]
+
+
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_axes([0.30, 0.05, 0.65, 0.9]) 
+    # for i, (x1, x2) in enumerate(zip(single_results, diverse_results)):
+    #     ax.plot([x1, x2], [i, i], color="black", linestyle="solid", alpha=0.5, linewidth=1, zorder=1)
+    ax.scatter([x for x in single_results], np.arange(0, len(single_labels)), color="red", label="Single Image Set", zorder=2)
+    ax.scatter([x for x in diverse_results], np.arange(len(single_labels), len(single_labels)+len(diverse_labels)), color="blue", label="Diverse Random Selection", zorder=2)
+
+    ax.set_yticks(np.arange(0, len(single_labels)+len(diverse_labels)))
+    ax.set_yticklabels(np.concatenate([single_labels, diverse_labels])) #, rotation=90, ha="right")
 
 
     ax.legend()
@@ -507,27 +632,27 @@ def get_vendi_diversity(model_dir):
     num_patches = patch_arrays.size
     print("processing {} patches".format(num_patches))
 
-    from models.yolov4.yolov4_image_set_driver import create_default_config
-    from models.common import model_keys
-    config = create_default_config()
-    model_keys.add_general_keys(config)
-    model_keys.add_specialized_keys(config)
+    # from models.yolov4.yolov4_image_set_driver import create_default_config
+    # from models.common import model_keys
+    # config = create_default_config()
+    # model_keys.add_general_keys(config)
+    # model_keys.add_specialized_keys(config)
 
-    from models.yolov4 import yolov4
+    # from models.yolov4 import yolov4
 
-    model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
-    input_shape = (256, *(config["arch"]["input_image_shape"]))
-    model.build(input_shape=input_shape)
-    model.load_weights(os.path.join("usr", "data", "erik", "models", "available", "public", 
-                                    "fixed_epoch_set_of_27_no_overlap", "weights.h5"), by_name=False)
+    # model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
+    # input_shape = (256, *(config["arch"]["input_image_shape"]))
+    # model.build(input_shape=input_shape)
+    # model.load_weights(os.path.join("usr", "data", "erik", "models", "available", "public", 
+    #                                 "fixed_epoch_set_of_27_no_overlap", "weights.h5"), by_name=False)
 
-    # weights = 'imagenet'
-    # model = tf.keras.applications.InceptionV3( #101( #ResNet50(
-    #     weights=weights,
-    #     include_top=False, 
-    #     input_shape=[None, None, 3],
-    #     pooling="max"
-    # )
+    weights = 'imagenet'
+    model = tf.keras.applications.InceptionV3( #101( #ResNet50(
+        weights=weights,
+        include_top=False, 
+        input_shape=[None, None, 3],
+        pooling="max"
+    )
 
     # if extraction_type == "box_patches":
     #     input_image_shape = np.array([150, 150, 3])
@@ -540,6 +665,9 @@ def get_vendi_diversity(model_dir):
         for j in range(i, min(num_patches, i+batch_size)):
             patch = tf.convert_to_tensor(patch_arrays[j], dtype=tf.float32)
             patch = tf.image.resize(images=patch, size=input_image_shape[:2])
+            # vec = tf.reshape(patch, [-1])
+
+            # all_features.append(vec)
             batch_patches.append(patch)
         batch_patches = tf.stack(values=batch_patches, axis=0)
         
@@ -1128,6 +1256,11 @@ def run():
             "model_creator": "erik",
             "num_training_sets": 1
         },
+        {
+            "model_name": "fixed_epoch_BlaineLake_HornerWest_2021-06-09_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
     ]
 
     single_diverse_baselines = [
@@ -1140,7 +1273,49 @@ def run():
             "model_name": "fixed_epoch_diverse_set_of_27_match_row_spacing_nasser_2021-06-01_no_overlap",
             "model_creator": "erik",
             "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_diverse_set_of_27_match_BlaineLake_HornerWest_2021-06-09_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
         }, 
+    ]
+
+
+    single_min_num_baselines = [
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_River_2021-06-09_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Lake_2021-06-09_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_HornerWest_2021-06-09_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_LowN1_2021-06-07_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Serhienko9N_2022-06-07_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        }
+    ]
+
+    single_min_num_diverse_baselines = [
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_27_match_row_spacing_nasser_2021-06-01_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
     ]
 
     fixed_epoch_exg_baselines = [
@@ -1160,6 +1335,8 @@ def run():
             "num_training_sets": 6
         },
     ]
+
+
 
 
 
@@ -1208,8 +1385,8 @@ def run():
     # all_baselines.extend(fixed_epoch_no_overlap_baselines)
     # all_baselines.extend(fixed_epoch_diverse_baselines)
     # all_baselines.extend(fixed_epoch_exg_baselines)
-    all_baselines.extend(single_baselines)
-    all_baselines.extend(single_diverse_baselines)
+    all_baselines.extend(single_min_num_baselines)
+    all_baselines.extend(single_min_num_diverse_baselines)
 
 
     # test(test_sets, all_baselines, num_reps)
@@ -1219,10 +1396,10 @@ def run():
     # add_num_training_patches(all_baselines)
     # plot_my_results_alt(test_sets, no_overlap_baselines, diverse_baselines, num_reps)
 
-    # test(test_sets, all_baselines, num_reps)
+    test(test_sets, all_baselines, num_reps)
     all_baselines = {
-        "full_image_sets": no_overlap_baselines,
-        "diverse_baselines": diverse_baselines,
+        # "full_image_sets": no_overlap_baselines,
+        # "diverse_baselines": diverse_baselines,
         # "CottonWeedDet12_supplemented": CottonWeedDet12_baselines, 
         # "WeedAI_10000_supplemented": weed_ai_10000_baselines,
         # "WeedAI_20000_supplemented": weed_ai_20000_baselines,
@@ -1235,8 +1412,8 @@ def run():
         # "random_images": random_image_baselines,
         # "uniformly_selected_patches": diverse_baselines,
         # "selected_patches": active_baselines
-        "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines,
-        "fixed_epoch_diverse_baselines": fixed_epoch_diverse_baselines,
+        # "fixed_epoch_full_image_sets": fixed_epoch_no_overlap_baselines,
+        # "fixed_epoch_diverse_baselines": fixed_epoch_diverse_baselines,
         # "fixed_epoch_exg_baselines": fixed_epoch_exg_baselines,
     }
     # plot_my_results_alt(test_sets, all_baselines, num_reps)
@@ -1248,13 +1425,22 @@ def run():
     # plot_single_diverse_comparison(test_sets, single_baselines, single_diverse_baselines)
 
 
-    model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap")
-    score = get_vendi_diversity(model_dir)
-    print("got vendi score", score)
+    # model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_MORSE_Nasser_2022-05-27_no_overlap")
+    # score = get_vendi_diversity(model_dir)
+    # print("got vendi score", score)
 
-    model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_1_no_overlap")
-    score = get_vendi_diversity(model_dir)
-    print("got vendi score", score)
+    # model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_1_no_overlap")
+    # score = get_vendi_diversity(model_dir)
+    # print("got vendi score", score)
+
+    # model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_BlaineLake_HornerWest_2021-06-09_no_overlap")
+    # score = get_vendi_diversity(model_dir)
+    # print("got vendi score", score)
+
+
+    # model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_diverse_set_of_27_match_1_no_overlap")
+    # score = get_vendi_diversity(model_dir)
+    # print("got vendi score", score)
 
 
 if __name__ == "__main__":
