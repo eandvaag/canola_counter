@@ -90,12 +90,12 @@ def run_single_and_diverse_test(training_image_set, all_training_image_sets):
     min_num = get_min_patch_num_of_sets(all_training_image_sets)
 
     model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
-    # full_model_name = "fixed_epoch_min_num_" + model_name + "_no_overlap"
+    full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
 
-    # run_full_image_set_model([training_image_set], full_model_name)
-    run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_set_of_1_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
-    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
-    # run_diverse_model(all_training_image_sets, "fixed_epoch_min_num_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
+    run_full_image_set_model([training_image_set], full_model_name)
+    # run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_set_of_1_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
+    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
+    run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
 
 
 def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None):
@@ -2369,13 +2369,17 @@ if __name__ == "__main__":
     #     run_single_and_diverse_test(training_image_sets[i], training_image_sets)
 
 
-    min_num = get_min_patch_num_of_sets(training_image_sets)
+    # min_num = get_min_patch_num_of_sets(training_image_sets)
 
-    model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
-    # full_model_name = "fixed_epoch_min_num_" + model_name + "_no_overlap"
+    # model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
+    # # full_model_name = "fixed_epoch_min_num_" + model_name + "_no_overlap"
 
-    # run_full_image_set_model([training_image_set], full_model_name)
-    run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_and_CottonWeedDet_no_overlap", min_num, 
-    prev_model_dir=None, supplementary_weed_image_sets=weed_image_sets)
-    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
-    # run_diverse_model(all_training_image_sets, "fixed_epoch_min_num_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
+    # # run_full_image_set_model([training_image_set], full_model_name)
+    # run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_and_CottonWeedDet_no_overlap", min_num, 
+    # prev_model_dir=None, supplementary_weed_image_sets=weed_image_sets)
+    # # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
+    # # run_diverse_model(all_training_image_sets, "fixed_epoch_min_num_diverse_set_of_27_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
+
+
+
+    run_single_and_diverse_test(training_image_sets[16], training_image_sets)
