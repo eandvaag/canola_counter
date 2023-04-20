@@ -534,12 +534,16 @@ def get_vendi_diversity(model_dir):
                 sim = cosine(all_features[i], all_features[j])
                 sim_mat[i][j] = sim
     # sim_mat = cosine(all_features, all_features)
+    print("sim_mat is: {}".format(sim_mat))
     print("calculating eigenvalues...")
     w, _ = np.linalg.eig(sim_mat)
+    print("eigenvalues are: {}".format(w))
     print("calculating entropy...")
     ent = entropy(w)
+    print("entropy is {}".format(ent))
     print("calculating vendi score")
     score = m.exp(ent)
+    print("score is {}".format(score))
 
     return score
 
