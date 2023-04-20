@@ -518,7 +518,7 @@ def get_vendi_diversity(model_dir):
     model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
     input_shape = (256, *(config["arch"]["input_image_shape"]))
     model.build(input_shape=input_shape)
-    model.load_weights(os.path.join("usr", "data", "erik", "models", "public", "available", 
+    model.load_weights(os.path.join("usr", "data", "erik", "models", "available", "public", 
                                     "fixed_epoch_set_of_27_no_overlap", "weights.h5"), by_name=False)
 
     # weights = 'imagenet'
