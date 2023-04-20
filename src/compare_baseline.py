@@ -6,6 +6,7 @@ import math as m
 import numpy as np
 import tensorflow as tf
 from scipy.spatial.distance import cosine
+from scipy.stats import entropy
 import random
 import uuid
 import urllib3
@@ -522,7 +523,17 @@ def get_vendi_diversity(model_dir):
     all_features = np.array(all_features)
     print("shape of features matrix is {}".format(all_features.shape))
     print("calculating similarity matrix...")
-    sim_mat = cosine(all_features, all_features)
+    sim_mat = np.zeros(shape=(all_features.shape[0], all_features.shape[0]))
+    for i in range(all_features.shape[0]):
+        for j in range(all_features.shape[0]):
+            if i == j:
+                sim_mat[i][j] = 1
+            elif i > j:
+                sim_mat[i][j] = sim_mat[j][i]
+            else:
+                sim = cosine(all_features[i], all_features[j])
+                sim_mat[i][j] = sim
+    # sim_mat = cosine(all_features, all_features)
     print("calculating eigenvalues...")
     w, _ = np.linalg.eig(sim_mat)
     print("calculating entropy...")
