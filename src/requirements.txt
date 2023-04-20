@@ -129,6 +129,7 @@ typing_extensions==4.0.1
 ujson==5.1.0
 umap-learn==0.5.2
 urllib3==1.26.7
+vendi-score==0.0.3
 Werkzeug==2.2.2
 wrapt==1.13.3
 xarray==2022.3.0
