@@ -509,7 +509,7 @@ def get_vendi_diversity(model_dir):
     for i in tqdm.trange(0, num_patches, batch_size):
         batch_patches = []
         for j in range(i, min(num_patches, i+batch_size)):
-            patch = tf.convert_to_tensor(patch_arrays[j]["patch"], dtype=tf.float32)
+            patch = tf.convert_to_tensor(patch_arrays[j], dtype=tf.float32)
             patch = tf.image.resize(images=patch, size=input_image_shape[:2])
             batch_patches.append(patch)
         batch_patches = tf.stack(values=batch_patches, axis=0)
