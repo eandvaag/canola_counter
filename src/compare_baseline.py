@@ -17,6 +17,7 @@ import server
 from models.common import annotation_utils
 from io_utils import json_io
 import fine_tune_eval
+from image_set import Image
 
 from lock_queue import LockQueue
 import diversity_test
