@@ -8,6 +8,7 @@ import tensorflow as tf
 from scipy.spatial.distance import cosine
 from vendi_score import vendi
 from scipy.stats import entropy
+import pandas as pd
 import random
 import uuid
 import urllib3
@@ -444,7 +445,9 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
                 # add_num_training_patches(baseline)
                 # num_annotations = get_num_annotations_used_by_baseline(baseline)
 
-                
+                total_true_positives = 0
+                total_false_positives = 0
+                total_false_negatives = 0                
 
                 for test_set in test_sets:
 
@@ -473,14 +476,20 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
                     direct_application_result_dir = result_pairs[0][0]
 
 
-                    # dataframe_path = os.path.join(direct_application_result_dir, "")
+                    # excel_path = os.path.join(direct_application_result_dir, "metrics.xlsx")
+                    # df = pd.read_excel(excel_path, sheet_name=0)
+                    # total_true_positives += df["True Positives (IoU=.50, conf>.50)"].sum()
+                    # total_false_positives += df["False Positives (IoU=.50, conf>.50)"].sum()
+                    # total_false_negatives += df["False Negatives (IoU=.50, conf>.50)"].sum()
+                    # print("total_true_positives", total_true_positives, df)
+
 
                     annotations = annotation_utils.load_annotations(os.path.join(direct_application_result_dir, "annotations.json"))
-                    full_predictions_path = os.path.join(direct_application_result_dir, "full_predictions.json")
-                    full_predictions = json_io.load_json(full_predictions_path)
+                    predictions_path = os.path.join(direct_application_result_dir, "predictions.json")
+                    predictions = json_io.load_json(predictions_path)
 
 
-                    full_predictions_lst.append(full_predictions)
+                    full_predictions_lst.append(predictions)
                     annotations_lst.append(annotations)
                     assessment_images_lst.append(list(annotations.keys()))
 
@@ -490,7 +499,8 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
 
                 global_accuracy = fine_tune_eval.get_global_accuracy_multiple_image_sets(annotations_lst, full_predictions_lst, assessment_images_lst)
                 # ave_abs_dic = np.mean(np.abs(all_dics))
-
+                # global_accuracy = total_true_positives / (total_true_positives + total_false_positives + total_false_negatives)
+                
                 if i == 0:
                     single_results.append(global_accuracy)
                 else:
@@ -1366,26 +1376,30 @@ def run():
         #     "model_creator": "erik",
         #     "num_training_sets": 1
         # },
-        {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_row_spacing_nasser_2021-06-01_no_overlap",
-            "model_creator": "erik",
-            "num_training_sets": 1
-        },
-        {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis1_2021-06-04_no_overlap",
-            "model_creator": "erik",
-            "num_training_sets": 1
-        },
-        {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis3_2021-06-04_no_overlap",
-            "model_creator": "erik",
-            "num_training_sets": 1
-        },
-        {
-            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_MORSE_Dugout_2022-05-27_no_overlap",
-            "model_creator": "erik",
-            "num_training_sets": 1
-        },
+
+        ### asus
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_row_spacing_nasser_2021-06-01_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+
+        ### amd
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis1_2021-06-04_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis3_2021-06-04_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_MORSE_Dugout_2022-05-27_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
         # {
         #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_MORSE_Nasser_2022-05-27_no_overlap",
         #     "model_creator": "erik",
@@ -1411,6 +1425,8 @@ def run():
         #     "model_creator": "erik",
         #     "num_training_sets": 1
         # },
+
+        # START T5600
         # {
         #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Saskatoon_Norheim4_2022-05-24_no_overlap",
         #     "model_creator": "erik",
@@ -1431,6 +1447,8 @@ def run():
         #     "model_creator": "erik",
         #     "num_training_sets": 1
         # },
+
+        ## asus
         # {
         #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_LowN2_2021-06-07_no_overlap",
         #     "model_creator": "erik",
@@ -1440,7 +1458,44 @@ def run():
         #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_Sutherland_2021-06-05_no_overlap",
         #     "model_creator": "erik",
         #     "num_training_sets": 1
-        # }
+        # },
+
+        ## amd
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Saskatoon_Norheim1_2021-06-02_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_row_spacing_brown_2021-06-08_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_SaskatoonEast_Stevenson5NW_2021-06-20_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_UNI_Vaderstad_2022-06-16_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_Biggar_Dennis2_2021-06-14_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        {
+            "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Serhienko10_2022-06-14_no_overlap",
+            "model_creator": "erik",
+            "num_training_sets": 1
+        },
+        # {
+        #     "model_name": "fixed_epoch_min_num_diverse_set_of_1_match_BlaineLake_Serhienko9S_2022-06-14_no_overlap",
+        #     "model_creator": "erik",
+        #     "num_training_sets": 1
+        # },
     ]
 
     single_min_num_diverse_baselines = [
