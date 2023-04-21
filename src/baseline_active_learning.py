@@ -87,7 +87,7 @@ def get_num_patches_used_by_model(model_dir):
 
 def run_single_and_diverse_test(training_image_set, all_training_image_sets):
 
-    # min_num = get_min_patch_num_of_sets(all_training_image_sets)
+    min_num = get_min_patch_num_of_sets(all_training_image_sets)
 
     model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
     full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
@@ -99,7 +99,7 @@ def run_single_and_diverse_test(training_image_set, all_training_image_sets):
     run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", num_patches_to_match, prev_model_dir=None)
 
 
-def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None):
+def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None, run=True):
 
     s = {}
 
@@ -225,17 +225,17 @@ def run_diverse_model(training_image_sets, model_name, num_patches_to_match, pre
     log_path = os.path.join(pending_model_path, "log.json")
     json_io.save_json(log_path, log)
 
+    if run:
+        server.sch_ctx["baseline_queue"].enqueue(log)
 
-    server.sch_ctx["baseline_queue"].enqueue(log)
-
-    baseline_queue_size = server.sch_ctx["baseline_queue"].size()
-    while baseline_queue_size > 0:
-    
-        log = server.sch_ctx["baseline_queue"].dequeue()
-        re_enqueue = server.process_baseline(log)
-        if re_enqueue:
-            server.sch_ctx["baseline_queue"].enqueue(log)
         baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+        while baseline_queue_size > 0:
+        
+            log = server.sch_ctx["baseline_queue"].dequeue()
+            re_enqueue = server.process_baseline(log)
+            if re_enqueue:
+                server.sch_ctx["baseline_queue"].enqueue(log)
+            baseline_queue_size = server.sch_ctx["baseline_queue"].size()
 
 
 def run_pending_model(model_dir):
@@ -1993,6 +1993,7 @@ def remove_specific_iter_results(training_image_sets, result_name):
                 shutil.rmtree(result_dir)
 
 
+
 def get_min_patch_num_of_sets(image_sets):
     all_totals = []  
     for image_set in image_sets:
@@ -2383,4 +2384,17 @@ if __name__ == "__main__":
 
 
 
-    run_single_and_diverse_test(training_image_sets[16], training_image_sets)
+    # run_single_and_diverse_test(training_image_sets[26], training_image_sets)
+
+    patch_nums = [250, 500, 1000, 2000, 4000, 8000, 16000, 32000, 38891]
+    for i in [0, 1, 2]: #range(len(patch_nums)):
+        prev_model_dir = None
+        model_name = "fixed_epoch_fixed_patch_num_" + str(patch_nums[i]) + "_no_overlap"
+        model_dir = os.path.join("usr", "data", "erik", "models", "pending", model_name)
+        # if i > 0:
+        #     prev_model_name = "fixed_epoch_fixed_patch_num_" + str(patch_nums[i-1]) + "_no_overlap"
+        #     prev_model_dir = os.path.join("usr", "data", "erik", "models", "pending", prev_model_name)
+        # run_diverse_model(training_image_sets, model_name, patch_nums[i], prev_model_dir, supplementary_weed_image_sets=None, run=False)
+
+
+        run_pending_model(model_dir)
