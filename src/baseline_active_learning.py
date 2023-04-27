@@ -2068,6 +2068,86 @@ def get_min_patch_num_of_sets(image_sets):
     return np.min(all_totals)
 
 
+
+
+def between_model(prev_model_dir, next_model_dir, num_to_take, model_name):
+
+    prev_log_path = os.path.join(prev_model_dir, "log.json")
+    prev_log = json_io.load_json(prev_log_path)
+
+    next_log_path = os.path.join(next_model_dir, "log.json")
+    next_log = json_io.load_json(next_log_path)
+
+    next_taken = {}
+    for image_set in next_log["image_sets"]:
+        image_set_str = image_set["username"] + " " + image_set["farm_name"] + " " + image_set["field_name"] + " " + image_set["mission_date"]
+        next_taken[image_set_str] = image_set["taken_regions"]
+
+    prev_taken = {}
+    tot_prev_taken = 0
+    for image_set in prev_log["image_sets"]:
+        image_set_str = image_set["username"] + " " + image_set["farm_name"] + " " + image_set["field_name"] + " " + image_set["mission_date"]
+        prev_taken[image_set_str] = image_set["taken_regions"]
+        for image_name in image_set["taken_regions"]:
+            tot_prev_taken += len(image_set["taken_regions"][image_name])
+
+    candidates = []
+    for image_set_str in next_taken:
+        for image_name in next_taken[image_set_str]:
+            for region in next_taken[image_set_str][image_name]:
+                if image_set_str not in prev_taken or image_name not in prev_taken[image_set_str] or region not in prev_taken[image_set_str][image_name]:
+                    candidates.append((image_set_str, image_name, region))
+
+    num_remaining_to_take = num_to_take - tot_prev_taken
+    print("Previously took {}. Need to have: {}. Going to take {} additional regions.".format(
+        tot_prev_taken, num_to_take, num_remaining_to_take
+    ))
+
+    picked = random.sample(candidates, num_remaining_to_take)
+
+    taken = prev_taken
+    for pick in picked:
+        image_set_str = pick[0]
+        if image_set_str not in taken:
+            taken[image_set_str] = {}
+
+        image_name = pick[1]
+        if image_name not in taken[image_set_str]:
+            taken[image_set_str][image_name] = []
+
+        region = pick[2]
+        taken[image_set_str][image_name].append(region)
+
+    log = {}
+    log["model_creator"] = "erik"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["submission_time"] = int(time.time())
+    log["image_sets"] = []
+    for image_set_str in taken.keys():
+        pieces = image_set_str.split(" ")
+        username = pieces[0]
+        farm_name = pieces[1]
+        field_name = pieces[2]
+        mission_date = pieces[3]
+        log["image_sets"].append({
+            "username": username,
+            "farm_name": farm_name,
+            "field_name": field_name,
+            "mission_date": mission_date,
+            "taken_regions": taken[image_set_str],
+            "patch_overlap_percent": 0
+        })
+    
+    pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+    
+
 if __name__ == "__main__":
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -2386,15 +2466,21 @@ if __name__ == "__main__":
 
     # run_single_and_diverse_test(training_image_sets[26], training_image_sets)
 
-    patch_nums = [250, 500, 1000, 2000, 4000, 8000, 16000, 32000, 38891]
-    for i in [0, 1, 2]: #range(len(patch_nums)):
-        prev_model_dir = None
-        model_name = "fixed_epoch_fixed_patch_num_" + str(patch_nums[i]) + "_no_overlap"
-        model_dir = os.path.join("usr", "data", "erik", "models", "pending", model_name)
-        # if i > 0:
-        #     prev_model_name = "fixed_epoch_fixed_patch_num_" + str(patch_nums[i-1]) + "_no_overlap"
-        #     prev_model_dir = os.path.join("usr", "data", "erik", "models", "pending", prev_model_name)
-        # run_diverse_model(training_image_sets, model_name, patch_nums[i], prev_model_dir, supplementary_weed_image_sets=None, run=False)
+    # patch_nums = [250, 500, 1000, 2000, 4000, 8000, 16000, 32000, 38891]
+    # for i in [5]: #range(len(patch_nums)):
+    #     prev_model_dir = None
+    #     model_name = "fixed_epoch_fixed_patch_num_" + str(patch_nums[i]) + "_no_overlap"
+    #     model_dir = os.path.join("usr", "data", "erik", "models", "pending", model_name)
+    #     # if i > 0:
+    #     #     prev_model_name = "fixed_epoch_fixed_patch_num_" + str(patch_nums[i-1]) + "_no_overlap"
+    #     #     prev_model_dir = os.path.join("usr", "data", "erik", "models", "pending", prev_model_name)
+    #     # run_diverse_model(training_image_sets, model_name, patch_nums[i], prev_model_dir, supplementary_weed_image_sets=None, run=False)
 
 
-        run_pending_model(model_dir)
+    #     run_pending_model(model_dir)
+
+    prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_fixed_patch_num_16000_no_overlap")
+    next_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_fixed_patch_num_32000_no_overlap")
+    num_to_take = 24000
+    model_name = "fixed_epoch_fixed_patch_num_24000_no_overlap"
+    between_model(prev_model_dir, next_model_dir, num_to_take, model_name)
