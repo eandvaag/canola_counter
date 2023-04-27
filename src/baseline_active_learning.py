@@ -96,7 +96,7 @@ def run_single_image_set_diverse_test(training_image_set, all_training_image_set
         print("Not training {} because there are not enough patches to take.".format(training_set_str))
 
     else:
-        print("{} has enough patches (need {}, have {}). Training model.".format(num_patches_to_take, patch_nums[training_set_str]))
+        print("{} has enough patches (need {}, have {}). Training model.".format(training_set_str, num_patches_to_take, patch_nums[training_set_str]))
         run_diverse_model([training_image_set], model_name + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
 
 
