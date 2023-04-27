@@ -85,18 +85,28 @@ def get_num_patches_used_by_model(model_dir):
                     
 
 
-def run_single_and_diverse_test(training_image_set, all_training_image_sets):
+def run_single_image_set_diverse_test(training_image_set, all_training_image_sets, num_patches_to_take):
 
-    min_num = get_min_patch_num_of_sets(all_training_image_sets)
+    patch_nums = get_patch_nums_of_sets(all_training_image_sets)
 
+    training_set_str = training_image_set["username"] + " " + training_image_set["farm_name"] + " " + training_image_set["field_name"] + " " + training_image_set["mission_date"]
     model_name = training_image_set["farm_name"] + "_" + training_image_set["field_name"] + "_" + training_image_set["mission_date"]
-    full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
+    
+    if patch_nums[training_set_str] < num_patches_to_take:
+        print("Not training {} because there are not enough patches to take.".format(training_set_str))
 
-    run_full_image_set_model([training_image_set], full_model_name)
+    else:
+        print("{} has enough patches (need {}, have {}). Training model.".format(num_patches_to_take, patch_nums[training_set_str]))
+        run_diverse_model([training_image_set], model_name + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
+
+
+    # full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
+
+    # # run_full_image_set_model([training_image_set], full_model_name)
     # run_diverse_model([training_image_set], "fixed_epoch_min_num_diverse_set_of_1_match_" + model_name + "_no_overlap", min_num, prev_model_dir=None)
-    model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
-    num_patches_to_match = get_num_patches_used_by_model(model_dir_to_match)
-    run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", num_patches_to_match, prev_model_dir=None)
+    # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
+    # num_patches_to_match = get_num_patches_used_by_model(model_dir_to_match)
+    # run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", num_patches_to_match, prev_model_dir=None)
 
 
 def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None, run=True):
@@ -193,7 +203,7 @@ def run_diverse_model(training_image_sets, model_name, num_patches_to_match, pre
         s[key][image_name].append(taken_candidate[2])
 
     log = {}
-    log["model_creator"] = "erik"
+    log["model_creator"] = "eval"
     log["model_name"] = model_name
     log["model_object"] = "canola_seedling"
     log["public"] = "yes"
@@ -218,7 +228,7 @@ def run_diverse_model(training_image_sets, model_name, num_patches_to_match, pre
 
     log["submission_time"] = int(time.time())
     
-    pending_model_path = os.path.join("usr", "data", "erik", "models", "pending", log["model_name"])
+    pending_model_path = os.path.join("usr", "data", "eval", "models", "pending", log["model_name"])
 
     os.makedirs(pending_model_path, exist_ok=False)
     
@@ -1994,8 +2004,9 @@ def remove_specific_iter_results(training_image_sets, result_name):
 
 
 
-def get_min_patch_num_of_sets(image_sets):
-    all_totals = []  
+def get_patch_nums_of_sets(image_sets):
+    # all_totals = []
+    totals = {}
     for image_set in image_sets:
         total_num_patches = 0
         username = image_set["username"]
@@ -2059,13 +2070,14 @@ def get_min_patch_num_of_sets(image_sets):
 
 
         print("{}: {} patches".format(image_set_str, total_num_patches))
-        all_totals.append(total_num_patches)
+        # all_totals.append(total_num_patches)
+        totals[image_set_str] = total_num_patches
 
 
-    print("min: {}".format(np.min(all_totals)))
-    print("max: {}".format(np.max(all_totals)))
+    # print("min: {}".format(np.min(all_totals)))
+    # print("max: {}".format(np.max(all_totals)))
 
-    return np.min(all_totals)
+    return totals #np.min(all_totals)
 
 
 
@@ -2479,8 +2491,15 @@ if __name__ == "__main__":
 
     #     run_pending_model(model_dir)
 
-    prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_fixed_patch_num_16000_no_overlap")
-    next_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_fixed_patch_num_32000_no_overlap")
-    num_to_take = 24000
-    model_name = "fixed_epoch_fixed_patch_num_24000_no_overlap"
-    between_model(prev_model_dir, next_model_dir, num_to_take, model_name)
+    # prev_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_fixed_patch_num_16000_no_overlap")
+    # next_model_dir = os.path.join("usr", "data", "erik", "models", "available", "public", "fixed_epoch_fixed_patch_num_32000_no_overlap")
+    # num_to_take = 24000
+    # model_name = "fixed_epoch_fixed_patch_num_24000_no_overlap"
+    # between_model(prev_model_dir, next_model_dir, num_to_take, model_name)
+
+    # min_num = get_min_patch_num_of_sets(training_image_sets)
+
+    # run_diverse_model(training_image_sets, "set_of_27_630_patches_rep_2", 630, prev_model_dir=None, supplementary_weed_image_sets=None, run=True)
+
+    for i in range(len(training_image_sets)):
+        run_single_image_set_diverse_test(training_image_sets[i], training_image_sets, 1500)
