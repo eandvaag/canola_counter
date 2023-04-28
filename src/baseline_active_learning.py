@@ -112,7 +112,7 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
 
             annotation_utils.save_annotations(annotations_path, annotations)
             perturbed_annotations_path = os.path.join(image_set_dir, "annotations", "perturbed_annotations_" + str(perturbation_amount) + ".json")
-            annotation_utils.save_annotations(perturbed_annotations_path, annotations)
+            shutil.copy(annotations_path, perturbed_annotations_path)
 
         run_diverse_model(training_image_sets, "set_of_27_perturbed_by_" + perturbation_amount + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
 
