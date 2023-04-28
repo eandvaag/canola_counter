@@ -84,6 +84,47 @@ def get_num_patches_used_by_model(model_dir):
     return total_num_patches
                     
 
+def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_patches_to_take):
+
+
+    for perturbation_amount in perturbation_amounts:
+        for image_set in training_image_sets:
+            image_set_dir = os.path.join("usr", "data",
+                                        image_set["username"], "image_sets",
+                                        image_set["farm_name"],
+                                        image_set["field_name"],
+                                        image_set["mission_date"])
+
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_perturbation.json")
+            shutil.copy(annotations_path, preserved_annotations_path)
+
+            annotations = annotation_utils.load_annotations(annotations_path)
+            for image_name in annotations.keys():
+                for box in annotations[image_name]["boxes"]:
+                    box[0] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[1] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[2] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[3] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
+
+
+            annotation_utils.save_annotations(annotations_path, annotations)
+            perturbed_annotations_path = os.path.join(image_set_dir, "annotations", "perturbed_annotations_" + str(perturbation_amount) + ".json")
+            annotation_utils.save_annotations(annotations, perturbed_annotations_path)
+
+        run_diverse_model(training_image_sets, "perturbed_by_" + perturbation_ammount + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
+
+        for image_set in training_image_sets:
+            image_set_dir = os.path.join("usr", "data",
+                                        image_set["username"], "image_sets",
+                                        image_set["farm_name"],
+                                        image_set["field_name"],
+                                        image_set["mission_date"])
+
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_perturbation.json")
+            shutil.copy(preserved_annotations_path, annotations_path)
+
 
 def run_single_image_set_diverse_test(training_image_set, all_training_image_sets, num_patches_to_take):
 
@@ -2501,5 +2542,22 @@ if __name__ == "__main__":
 
     # run_diverse_model(training_image_sets, "set_of_27_630_patches_rep_2", 630, prev_model_dir=None, supplementary_weed_image_sets=None, run=True)
 
-    for i in range(len(training_image_sets)):
-        run_single_image_set_diverse_test(training_image_sets[i], training_image_sets, 1500)
+
+    # patch_nums = get_patch_nums_of_sets(training_image_sets)
+    # tot = 0
+    # for image_set in training_image_sets:
+    #     username = image_set["username"]
+    #     farm_name = image_set["farm_name"]
+    #     field_name = image_set["field_name"]
+    #     mission_date = image_set["mission_date"]
+    #     image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+    #     tot += patch_nums[image_set_str]
+    #     # run_single_image_set_diverse_test(training_image_sets[i], training_image_sets, 1500)
+    # print(tot)
+
+    # run_single_image_set_diverse_test(training_image_sets[i], training_image_sets, 1500)
+    # run_diverse_model(training_image_sets, "set_of_27_1500_patches_rep_0", 1500, prev_model_dir=None, supplementary_weed_image_sets=None, run=True)
+
+
+    perturbation_amounts = [10, 30, 50, 100]
+    annotation_perturbation_test(training_image_sets, perturbation_amounts, 16000)
