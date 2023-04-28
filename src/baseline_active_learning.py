@@ -147,7 +147,7 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
             shutil.copy(preserved_annotations_path, annotations_path)
 
 
-def run_single_image_set_diverse_test(training_image_set, all_training_image_sets, num_patches_to_take):
+def run_single_image_set_diverse_test(training_image_set, all_training_image_sets, num_patches_to_take, supplementary_weed_image_sets=None):
 
     patch_nums = get_patch_nums_of_sets(all_training_image_sets)
 
@@ -159,7 +159,7 @@ def run_single_image_set_diverse_test(training_image_set, all_training_image_set
 
     else:
         print("{} has enough patches (need {}, have {}). Training model.".format(training_set_str, num_patches_to_take, patch_nums[training_set_str]))
-        run_diverse_model([training_image_set], model_name + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
+        run_diverse_model([training_image_set], model_name + "_" + str(num_patches_to_take) + "_patches_and_CottonWeedDet12_rep_0", num_patches_to_take, supplementary_weed_image_sets=supplementary_weed_image_sets, prev_model_dir=None)
 
 
     # full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
@@ -2580,5 +2580,14 @@ if __name__ == "__main__":
     # run_diverse_model(training_image_sets, "set_of_27_1500_patches_rep_0", 1500, prev_model_dir=None, supplementary_weed_image_sets=None, run=True)
 
 
-    perturbation_amounts = [10, 30, 50, 100]
-    annotation_perturbation_test(training_image_sets, perturbation_amounts, 16000)
+    # perturbation_amounts = [10, 30, 50, 100]
+    # annotation_perturbation_test(training_image_sets, perturbation_amounts, 16000)
+
+
+
+
+    for i in range(10): #len(training_image_sets)):
+        run_single_image_set_diverse_test(training_image_sets[i], 
+            all_training_image_sets, 
+            630, 
+            supplementary_weed_image_sets=weed_image_sets)
