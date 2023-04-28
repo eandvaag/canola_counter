@@ -84,6 +84,20 @@ def get_num_patches_used_by_model(model_dir):
     return total_num_patches
                     
 
+
+def restore_annotations(training_image_sets):
+
+    for image_set in training_image_sets:
+        image_set_dir = os.path.join("usr", "data",
+                            image_set["username"], "image_sets",
+                            image_set["farm_name"],
+                            image_set["field_name"],
+                            image_set["mission_date"])
+        preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_perturbation.json")
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        if os.path.exists(preserved_annotations_path):
+            shutil.copy(preserved_annotations_path, annotations_path)
+
 def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_patches_to_take):
 
 
@@ -114,7 +128,7 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
             perturbed_annotations_path = os.path.join(image_set_dir, "annotations", "perturbed_annotations_" + str(perturbation_amount) + ".json")
             shutil.copy(annotations_path, perturbed_annotations_path)
 
-        run_diverse_model(training_image_sets, "set_of_27_perturbed_by_" + perturbation_amount + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
+        run_diverse_model(training_image_sets, "set_of_27_perturbed_by_" + str(perturbation_amount) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
 
         for image_set in training_image_sets:
             image_set_dir = os.path.join("usr", "data",
