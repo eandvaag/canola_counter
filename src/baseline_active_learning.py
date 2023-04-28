@@ -115,13 +115,18 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
             preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_perturbation.json")
             shutil.copy(annotations_path, preserved_annotations_path)
 
+            metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+            metadata = json_io.load_json(metadata_path)
+
             annotations = annotation_utils.load_annotations(annotations_path)
             for image_name in annotations.keys():
+                image_h = metadata["images"][image_name]["height_px"]
+                image_w = metadata["images"][image_name]["width_px"]
                 for box in annotations[image_name]["boxes"]:
-                    box[0] += random.randint(-(1) * perturbation_amount, perturbation_amount)
-                    box[1] += random.randint(-(1) * perturbation_amount, perturbation_amount)
-                    box[2] += random.randint(-(1) * perturbation_amount, perturbation_amount)
-                    box[3] += random.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[0] += min(image_h - 1, max(0, random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    box[1] += min(image_w - 1, max(0, random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    box[2] += max(box[0] + 1, min(image_h, random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    box[3] += max(box[1] + 1, min(image_w, random.randint(-(1) * perturbation_amount, perturbation_amount)))
 
 
             annotation_utils.save_annotations(annotations_path, annotations)
