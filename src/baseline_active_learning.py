@@ -88,7 +88,8 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
 
 
     for perturbation_amount in perturbation_amounts:
-        for image_set in training_image_sets:
+        print("Perturbation amount: {}".format(perturbation_amount))
+        for image_set in tqdm.tqdm(training_image_sets, desc="Perturbing image sets"):
             image_set_dir = os.path.join("usr", "data",
                                         image_set["username"], "image_sets",
                                         image_set["farm_name"],
@@ -102,10 +103,10 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
             annotations = annotation_utils.load_annotations(annotations_path)
             for image_name in annotations.keys():
                 for box in annotations[image_name]["boxes"]:
-                    box[0] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
-                    box[1] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
-                    box[2] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
-                    box[3] += rand.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[0] += random.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[1] += random.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[2] += random.randint(-(1) * perturbation_amount, perturbation_amount)
+                    box[3] += random.randint(-(1) * perturbation_amount, perturbation_amount)
 
 
             annotation_utils.save_annotations(annotations_path, annotations)
