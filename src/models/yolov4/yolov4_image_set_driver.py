@@ -53,7 +53,7 @@ from models.yolov4.encode import Decoder
 EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10 #20
 TRAINING_TIME_SESSION_CEILING = 5000000           # number of seconds before current session is stopped in order to give others a chance
 
-TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS = False
+TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS = True #False
 NUM_EPOCHS_TO_TRAIN = 200
 # MAX_IN_MEMORY_IMAGE_SIZE = 5e+8     # 500 megabytes
 
@@ -667,6 +667,10 @@ def predict(sch_ctx, image_set_dir, request): #, q):
         #                              extra_items={"percent_complete": round(((image_index+1) / len(request["image_names"])) * 100)}) #"num_processed": image_index+1, "num_images": len(image_names)}) 
 
 
+    end_time = time.time()
+
+    elapsed_prediction_time = end_time - start_time
+    logger.info("Ran predictions in {} seconds".format(elapsed_prediction_time))
     # print("running clip image boxes")
     # driver_utils.clip_image_boxes(image_set_dir, predictions)
     # driver_utils.clip_image_boxes_fast(image_set_dir, predictions)

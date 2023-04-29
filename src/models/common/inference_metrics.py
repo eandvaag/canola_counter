@@ -512,7 +512,7 @@ def get_positives_and_negatives(annotated_boxes, predicted_boxes, iou_thresh):
 
 
 
-def collect_image_set_metrics(full_predictions, annotations):
+def collect_image_set_metrics(predictions, annotations):
 
 
     logger = logging.getLogger(__name__)
@@ -558,7 +558,7 @@ def collect_image_set_metrics(full_predictions, annotations):
     # for image_name in annotations.keys():
     #     for metric_key in metric_keys:
 
-    for image_name in tqdm.tqdm(full_predictions.keys(), desc="Calculating Metrics"):
+    for image_name in tqdm.tqdm(predictions.keys(), desc="Calculating Metrics"):
 
 
         # print("collect_image_set_metrics", image_name)
@@ -569,8 +569,8 @@ def collect_image_set_metrics(full_predictions, annotations):
 
 
         annotated_boxes = annotations[image_name]["boxes"]
-        pred_boxes = np.array(full_predictions[image_name]["boxes"])
-        pred_scores = np.array(full_predictions[image_name]["scores"])
+        pred_boxes = np.array(predictions[image_name]["boxes"])
+        pred_scores = np.array(predictions[image_name]["scores"])
 
 
         for region_key in ["regions_of_interest", "training_regions", "test_regions"]:

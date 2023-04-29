@@ -39,6 +39,8 @@ class Conv2d(tf.keras.layers.Layer):
             x = tfa.activations.mish(x)
         elif self.activation == "linear":
             x = tf.keras.activations.linear(x)
+        elif self.activation == "linear_float32":
+            x = tf.keras.layers.Activation('linear', dtype='float32', name='predictions')(x) #tf.keras.activations.linear(x, dtype="float32")    
 
         return x
 

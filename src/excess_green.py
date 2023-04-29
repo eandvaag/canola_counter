@@ -128,7 +128,7 @@ CHUNK_SIZE = 5000
 #     detections = 
 
 
-def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record, annotations, full_predictions):
+def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record, annotations, predictions):
 
     
     image_name = list(annotations.keys())[0]
@@ -164,7 +164,7 @@ def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record,
 
     results = Parallel(int(os.cpu_count() / 2))(
         delayed(get_vegetation_percentages_for_chunk)(
-            excess_green_record, annotations, full_predictions, image.image_path, chunk_coords) for chunk_coords in chunk_coords_lst)
+            excess_green_record, annotations, predictions, image.image_path, chunk_coords) for chunk_coords in chunk_coords_lst)
     # print("results", results)
 
     region_keys = ["regions_of_interest", "training_regions", "test_regions"]
@@ -212,7 +212,7 @@ def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record,
 
     return vegetation_record
 
-def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_predictions, image_path, chunk_coords):
+def get_vegetation_percentages_for_chunk(excess_green_record, annotations, predictions, image_path, chunk_coords):
     ds = gdal.Open(image_path)
     chunk_w = chunk_coords[3]-chunk_coords[1]
     chunk_h = chunk_coords[2]-chunk_coords[0]
@@ -231,8 +231,8 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
 
 
     pred_mask = np.full((chunk_array.shape[0], chunk_array.shape[1]), True)
-    if image_name in full_predictions:
-        pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    if image_name in predictions:
+        pred_boxes = np.array(predictions[image_name]["boxes"])[np.array(predictions[image_name]["scores"]) > 0.50]
     else:
         pred_boxes = np.array([])
     inds = box_utils.get_contained_inds(pred_boxes, [chunk_coords])
@@ -407,7 +407,7 @@ def get_vegetation_percentages_for_chunk(excess_green_record, annotations, full_
     return result
 
 
-def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, annotations, full_predictions):
+def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, annotations, predictions):
     # needs_update = []
     # for image_name in annotations.keys():
     #     if image_name not in vegetation_record or excess_green_record[image_name]["sel_val"] != vegetation_record[image_name]["sel_val"]:
@@ -422,7 +422,7 @@ def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, a
     image_names = list(annotations.keys()) 
 
     results = Parallel(int(os.cpu_count() / 2))(
-        delayed(get_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, full_predictions, image_name) for image_name in image_names)
+        delayed(get_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, predictions, image_name) for image_name in image_names)
 
     # print("new vegetation record results", results)
     vegetation_record = {}
@@ -441,7 +441,7 @@ def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, a
 
 
 
-def get_vegetation_percentages_for_image(image_set_dir, excess_green_record, annotations, full_predictions, image_name):
+def get_vegetation_percentages_for_image(image_set_dir, excess_green_record, annotations, predictions, image_name):
 
     image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
     image = Image(image_path)
@@ -449,8 +449,8 @@ def get_vegetation_percentages_for_image(image_set_dir, excess_green_record, ann
     exg_array = image_utils.excess_green(image_array)
 
     pred_mask = np.full((image_array.shape[0], image_array.shape[1]), True)
-    if image_name in full_predictions:
-        pred_boxes = np.array(full_predictions[image_name]["boxes"])[np.array(full_predictions[image_name]["scores"]) > 0.50]
+    if image_name in predictions:
+        pred_boxes = np.array(predictions[image_name]["boxes"])[np.array(predictions[image_name]["scores"]) > 0.50]
     else:
         pred_boxes = np.array([])
     for pred_box in pred_boxes:

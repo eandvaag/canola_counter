@@ -159,7 +159,7 @@ def run_single_image_set_diverse_test(training_image_set, all_training_image_set
 
     else:
         print("{} has enough patches (need {}, have {}). Training model.".format(training_set_str, num_patches_to_take, patch_nums[training_set_str]))
-        run_diverse_model([training_image_set], model_name + "_" + str(num_patches_to_take) + "_patches_and_CottonWeedDet12_rep_0", num_patches_to_take, supplementary_weed_image_sets=supplementary_weed_image_sets, prev_model_dir=None)
+        run_diverse_model([training_image_set], model_name + "_" + str(num_patches_to_take) + "_patches_and_CottonWeedDet12_rep_1", num_patches_to_take, supplementary_weed_image_sets=supplementary_weed_image_sets, prev_model_dir=None)
 
 
     # full_model_name = "fixed_epoch_" + model_name + "_no_overlap"
@@ -2586,8 +2586,8 @@ if __name__ == "__main__":
 
 
 
-    for i in range(10): #len(training_image_sets)):
+    for i in range(5): #len(training_image_sets)):
         run_single_image_set_diverse_test(training_image_sets[i], 
-            all_training_image_sets, 
+            training_image_sets, 
             630, 
             supplementary_weed_image_sets=weed_image_sets)

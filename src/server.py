@@ -681,7 +681,7 @@ def check_predict(username, farm_name, field_name, mission_date):
 
 #     return end_time
 
-def create_vegetation_record(image_set_dir, excess_green_record, annotations, full_predictions):
+def create_vegetation_record(image_set_dir, excess_green_record, annotations, predictions):
 
     # vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
     # vegetation_record = json_io.load_json(vegetation_record_path)
@@ -694,9 +694,9 @@ def create_vegetation_record(image_set_dir, excess_green_record, annotations, fu
     metadata = json_io.load_json(metadata_path)
 
     if metadata["is_ortho"] == "yes":
-        vegetation_record = excess_green.create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record, annotations, full_predictions)
+        vegetation_record = excess_green.create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record, annotations, predictions)
     else:
-        vegetation_record = excess_green.create_vegetation_record_for_image_set(image_set_dir, excess_green_record, annotations, full_predictions)
+        vegetation_record = excess_green.create_vegetation_record_for_image_set(image_set_dir, excess_green_record, annotations, predictions)
 
     end_time = time.time()
     elapsed = round(end_time - start_time, 2)
@@ -747,6 +747,9 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     full_predictions_path = os.path.join(results_dir, "full_predictions.json")
     full_predictions = json_io.load_json(full_predictions_path)
 
+    predictions_path = os.path.join(results_dir, "predictions.json")
+    predictions = json_io.load_json(predictions_path)
+
     # excess_green_record_path = os.path.join(image_set_dir, "excess_green", "record.json")
     # if os.path.exists(excess_green_record_path):
     #     excess_green_record = json_io.load_json(excess_green_record_path)
@@ -757,7 +760,7 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
     annotations = annotation_utils.load_annotations(annotations_src_path)
 
     isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.COLLECTING_METRICS)
-    metrics = inference_metrics.collect_image_set_metrics(full_predictions, annotations) #, config)
+    metrics = inference_metrics.collect_image_set_metrics(predictions, annotations) #, config)
     # metrics = fast_metrics #{}
     # metric_keys = list(fast_metrics.keys()) + list(slow_metrics.keys())
     
@@ -790,7 +793,7 @@ def collect_results(image_set_dir, results_dir): #, annotations, fast_metrics):
 
     if calculate_vegetation_coverage:
         isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.CALCULATING_VEGETATION_COVERAGE)
-        vegetation_record = create_vegetation_record(image_set_dir, excess_green_record, annotations, full_predictions)
+        vegetation_record = create_vegetation_record(image_set_dir, excess_green_record, annotations, predictions)
 
         # vegetation_record_path = os.path.join(image_set_dir, "excess_green", "vegetation_record.json")
         # json_io.save_json(vegetation_record_path, updated_vegetation_record)
