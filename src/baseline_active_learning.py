@@ -270,7 +270,7 @@ def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_matc
 
         for image_name in image_set["taken_regions"]:
 
-            for patch_coords in image_set[image_name]:
+            for patch_coords in image_set["taken_regions"][image_name]:
 
                 inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
                 if inds.size > 0:
