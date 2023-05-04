@@ -249,10 +249,10 @@ def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_matc
                             zero_anno_candidates.append(
                                 (image_set_str, image_name, patch_coords, score)
                             )
-    print("number of zero anno candidates".format(len(zero_anno_candidates)))
+    print("number of zero anno candidates: {}".format(len(zero_anno_candidates)))
     zero_anno_candidates.sort(key=lambda x: x[3], reverse=True)
-    print("10 best zero_anno_candidates".format(zero_anno_candidates[:10]))
-    print("10 worst zero anno candidates".format(zero_anno_candidates[-10:]))
+    print("10 best zero_anno_candidates: {}".format(zero_anno_candidates[:10]))
+    print("10 worst zero anno candidates: {}".format(zero_anno_candidates[-10:]))
     zero_candidate_index = 0
 
     taken = {}
