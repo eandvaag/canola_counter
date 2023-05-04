@@ -2998,14 +2998,14 @@ def eval_run():
     single_baselines = []
     for baseline in eval_single_1890_baselines:
         single_baselines.append({
-            "model_name": baseline + "_rep_1",
+            "model_name": baseline + "_rep_2",
             "model_creator": "eval"
         })
 
     diverse_baselines = []
     for baseline in eval_diverse_1890_baselines:
         diverse_baselines.append({
-            "model_name": baseline + "_rep_1",
+            "model_name": baseline + "_rep_2",
             "model_creator": "eval"
         })        
 
