@@ -98,11 +98,11 @@ def restore_annotations(training_image_sets):
         if os.path.exists(preserved_annotations_path):
             shutil.copy(preserved_annotations_path, annotations_path)
 
-def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_patches_to_take):
+def annotation_perturbation_test(training_image_sets, perturbation_sigmas, num_patches_to_take):
 
 
-    for perturbation_amount in perturbation_amounts:
-        print("Perturbation amount: {}".format(perturbation_amount))
+    for perturbation_sigma in perturbation_sigmas:
+        print("Perturbation amount: {}".format(perturbation_sigma))
         for image_set in training_image_sets:
 
             image_set_dir = os.path.join("usr", "data",
@@ -123,10 +123,16 @@ def annotation_perturbation_test(training_image_sets, perturbation_amounts, num_
                 image_h = metadata["images"][image_name]["height_px"]
                 image_w = metadata["images"][image_name]["width_px"]
                 for box in annotations[image_name]["boxes"]:
-                    box[0] = min(image_h - 1, max(0, box[0] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
-                    box[1] = min(image_w - 1, max(0, box[1] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
-                    box[2] = max(box[0] + 1, min(image_h, box[2] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
-                    box[3] = max(box[1] + 1, min(image_w, box[3] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    p_min_y = round(random.gauss(box[0], perturbation_sigma))
+                    p_min_x = round(random.gauss(box[1], perturbation_sigma))
+                    p_max_y = round(random.gauss(box[0], perturbation_sigma))
+                    p_max_x = round(random.gauss(box[1], perturbation_sigma))
+
+
+                    box[0] = min(image_h - 1, max(0, p_min_y)) #box[0] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    box[1] = min(image_w - 1, max(0, p_min_x)) #box[1] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    box[2] = max(box[0] + 1, min(image_h, p_max_y)) #box[2] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
+                    box[3] = max(box[1] + 1, min(image_w, p_max_x)) #box[3] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
 
 
             annotation_utils.save_annotations(annotations_path, annotations)
@@ -169,6 +175,174 @@ def run_single_image_set_diverse_test(training_image_set, all_training_image_set
     # model_dir_to_match = os.path.join("usr", "data", "erik", "models", "available", "public", full_model_name)
     # num_patches_to_match = get_num_patches_used_by_model(model_dir_to_match)
     # run_diverse_model(all_training_image_sets, "fixed_epoch_diverse_set_of_27_match_" + model_name + "_no_overlap", num_patches_to_match, prev_model_dir=None)
+
+def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_match, run=True):
+
+    match_log_path = os.path.join(model_dir_to_match, "log.json")
+    match_log = json_io.load_json(match_log_path)
+
+    zero_anno_candidates = []
+
+
+    for image_set in training_image_sets:
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+        image_set_dir = os.path.join("usr", "data", username, "image_sets",
+                                     farm_name, field_name, mission_date)
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+        
+        
+        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        metadata = json_io.load_json(metadata_path)
+
+        image_names = list(annotations.keys())
+        image_w = metadata["images"][image_names[0]]["width_px"]
+        image_h = metadata["images"][image_names[0]]["height_px"]
+
+        patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+            
+        patch_overlap_percent = 0
+        overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+        incr = patch_size - overlap_px
+        w_covered = max(image_w - patch_size, 0)
+        num_w_patches = m.ceil(w_covered / incr) + 1
+
+        h_covered = max(image_h - patch_size, 0)
+        num_h_patches = m.ceil(h_covered / incr) + 1
+
+        for image_name in annotations.keys():
+            image_w = metadata["images"][image_name]["width_px"]
+            image_h = metadata["images"][image_name]["height_px"]
+
+            image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+            image = Image(image_path)
+            image_array = image.load_image_array()
+            exg_array = image_utils.excess_green(image_array)
+
+
+            if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
+                for h_index in range(num_h_patches):
+                    for w_index in range(num_w_patches):
+
+                        patch_coords = [
+                            patch_size * h_index,
+                            patch_size * w_index,
+                            min((patch_size * h_index) + patch_size, image_h),
+                            min((patch_size * w_index) + patch_size, image_w)
+                        ]
+
+                        inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
+
+                        if inds.size > 0:
+                            exg_patch = exg_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+                            sel_vals = exg_patch[exg_patch != -10]
+                            score = np.sum(sel_vals ** 2) / sel_vals.size
+
+                            zero_anno_candidates.append(
+                                (image_set_str, image_name, patch_coords, score)
+                            )
+
+    zero_anno_candidates.sort(key=lambda x: x[3], reverse=True)
+    print("10 best zero_anno_candidates".format(zero_anno_candidates[:10]))
+    print("10 worst zero anno candidates".format(zero_anno_candidates[-10:]))
+    zero_candidate_index = 0
+
+    taken = {}
+    for image_set in match_log["image_sets"]:
+
+        username = image_set["username"]
+        farm_name = image_set["farm_name"]
+        field_name = image_set["field_name"]
+        mission_date = image_set["mission_date"]
+        image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+        image_set_dir = os.path.join("usr", "data", username, "image_sets",
+                                     farm_name, field_name, mission_date)
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        for image_name in image_set["taken_regions"]:
+
+            for patch_coords in image_set[image_name]:
+
+                inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
+                if inds.size > 0:
+                    if image_set_str not in taken:
+                        taken[image_set_str] = {}
+                    if image_name not in taken[image_set_str]:
+                        taken[image_set_str][image_name] = []
+
+                    taken[image_set_str][image_name].append(patch_coords)
+
+                else:
+                    c = zero_anno_candidates[zero_candidate_index]
+                    zero_candidate_index += 1
+                    repl_image_set_str = c[0]
+                    repl_image_name = c[1]
+                    repl_patch_coords = c[2]
+
+                    if repl_image_set_str not in taken:
+                        taken[repl_image_set_str] = {}
+                    if image_name not in taken[repl_image_set_str]:
+                        taken[repl_image_set_str][repl_image_name] = []
+
+                    taken[repl_image_set_str][repl_image_name].append(repl_patch_coords)
+        
+                    
+
+    log = {}
+    log["model_creator"] = "eval"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["image_sets"] = []
+
+    for image_set_str in taken:
+
+        pieces = image_set_str.split(" ")
+        log["image_sets"].append({
+            "username": pieces[0],
+            "farm_name": pieces[1],
+            "field_name": pieces[2],
+            "mission_date": pieces[3],
+            "taken_regions": taken[image_set_str],
+            "patch_overlap_percent": 0
+        })
+
+    
+    # if supplementary_weed_image_sets is not None:
+    #     for image_set in supplementary_weed_image_sets:
+    #         image_set["patch_overlap_percent"] = 0
+    #         log["image_sets"].append(image_set)
+
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "eval", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+    if run:
+        server.sch_ctx["baseline_queue"].enqueue(log)
+
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+        while baseline_queue_size > 0:
+        
+            log = server.sch_ctx["baseline_queue"].dequeue()
+            re_enqueue = server.process_baseline(log)
+            if re_enqueue:
+                server.sch_ctx["baseline_queue"].enqueue(log)
+            baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
 
 
 def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None, run=True):
@@ -2586,8 +2760,14 @@ if __name__ == "__main__":
 
 
 
-    for i in range(5): #len(training_image_sets)):
-        run_single_image_set_diverse_test(training_image_sets[i], 
-            training_image_sets, 
-            630, 
-            supplementary_weed_image_sets=weed_image_sets)
+    # for i in range(15, 16): #len(training_image_sets)):
+    #     run_single_image_set_diverse_test(training_image_sets[i], 
+    #         training_image_sets, 
+    #         630, 
+    #         supplementary_weed_image_sets=weed_image_sets)
+        
+
+    # run_diverse_model(training_image_sets, "no_clip_no_aug_set_of_27_630_patches_rep_0", 630, None, supplementary_weed_image_sets=None, run=True)
+
+    model_dir_to_match = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_4000_patches_rep_0")
+    exg_zero_anno_replacement(training_image_sets, "set_of_27_exg_repl_4000_patches_rep_0" , model_dir_to_match, run=True)

@@ -300,6 +300,19 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_coords,
         
 
 
+        # if trim:
+
+        #     mask = np.logical_and(
+        #         np.logical_and(image_abs_boxes[:,0] > patch_coords[0], image_abs_boxes[:,2] < patch_coords[2]),
+        #         np.logical_and(image_abs_boxes[:,1] > patch_coords[1], image_abs_boxes[:,3] < patch_coords[3])
+        #     )
+
+
+        #     image_abs_boxes = image_abs_boxes[mask]
+        #     image_scores = patch_scores[mask]
+
+
+
         if trim:
 
             wiggle_room = 3
@@ -326,6 +339,7 @@ def get_image_detections(patch_abs_boxes, patch_scores, patch_coords,
             image_abs_boxes = image_abs_boxes[mask]
             image_scores = patch_scores[mask]
             # image_classes = patch_classes[mask]
+
         else:
             image_scores = patch_scores
             # image_classes = patch_classes

@@ -915,7 +915,15 @@ def can_calculate_density(metadata, camera_specs):
 
     return True
 
-def calculate_area_m2(camera_specs, metadata, area_px):
+def calculate_area_m2(gsd, area_px):
+
+
+    # area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
+    area_m2 = area_px * (gsd ** 2) #(area_height_px * gsd) * (area_width_px * gsd)
+
+    return area_m2
+
+def get_gsd(camera_specs, metadata):
 
     make = metadata["camera_info"]["make"]
     model = metadata["camera_info"]["model"]
@@ -929,12 +937,7 @@ def calculate_area_m2(camera_specs, metadata, area_px):
 
     gsd = min(gsd_h, gsd_w)
 
-    # area_m2 = (metadata["images"][image_name]["height_px"] * gsd) * (metadata["images"][image_name]["width_px"] * gsd)
-    area_m2 = area_px * (gsd ** 2) #(area_height_px * gsd) * (area_width_px * gsd)
-
-    return area_m2
-    
-
+    return gsd
 
 def create_spreadsheet(results_dir, regions_only=False): #username, farm_name, field_name, mission_date, result_uuid, download_uuid): #, annotation_version):
 
@@ -1143,9 +1146,17 @@ def create_images_sheet(args, updated_metrics):
         columns.extend(["Annotated Count Per Square Metre", "Predicted Count Per Square Metre"])
 
     columns.extend(["Area (Pixels)"])
+    columns.extend(["Mean of Annotated Object Areas (Pixels)"])
+    columns.extend(["Mean of Predicted Object Areas (Pixels)"])
+    columns.extend(["Std. Dev. of Annotated Object Areas (Pixels)"])
+    columns.extend(["Std. Dev. of Predicted Object Areas (Pixels)"])
+
     if include_density:
         columns.extend(["Area (Square Metres)"])
-
+        columns.extend(["Mean of Annotated Object Areas (Square Metres)"])
+        columns.extend(["Mean of Predicted Object Areas (Square Metres)"])
+        columns.extend(["Std. Dev. of Annotated Object Areas (Square Metres)"])
+        columns.extend(["Std. Dev. of Predicted Object Areas (Square Metres)"])
     # if excess_green_record is not None:
 
     columns.extend([
@@ -1217,12 +1228,13 @@ def create_images_sheet(args, updated_metrics):
             fully_annotated = "no"
         # image_status = annotations[image_name]["status"]
 
-        # pred_image_abs_boxes = predictions[image_name]["boxes"]
+        pred_image_abs_boxes = predictions[image_name]["boxes"]
         pred_image_scores = predictions[image_name]["scores"]
+        sel_pred_image_abs_boxes = pred_image_abs_boxes[pred_image_scores > 0.50]
         # print(pred_image_scores)
 
         annotated_count = image_abs_boxes.shape[0]
-        predicted_count = np.sum(pred_image_scores > 0.50)
+        predicted_count = sel_pred_image_abs_boxes.shape[0] #np.sum(pred_image_scores > 0.50)
 
         if fully_annotated == "no":
             percent_count_error = "NA"
@@ -1256,15 +1268,59 @@ def create_images_sheet(args, updated_metrics):
         area_px = height_px * width_px
         d["Area (Pixels)"].append(area_px)
 
-        if include_density:
+        if annotated_count > 0:
+            annotated_box_areas_px = box_utils.box_areas_np(image_abs_boxes)
+            mean_annotated_object_area_px = np.mean(annotated_box_areas_px)
+            stdev_annotated_object_area_px = np.std(annotated_box_areas_px)
+        else:
+            mean_annotated_object_area_px = "NA"
+            stdev_annotated_object_area_px = "NA"
 
-            area_m2 = calculate_area_m2(camera_specs, metadata, area_px)
+        if predicted_count > 0:
+            predicted_box_areas_px = box_utils.box_areas_np(sel_pred_image_abs_boxes)
+            mean_predicted_object_area_px = np.mean(predicted_box_areas_px)
+            stdev_predicted_object_area_px = np.std(predicted_box_areas_px)
+        else:
+            mean_predicted_object_area_px = "NA"
+            stdev_predicted_object_area_px = "NA"
+
+        d["Mean of Annotated Object Areas (Pixels)"].append(round(mean_annotated_object_area_px, 8))
+        d["Mean of Predicted Object Areas (Pixels)"].append(round(mean_predicted_object_area_px, 8))
+        d["Std. Dev. of Annotated Object Areas (Pixels)"].append(round(stdev_annotated_object_area_px, 8))
+        d["Std. Dev. of Predicted Object Areas (Pixels)"].append(round(stdev_predicted_object_area_px, 8))
+
+
+        if include_density:
+            gsd = get_gsd(camera_specs, metadata)
+            area_m2 = calculate_area_m2(gsd, area_px)
             # if image_status == "unannotated":
             #     d["annotated_plant_count_per_square_metre"].append("NA")
             # else:
-            d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 2))
-            d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 2))
-            d["Area (Square Metres)"].append(round(area_m2, 2))
+            d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 8))
+            d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 8))
+            d["Area (Square Metres)"].append(round(area_m2, 8))
+
+            if annotated_count > 0:
+                annotated_box_areas_m2 = calculate_area_m2(gsd, annotated_box_areas_px)
+                mean_annotated_object_area_m2 = np.mean(annotated_box_areas_m2)
+                stdev_annotated_object_area_m2 = np.std(annotated_box_areas_m2)
+            else:
+                mean_annotated_object_area_m2 = "NA"
+                stdev_annotated_object_area_m2 = "NA"
+
+            if predicted_count > 0:
+                predicted_box_areas_m2 = calculate_area_m2(gsd, predicted_box_areas_px)
+                mean_predicted_object_area_m2 = np.mean(predicted_box_areas_m2)
+                stdev_predicted_object_area_m2 = np.std(predicted_box_areas_m2)                
+            else:
+                mean_predicted_object_area_m2 = "NA"
+                stdev_predicted_object_area_m2 = "NA"
+
+            d["Mean of Annotated Object Areas (Square Metres)"].append(round(mean_annotated_object_area_m2, 8))
+            d["Mean of Predicted Object Areas (Square Metres)"].append(round(mean_predicted_object_area_m2, 8))
+            d["Std. Dev. of Annotated Object Areas (Square Metres)"].append(round(stdev_annotated_object_area_m2, 8))
+            d["Std. Dev. of Predicted Object Areas (Square Metres)"].append(round(stdev_predicted_object_area_m2, 8))
+
 
 
 
@@ -1699,9 +1755,22 @@ def create_regions_sheet(args, updated_metrics):
         columns.extend(["Annotated Count Per Square Metre", "Predicted Count Per Square Metre"])
 
     columns.extend(["Area (Pixels)"])
+    columns.extend(["Mean of Annotated Object Areas (Pixels)"])
+    columns.extend(["Mean of Predicted Object Areas (Pixels)"])
+    columns.extend(["Std. Dev. of Annotated Object Areas (Pixels)"])
+    columns.extend(["Std. Dev. of Predicted Object Areas (Pixels)"])
 
     if include_density:
         columns.extend(["Area (Square Metres)"])
+        columns.extend(["Mean of Annotated Object Areas (Square Metres)"])
+        columns.extend(["Mean of Predicted Object Areas (Square Metres)"])
+        columns.extend(["Std. Dev. of Annotated Object Areas (Square Metres)"])
+        columns.extend(["Std. Dev. of Predicted Object Areas (Square Metres)"])
+
+    # columns.extend(["Area (Pixels)"])
+
+    # if include_density:
+    #     columns.extend(["Area (Square Metres)"])
     # if excess_green_record is not None:
     # columns.append("ground_cover_percentage")
     columns.extend([
@@ -1738,8 +1807,9 @@ def create_regions_sheet(args, updated_metrics):
     for image_name in predictions.keys():
 
         annotated_boxes = annotations[image_name]["boxes"]
-        predicted_boxes = predictions[image_name]["boxes"]
+        # predicted_boxes = predictions[image_name]["boxes"]
         predicted_scores = predictions[image_name]["scores"]
+        sel_predicted_boxes = predictions[image_name]["boxes"][predicted_scores > 0.50]
 
         annotations_source = annotations[image_name]["source"]
         # above_thresh_predicted_boxes = predicted_boxes[predicted_scores >= 0.50]
@@ -1770,7 +1840,7 @@ def create_regions_sheet(args, updated_metrics):
                 # annotated_inds = box_utils.get_contained_inds(annotated_boxes, [region])
                 annotated_centres = (annotated_boxes[..., :2] + annotated_boxes[..., 2:]) / 2.0
                 # predicted_inds = box_utils.get_contained_inds(predicted_boxes, [region])
-                predicted_centres = (predicted_boxes[..., :2] + predicted_boxes[..., 2:]) / 2.0
+                predicted_centres = (sel_predicted_boxes[..., :2] + sel_predicted_boxes[..., 2:]) / 2.0
 
                 if region_type == "regions_of_interest":
                     annotated_inds = poly_utils.get_contained_inds_for_points(annotated_centres, [region])
@@ -1784,11 +1854,12 @@ def create_regions_sheet(args, updated_metrics):
                     area_px = height_px * width_px
 
                 region_annotated_boxes = annotated_boxes[annotated_inds]
-                region_predicted_scores = predicted_scores[predicted_inds]
+                region_sel_predicted_boxes = sel_predicted_boxes[predicted_inds]
+                # region_predicted_scores = predicted_scores[predicted_inds]
 
 
                 annotated_count = region_annotated_boxes.shape[0]
-                predicted_count = np.sum(region_predicted_scores > 0.50)
+                predicted_count = region_sel_predicted_boxes.shape[0] #np.sum(region_predicted_scores > 0.50)
 
                 # if region_type == "regions_of_interest":
                 #     percent_count_error = "NA"
@@ -1815,14 +1886,89 @@ def create_regions_sheet(args, updated_metrics):
                 d["Annotated Count"].append(annotated_count)
                 d["Predicted Count"].append(predicted_count)
 
-                d["Area (Pixels)"].append(round(area_px, 2))
+                d["Area (Pixels)"].append(round(area_px, 8))
+
+                # if annotated_count > 0:
+                #     mean_annotated_object_area_px = box_utils.box_areas_np(region_annotated_boxes) 
+                # else:
+                #     mean_annotated_object_area_px = "NA"
+
+                # if predicted_count > 0:
+                #     mean_predicted_object_area_px = box_utils.box_areas_np(region_sel_predicted_boxes)
+                # else:
+                #     mean_predicted_object_area_px = "NA"
+
+                # d["Mean Area of Annotated Objects (Pixels)"].append(mean_annotated_object_area_px)
+                # d["Mean Area of Predicted Objects (Pixels)"].append(mean_predicted_object_area_px)
+
+                if annotated_count > 0:
+                    annotated_box_areas_px = box_utils.box_areas_np(region_annotated_boxes)
+                    mean_annotated_object_area_px = np.mean(annotated_box_areas_px)
+                    stdev_annotated_object_area_px = np.std(annotated_box_areas_px)
+                else:
+                    mean_annotated_object_area_px = "NA"
+                    stdev_annotated_object_area_px = "NA"
+
+                if predicted_count > 0:
+                    predicted_box_areas_px = box_utils.box_areas_np(region_sel_predicted_boxes)
+                    mean_predicted_object_area_px = np.mean(predicted_box_areas_px)
+                    stdev_predicted_object_area_px = np.std(predicted_box_areas_px)
+                else:
+                    mean_predicted_object_area_px = "NA"
+                    stdev_predicted_object_area_px = "NA"
+
+                d["Mean of Annotated Object Areas (Pixels)"].append(round(mean_annotated_object_area_px, 8))
+                d["Mean of Predicted Object Areas (Pixels)"].append(round(mean_predicted_object_area_px, 8))
+                d["Std. Dev. of Annotated Object Areas (Pixels)"].append(round(stdev_annotated_object_area_px, 8))
+                d["Std. Dev. of Predicted Object Areas (Pixels)"].append(round(stdev_predicted_object_area_px, 8))
+
+
+
+
 
                 if include_density:
 
-                    area_m2 = calculate_area_m2(camera_specs, metadata, area_px) #image_name)
-                    d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 2))
-                    d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 2))
-                    d["Area (Square Metres)"].append(round(area_m2, 2))
+                    gsd = get_gsd(camera_specs, metadata)
+                    area_m2 = calculate_area_m2(gsd, area_px) #image_name)
+                    d["Annotated Count Per Square Metre"].append(round(annotated_count / area_m2, 8))
+                    d["Predicted Count Per Square Metre"].append(round(predicted_count / area_m2, 8))
+                    d["Area (Square Metres)"].append(round(area_m2, 8))
+
+                    # if annotated_count > 0:
+                    #     mean_annotated_object_area_m2 = calculate_area_m2(gsd, mean_annotated_object_area_px)
+                    # else:
+                    #     mean_annotated_object_area_m2 = "NA"
+
+                    # if predicted_count > 0:
+                    #     mean_predicted_object_area_m2 = calculate_area_m2(gsd, mean_predicted_object_area_px)
+                    # else:
+                    #     mean_predicted_object_area_m2 = "NA"
+
+                    # d["Mean Area of Annotated Objects (Square Metres)"].append(mean_annotated_object_area_m2)
+                    # d["Mean Area of Predicted Objects (Square Metres)"].append(mean_predicted_object_area_m2)
+                    if annotated_count > 0:
+                        annotated_box_areas_m2 = calculate_area_m2(gsd, annotated_box_areas_px)
+                        mean_annotated_object_area_m2 = np.mean(annotated_box_areas_m2)
+                        stdev_annotated_object_area_m2 = np.std(annotated_box_areas_m2)
+                    else:
+                        mean_annotated_object_area_m2 = "NA"
+                        stdev_annotated_object_area_m2 = "NA"
+
+                    if predicted_count > 0:
+                        predicted_box_areas_m2 = calculate_area_m2(gsd, predicted_box_areas_px)
+                        mean_predicted_object_area_m2 = np.mean(predicted_box_areas_m2)
+                        stdev_predicted_object_area_m2 = np.std(predicted_box_areas_m2)                
+                    else:
+                        mean_predicted_object_area_m2 = "NA"
+                        stdev_predicted_object_area_m2 = "NA"
+
+                    d["Mean of Annotated Object Areas (Square Metres)"].append(round(mean_annotated_object_area_m2, 8))
+                    d["Mean of Predicted Object Areas (Square Metres)"].append(round(mean_predicted_object_area_m2, 8))
+                    d["Std. Dev. of Annotated Object Areas (Square Metres)"].append(round(stdev_annotated_object_area_m2, 8))
+                    d["Std. Dev. of Predicted Object Areas (Square Metres)"].append(round(stdev_predicted_object_area_m2, 8))
+
+
+
 
 
                 d["Percent Count Error"].append(percent_count_error)

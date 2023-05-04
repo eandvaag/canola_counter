@@ -925,7 +925,11 @@ def annotate_patch(patch_data, gt_boxes): #, clip_coords=None):
         #     image_abs_boxes, mask = box_utils.clip_boxes_and_get_small_visibility_mask(
         #         contained_boxes, clip_coords, min_visibility=0.15)
 
+
+        # ---- CLIP ----
         image_abs_boxes = image_abs_boxes[mask]
+        # ---- NO CLIP ----
+        # image_abs_boxes = contained_boxes[mask]
 
         # contained_classes = contained_classes[mask]
 

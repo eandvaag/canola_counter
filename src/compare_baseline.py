@@ -25,6 +25,62 @@ from image_set import Image
 
 from lock_queue import LockQueue
 import diversity_test
+import fine_tune_experiment
+
+
+def create_fine_tune_plot(test_set, methods):
+    test_set_image_set_dir = os.path.join("usr", "data",
+                                                    test_set["username"], "image_sets",
+                                                    test_set["farm_name"],
+                                                    test_set["field_name"],
+                                                    test_set["mission_date"])
+    
+
+    mapping = get_mapping_for_test_set(test_set_image_set_dir)
+    annotations_path = os.path.join(test_set_image_set_dir, "annotations", "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path)
+    results = []
+    labels = []
+    for method in methods:
+
+        result_name = "post_finetune_" + method
+        result_uuid = mapping[result_name]
+        result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
+
+        predictions_path = os.path.join(result_dir, "predictions.json")
+        predictions = annotation_utils.load_predictions(predictions_path)
+
+        accuracies = []
+        for image_name in annotations.keys():
+            sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+            accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
+            accuracies.append(accuracy)
+
+        # global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
+
+        # test_set_accuracy = global_accuracy #np.mean(accuracy)
+        test_set_accuracy = np.mean(accuracies)
+
+        results.append(test_set_accuracy)
+        labels.append(method)
+
+
+    colors = ["salmon", "royalblue", "forestgreen", "orange", "mediumorchid"]
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_axes([0.35, 0.15, 0.5, 0.7])
+
+    ax.scatter(results, np.arange(len(labels))) #, color=colors) #, width=0.4)
+
+    ax.set_yticks(np.arange(len(labels)))
+    ax.set_yticklabels(labels)
+
+    ax.set_ylabel("Accuracy")
+
+    out_path = os.path.join("eval_charts", "fine_tuning", "accuracy.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
 
 
 
@@ -127,6 +183,132 @@ def create_eval_size_plot(test_sets, baselines):
     os.makedirs(out_dir, exist_ok=True)
     plt.savefig(out_path)
 
+
+def create_weed_comparison_plot(test_sets, baselines):
+
+
+    mappings = {}
+    # results = {
+    #     "overall": {
+    #         "no_weed": [],
+    #         "weed": []
+    #     }
+    # }
+    # results = []
+    for test_set in test_sets:
+        test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+        # results[test_set_str] = {
+        #     "no_weed": [],
+        #     "weed": []
+        # }
+        test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])
+        mappings[test_set_str] = get_mapping_for_test_set(test_set_image_set_dir)
+
+    no_weed_results = []
+    weed_results = []
+
+    for i in range(2):
+        # if i == 0:
+        #     baselines = no_weed_baselines
+        #     result_key = "no_weed"
+        # else:
+        #     baselines = weed_baselines
+        #     result_key = "weed"
+
+
+        for baseline in baselines:
+            baseline_accuracies = []
+            for test_set in test_sets:
+                test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+                test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])
+
+                rep_accuracies = []
+                for rep_num in range(3):
+                    if i == 0:
+                        model_name = baseline["model_name"] + "_rep_" + str(rep_num)
+                    else:
+                        model_name = baseline["model_name"] + "_and_CottonWeedDet12_rep_" + str(rep_num)
+
+                    model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+                    result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
+                    excel_path = os.path.join(result_dir, "metrics.xlsx")
+                    df = pd.read_excel(excel_path, sheet_name=0)
+                    rep_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+                    print("\t{}: {}: {}".format(test_set_str, model_name, rep_accuracy))
+                    rep_accuracies.append(rep_accuracy)
+
+                baseline_accuracy = np.mean(rep_accuracies)
+                # baseline_variance = np.std(rep_accuracies)
+                baseline_accuracies.append(baseline_accuracy)
+
+
+                # results[test_set_str][result_key].append(baseline_accuracy)
+
+                #     # (baseline["model_name"][:len(baseline["model_name"])-len("_630_patches")], baseline_accuracy))
+
+
+
+            overall_baseline_accuracy = np.mean(baseline_accuracies)
+
+            if i == 0:
+                no_weed_results.append(overall_baseline_accuracy)
+            else:
+                weed_results.append(overall_baseline_accuracy)
+
+            # results["overall"][result_key].append(
+            #     # (baseline["model_name"][:len(baseline["model_name"])-len("_630_patches")], 
+            #     overall_baseline_accuracy)
+            #     # np.min(baseline_accuracies),
+            #     # np.max(baseline_accuracies)))
+
+    
+    labels = []
+    for baseline in baselines:
+        labels.append(baseline["model_name"])
+    # weed_labels = []
+    # for weed_baseline in weed_baselines:
+    #     weed_labels.append(weed_baseline["model_name"])
+
+    # labels = 
+
+    labels = np.array(labels)
+    no_weed_results = np.array(no_weed_results)
+    weed_results = np.array(weed_results)
+
+    inds = np.argsort(weed_results)
+
+    labels = labels[inds]
+    no_weed_results = no_weed_results[inds]
+    weed_results = weed_results[inds]
+
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_axes([0.30, 0.05, 0.65, 0.9])
+
+    ax.scatter(no_weed_results, np.arange(len(labels)), 
+               label="no_weed", marker="o", color="blue")
+    ax.scatter(weed_results, np.arange(len(labels)), 
+               label="weed", marker="o", color="red")
+    
+    
+    ax.set_yticks(np.arange(0, len(labels)))
+    ax.set_yticklabels(labels)
+
+
+    ax.legend()
+    ax.set_xlabel("Test Accuracy")
+
+    out_path = os.path.join("eval_charts", "weed_comparisons", "overall.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
     
 def create_eval_improvement_plot(test_sets, single_baselines, single_baselines_improved, diverse_baselines, diverse_baselines_improved):
 
@@ -251,10 +433,211 @@ def create_eval_improvement_plot(test_sets, single_baselines, single_baselines_i
         ax.legend()
         ax.set_xlabel("Test Accuracy")
 
-        out_path = os.path.join("eval_charts", "single_diverse_improved_comparisons", test_set_str + ".svg")
+        out_path = os.path.join("eval_charts", "peturbation_comparisons", test_set_str + ".svg")
         out_dir = os.path.dirname(out_path)
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(out_path)
+
+def create_patch_merging_plot(test_sets, baseline, merging_prefixes):
+
+
+    mappings = {}
+    # results = {
+    #     "overall": {
+    #         "single": [],
+    #         "diverse": [],
+    #         "single_improved": [],
+    #         "diverse_improved": []
+    #     }
+    # }
+    results = {}
+    results["overall"] = {}
+    # for merging_prefix in merging_prefixes:
+    #     results["overall"][merging_prefix] = []
+    for test_set in test_sets:
+        test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+        # results[test_set_str] = {
+        #     "single": [],
+        #     "diverse": [],
+        #     "single_improved": [],
+        #     "diverse_improved": []
+        # }
+        results[test_set_str] = {}
+        # for merging_prefix in merging_prefixes:
+        #     results[test_set_str][merging_prefix] = []
+
+        test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])
+        mappings[test_set_str] = get_mapping_for_test_set(test_set_image_set_dir)
+
+    # for i in range(4):
+        # if i == 0:
+        #     baselines = single_baselines
+        #     result_key = "single"
+        # elif i == 1:
+        #     baselines = diverse_baselines
+        #     result_key = "diverse"
+        # elif i == 2:
+        #     baselines = single_baselines_improved
+        #     result_key = "single_improved"
+        # else:
+        #     baselines = diverse_baselines_improved
+        #     result_key = "diverse_improved"
+
+
+    for merging_prefix in merging_prefixes:
+        # for baseline in baselines:
+        baseline_accuracies = []
+        baseline_true_positives_lst = []
+        baseline_false_positives_lst = []
+        baseline_false_negatives_lst = []
+        for test_set in test_sets:
+            test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+            test_set_image_set_dir = os.path.join("usr", "data",
+                                                    test_set["username"], "image_sets",
+                                                    test_set["farm_name"],
+                                                    test_set["field_name"],
+                                                    test_set["mission_date"])
+
+            # rep_accuracies = []
+            # for rep_num in range(1):
+            model_name = baseline["model_name"] + "_rep_" + str(0)
+            model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+            result_dir = os.path.join(model_dir, mappings[test_set_str][merging_prefix + model_name])
+            excel_path = os.path.join(result_dir, "metrics.xlsx")
+            df = pd.read_excel(excel_path, sheet_name=0)
+            rep_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+            baseline_true_positives = df["True Positives (IoU=.50, conf>.50)"].sum(skipna=True)
+            baseline_false_positives = df["False Positives (IoU=.50, conf>.50)"].sum(skipna=True)
+            baseline_false_negatives = df["False Negatives (IoU=.50, conf>.50)"].sum(skipna=True)
+
+            # rep_accuracies.append(rep_accuracy)
+
+            baseline_accuracy = rep_accuracy #np.mean(rep_accuracies)
+            # baseline_variance = np.std(rep_accuracies)
+            baseline_accuracies.append(baseline_accuracy)
+            baseline_true_positives_lst.append(baseline_true_positives)
+            baseline_false_positives_lst.append(baseline_false_positives)
+            baseline_false_negatives_lst.append(baseline_false_negatives)
+            
+            results[test_set_str][merging_prefix] = [
+                    baseline_accuracy,
+                    baseline_true_positives,
+                    baseline_false_positives,
+                    baseline_false_negatives
+             ]
+
+            # results[test_set_str][merging_prefix].append(baseline_accuracy)
+
+                # (baseline["model_name"][:len(baseline["model_name"])-len("_630_patches")], baseline_accuracy))
+
+
+
+        # overall_baseline_accuracy = np.mean(baseline_accuracies)
+
+        results["overall"][merging_prefix] = [
+            np.mean(baseline_accuracies),
+            np.sum(baseline_true_positives_lst),
+            np.sum(baseline_false_positives_lst),
+            np.sum(baseline_false_negatives_lst)
+        ]
+
+        # results["overall"][merging_prefix].append(
+        #     # (baseline["model_name"][:len(baseline["model_name"])-len("_630_patches")], 
+        #     overall_baseline_accuracy) #,
+        #     # np.min(baseline_accuracies),
+        #     # np.max(baseline_accuracies)))
+
+
+    color_options = ["salmon", "royalblue", "forestgreen"]
+    # colors = {}
+    # for i, merging_prefix in enumerate(merging_prefixes):
+    #     colors[merging_prefix] = color_options[i]
+
+    label_lookup = {
+        "no_overlap_": "0% overlap \n+ NMS",
+        "no_prune_": "50% overlap \n+ NMS",
+        "": "50% overlap \n+ prune \n+ NMS",
+        "alt_prune_": "50% overlap \n+ alt_prune \n+ NMS"
+    }
+
+    for test_set_str in ["overall"]: #results:
+
+        for i in range(4):
+
+            if i == 0:
+                ylabel = "Test Accuracy"
+            elif i == 1:
+                ylabel = "Number of True Positives"
+            elif i == 2:
+                ylabel = "Number of False Positives"
+            else:
+                ylabel = "Number of False Negatives"
+            # labels = []
+            # for merging_prefix in merging_prefixes:
+            #     # tuples = results[test_set_str][merging_prefix]
+
+            #     # tuples.sort(key=lambda x: x[1])
+
+            #     if i == 0:
+            #         for tup in tuples:
+            #             labels.append(tup[0])
+            # tuples = results[test_set_str]
+
+            # tuples.sort(key=lambda x: x[1])
+
+            # labels = []
+            # for tup in results[test_set_str][list(results[test_set_str].keys())[0]]:
+            #     labels.append(tup[0])
+
+            fig = plt.figure(figsize=(5, 5))
+            ax = fig.add_axes([0.15, 0.15, 0.7, 0.7])
+
+
+            bars = []
+            labels = []
+            for merging_prefix in merging_prefixes:
+                bars.append(results[test_set_str][merging_prefix][i])
+                labels.append(label_lookup[merging_prefix])
+            print(bars)
+            print(merging_prefixes)
+            print(color_options)
+                # ax.scatter([x[1] for x in results[test_set_str][merging_prefix]], np.arange(len(labels)), marker="o", color=colors[merging_prefix], label=label_lookup[merging_prefix], zorder=2) #label="Single Image Set (630 patches)", zorder=2)
+            ax.bar(labels, bars, color=color_options, width=0.4)
+            # ax.scatter([x[1] for x in diverse_tuples], np.arange(len(single_tuples), len(single_tuples)+len(diverse_tuples)), marker="x", color="blue", label="Diverse Random Selection (630 patches)", zorder=2)
+            
+            # ax.scatter([x[1] for x in single_improved_tuples], np.arange(len(single_tuples)), marker="o", color="red", label="Single Image Set (1500 patches)", zorder=2)
+            # ax.scatter([x[1] for x in diverse_improved_tuples], np.arange(len(single_tuples), len(single_tuples)+len(diverse_tuples)), marker="o", color="blue", label="Diverse Random Selection (1500 patches)", zorder=2)
+            
+            # if test_set_str == "overall":
+            #     ax.scatter([x[2] for x in single_tuples], np.arange(len(single_tuples)), color="red", marker="x")
+            #     ax.scatter([x[2] for x in diverse_tuples], np.arange(len(single_tuples), len(single_tuples)+len(diverse_tuples)), color="blue", marker="x")
+                
+            #     ax.scatter([x[3] for x in single_tuples], np.arange(len(single_tuples)), color="red", marker="x")
+            #     ax.scatter([x[3] for x in diverse_tuples], np.arange(len(single_tuples), len(single_tuples)+len(diverse_tuples)), color="blue", marker="x")
+
+            # ax.set_yticks(np.arange(0, len(single_tuples)+len(diverse_tuples)))
+            # ax.set_yticklabels(labels)
+
+
+            # ax.legend()
+            # ax.set_xlabel("Test Accuracy")
+            ax.set_ylabel(ylabel)
+
+            out_path = os.path.join("eval_charts", "patch_merge_comparisons", ylabel + ".svg")
+            out_dir = os.path.dirname(out_path)
+            os.makedirs(out_dir, exist_ok=True)
+            plt.savefig(out_path)
+
+
+
+
+
+
+
 
 
 def create_eval_min_num_plot(test_sets, single_baselines, diverse_baselines):
@@ -290,7 +673,7 @@ def create_eval_min_num_plot(test_sets, single_baselines, diverse_baselines):
 
         for baseline in baselines:
             rep_accuracies = []
-            for rep_num in range(3):
+            for rep_num in range(5):
 
                 model_name = baseline["model_name"] + "_rep_" + str(rep_num)
                 
@@ -318,6 +701,9 @@ def create_eval_min_num_plot(test_sets, single_baselines, diverse_baselines):
 
                 rep_accuracy = np.mean(test_set_accuracies)
                 rep_accuracies.append(rep_accuracy)
+
+            # if i == 1:
+            print(baseline["model_name"], rep_accuracies)
 
             baseline_accuracy = np.mean(rep_accuracies)
             baseline_std = np.std(rep_accuracies)
@@ -383,7 +769,7 @@ def create_eval_min_num_plot(test_sets, single_baselines, diverse_baselines):
         ax.legend()
         ax.set_xlabel("Test Accuracy")
 
-        out_path = os.path.join("eval_charts", "single_diverse_3rep_comparisons", test_set_str + ".svg")
+        out_path = os.path.join("eval_charts", "single_diverse_5rep_comparisons", test_set_str + ".svg")
         out_dir = os.path.dirname(out_path)
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(out_path)
@@ -454,7 +840,7 @@ def predict_on_test_sets(test_sets, baselines):
                 "image_names": image_names,
                 "regions": regions,
                 "save_result": True,
-                "results_name": baseline["model_name"],
+                "results_name": baseline["model_name"], # "no_prune_" + baseline["model_name"],
                 "results_message": ""
             }
 
@@ -2376,6 +2762,37 @@ eval_diverse_630_baselines = [
     "set_of_27_630_patches"
 ]
 
+# eval_single_630_baselines = [
+#     # "BlaineLake_River_2021-06-09_630_patches",
+#     # "BlaineLake_Lake_2021-06-09_630_patches",
+#     # "BlaineLake_HornerWest_2021-06-09_630_patches",
+#     # "UNI_LowN1_2021-06-07_630_patches",
+#     # "BlaineLake_Serhienko9N_2022-06-07_630_patches",
+#     "row_spacing_nasser_2021-06-01_630_patches",
+#     # "Biggar_Dennis1_2021-06-04_630_patches",
+#     # "Biggar_Dennis3_2021-06-04_630_patches",
+#     "MORSE_Dugout_2022-05-27_630_patches",
+#     "MORSE_Nasser_2022-05-27_630_patches",
+#     "row_spacing_brown_2021-06-01_630_patches",
+#     "row_spacing_nasser2_2022-06-02_630_patches",
+#     # "Saskatoon_Norheim1_2021-05-26_630_patches",
+#     # "Saskatoon_Norheim2_2021-05-26_630_patches",
+#     # "Saskatoon_Norheim4_2022-05-24_630_patches",
+#     # "Saskatoon_Norheim5_2022-05-24_630_patches",
+#     "UNI_Brown_2021-06-05_630_patches",
+#     "UNI_Dugout_2022-05-30_630_patches",
+#     "UNI_LowN2_2021-06-07_630_patches",
+#     "UNI_Sutherland_2021-06-05_630_patches",
+#     # "Saskatoon_Norheim1_2021-06-02_630_patches",
+#     # "row_spacing_brown_2021-06-08_630_patches",
+#     # "SaskatoonEast_Stevenson5NW_2022-06-20_630_patches",
+#     # "UNI_Vaderstad_2022-06-16_630_patches",
+#     # "Biggar_Dennis2_2021-06-12_630_patches",
+#     # "BlaineLake_Serhienko10_2022-06-14_630_patches",
+#     # "BlaineLake_Serhienko9S_2022-06-14_630_patches"
+# ]
+
+
 eval_single_630_baselines = [
     "BlaineLake_River_2021-06-09_630_patches",
     "BlaineLake_Lake_2021-06-09_630_patches",
@@ -2406,6 +2823,26 @@ eval_single_630_baselines = [
     "BlaineLake_Serhienko9S_2022-06-14_630_patches"
 ]
 
+eval_single_1890_baselines = [
+    "BlaineLake_River_2021-06-09_1890_patches"
+]
+
+eval_diverse_1890_baselines = [
+    "set_of_27_1890_patches"
+]
+
+eval_single_630_CottenWeedDet12_baselines = [
+    # "row_spacing_brown_2021-06-01_630_patches_and_CottonWeedDet12",
+    # "row_spacing_nasser_2021-06-01_630_patches_and_CottonWeedDet12",
+    # "UNI_Dugout_2022-05-30_630_patches_and_CottonWeedDet12",
+    # "MORSE_Dugout_2022-05-27_630_patches_and_CottonWeedDet12",
+    # "UNI_Brown_2021-06-05_630_patches_and_CottonWeedDet12",
+    # "UNI_Sutherland_2021-06-05_630_patches_and_CottonWeedDet12",
+    # "row_spacing_nasser2_2022-06-02_630_patches_and_CottonWeedDet12",
+    # "MORSE_Nasser_2022-05-27_630_patches_and_CottonWeedDet12",
+    # "UNI_LowN2_2021-06-07_630_patches_and_CottonWeedDet12",
+]
+
 eval_diverse_1500_baselines = [
     "set_of_27_1500_patches"
 ]
@@ -2425,6 +2862,14 @@ eval_single_1500_baselines = [
     "Saskatoon_Norheim1_2021-06-02_1500_patches",
     "row_spacing_brown_2021-06-08_1500_patches"
 
+]
+
+nonperturbed_baselines = [
+    "set_of_27_16000_patches"
+]
+
+perturbed_baselines = [
+    "set_of_27_perturbed_by_10_16000_patches"
 ]
 
 eval_test_sets = [
@@ -2496,23 +2941,76 @@ def eval_run():
     server.sch_ctx["baseline_queue"] = LockQueue()
 
 
+    # single_baselines = []
+    # for baseline in eval_diverse_630_baselines:
+    #     single_baselines.append({
+    #         "model_name": baseline + "_rep_3",
+    #         "model_creator": "eval"
+    #     })
 
+
+    # single_weed_baselines = []
+    # for baseline in eval_single_630_CottenWeedDet12_baselines:
+    #     single_weed_baselines.append({
+    #         "model_name": baseline, #+ "_rep_1",
+    #         "model_creator": "eval"
+    #     })
+    # for baseline in eval_single_630_CottenWeedDet12_baselines:
+    #     for i in range(3):
+    #         single_weed_baselines.append({
+    #             "model_name": baseline + "_rep_" + str(i), #2",
+    #             "model_creator": "eval"
+    #         })
+
+    # d_perturbed_baselines = []
+    # for baseline in perturbed_baselines:
+    #     d_perturbed_baselines.append({
+    #         "model_name": baseline, # + "_rep_0",
+    #         "model_creator": "eval"
+    #     })
+    # d_nonperturbed_baselines = []
+    # for baseline in nonperturbed_baselines:
+    #     d_nonperturbed_baselines.append({
+    #         "model_name": baseline, # + "_rep_0",
+    #         "model_creator": "eval"
+    #     })
+
+    # baselines = [{"model_name": "set_of_27_38891_patches_rep_0", "model_creator": "eval"}]
+
+    # # create_eval_improvement_plot(eval_test_sets, d_nonperturbed_baselines, d_perturbed_baselines, [], [])
+    # # predict_on_test_sets(eval_test_sets, baselines)
+    # # create_patch_merging_plot(eval_test_sets, baselines[0], ["no_overlap_", "no_prune_", "alt_prune_", ""])
+
+    # methods = [
+    #     "random_images",
+    #     "random_patches_match_patch_num",
+    #     "selected_patches_match_patch_num",
+    #     "selected_patches_match_annotation_num"
+    # ]
+
+    # # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods)
+    # create_fine_tune_plot(eval_test_sets[0], methods)
+
+    # predict_on_test_sets(eval_test_sets, single_baselines) # + d_diverse_baselines)
+    # create_weed_comparison_plot(eval_test_sets, single_baselines)
+
+    # exit()
     single_baselines = []
-    for baseline in eval_single_630_baselines:
+    for baseline in eval_single_1890_baselines:
         single_baselines.append({
-            "model_name": baseline, # + "_rep_0",
+            "model_name": baseline + "_rep_1",
             "model_creator": "eval"
         })
 
     diverse_baselines = []
-    for baseline in eval_diverse_630_baselines:
+    for baseline in eval_diverse_1890_baselines:
         diverse_baselines.append({
-            "model_name": baseline, # + "_rep_2",
+            "model_name": baseline + "_rep_1",
             "model_creator": "eval"
         })        
 
-    # predict_on_test_sets(eval_test_sets, diverse_baselines) # + d_diverse_baselines)
-    create_eval_min_num_plot(eval_test_sets, single_baselines, diverse_baselines)
+    predict_on_test_sets(eval_test_sets, single_baselines)
+    # create_eval_min_num_plot(eval_test_sets, single_baselines, diverse_baselines)
     exit()
     
 

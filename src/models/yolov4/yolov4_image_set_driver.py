@@ -612,7 +612,7 @@ def predict(sch_ctx, image_set_dir, request): #, q):
                                                                 pred_patch_scores,
                                                                 patch_coords, 
                                                                 region, #image_path, 
-                                                                trim=True)
+                                                                trim=True) #True)
 
                             predictions[image_name]["boxes"].extend(pred_image_abs_boxes.tolist())
                             predictions[image_name]["scores"].extend(pred_image_scores.tolist())
@@ -1359,7 +1359,7 @@ def train_baseline(sch_ctx, root_dir):
     # train_loader_is_preloaded, train_data_loader = data_load.get_data_loader(training_tf_record_paths, config, shuffle=True, augment=True)
     # val_loader_is_preloaded, val_data_loader = data_load.get_data_loader(validation_tf_record_paths, config, shuffle=False, augment=False)
     
-    train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True)
+    train_data_loader = data_load.TrainDataLoader(training_tf_record_paths, config, shuffle=True, augment=True) #True)
     # val_data_loader = data_load.TrainDataLoader(validation_tf_record_paths, config, shuffle=False, augment=False)
 
 
