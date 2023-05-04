@@ -217,7 +217,8 @@ def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_matc
         num_h_patches = m.ceil(h_covered / incr) + 1
 
         for image_name in annotations.keys():
-            if len(annotations[image_name]["test_regions"]) > 0:
+                
+            if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
                 image_w = metadata["images"][image_name]["width_px"]
                 image_h = metadata["images"][image_name]["height_px"]
 
@@ -227,28 +228,28 @@ def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_matc
                 exg_array = image_utils.excess_green(image_array)
 
 
-                if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
-                    for h_index in range(num_h_patches):
-                        for w_index in range(num_w_patches):
 
-                            patch_coords = [
-                                patch_size * h_index,
-                                patch_size * w_index,
-                                min((patch_size * h_index) + patch_size, image_h),
-                                min((patch_size * w_index) + patch_size, image_w)
-                            ]
+                for h_index in range(num_h_patches):
+                    for w_index in range(num_w_patches):
 
-                            inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
+                        patch_coords = [
+                            patch_size * h_index,
+                            patch_size * w_index,
+                            min((patch_size * h_index) + patch_size, image_h),
+                            min((patch_size * w_index) + patch_size, image_w)
+                        ]
 
-                            if inds.size > 0:
-                                exg_patch = exg_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
-                                sel_vals = exg_patch[exg_patch != -10]
-                                score = np.sum(sel_vals ** 2) / sel_vals.size
+                        inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
 
-                                zero_anno_candidates.append(
-                                    (image_set_str, image_name, patch_coords, score)
-                                )
+                        if inds.size == 0:
+                            exg_patch = exg_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+                            # sel_vals = exg_patch[exg_patch != -10]
+                            score = np.sum(exg_patch ** 2) / exg_patch.size
 
+                            zero_anno_candidates.append(
+                                (image_set_str, image_name, patch_coords, score)
+                            )
+    print("number of zero anno candidates".format(len(zero_anno_candidates)))
     zero_anno_candidates.sort(key=lambda x: x[3], reverse=True)
     print("10 best zero_anno_candidates".format(zero_anno_candidates[:10]))
     print("10 worst zero anno candidates".format(zero_anno_candidates[-10:]))
