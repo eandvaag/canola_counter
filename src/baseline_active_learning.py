@@ -290,7 +290,7 @@ def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_matc
 
                     if repl_image_set_str not in taken:
                         taken[repl_image_set_str] = {}
-                    if image_name not in taken[repl_image_set_str]:
+                    if repl_image_name not in taken[repl_image_set_str]:
                         taken[repl_image_set_str][repl_image_name] = []
 
                     taken[repl_image_set_str][repl_image_name].append(repl_patch_coords)
