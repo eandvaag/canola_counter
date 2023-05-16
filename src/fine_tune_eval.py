@@ -441,12 +441,17 @@ def get_confidence_quality(pred_scores):
 
 def get_AP(annotations, full_predictions, iou_thresh): #annotated_boxes, predicted_boxes, predicted_scores):
     
-    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
+    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=True, num_classes=1)
 
-    for image_name in annotations.keys():
+    mAP_vals = []
+    for image_name in tqdm.tqdm(annotations.keys()):
         annotated_boxes = annotations[image_name]["boxes"]
-        predicted_boxes = full_predictions[image_name]["boxes"]
         predicted_scores = full_predictions[image_name]["scores"]
+        predicted_boxes = full_predictions[image_name]["boxes"]
+
+        # predicted_boxes = predicted_boxes[predicted_scores > 0.01]
+        # predicted_scores = predicted_scores[predicted_scores > 0.01]
+
 
         annotated_classes = np.zeros(shape=(annotated_boxes.shape[0]))
         predicted_classes = np.zeros(shape=(predicted_boxes.shape[0]))
@@ -460,16 +465,17 @@ def get_AP(annotations, full_predictions, iou_thresh): #annotated_boxes, predict
 
         metric_fn.add(pred_for_mAP, true_for_mAP)
 
-    if iou_thresh == ".50:.05:.95":
-        mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
-    elif iou_thresh == ".50":
-        mAP = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
-    elif iou_thresh == ".75":
-        mAP = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
-    else:
-        raise RuntimeError("Invalid IoU threshold: {}".format(iou_thresh))
+        if iou_thresh == ".50:.05:.95":
+            mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        elif iou_thresh == ".50":
+            mAP = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        elif iou_thresh == ".75":
+            mAP = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+        else:
+            raise RuntimeError("Invalid IoU threshold: {}".format(iou_thresh))
 
-    return mAP
+        mAP_vals.append(mAP)
+    return np.mean(mAP_vals) #mAP
 
 def get_dics(annotations, full_predictions, assessment_images):
     dics = []

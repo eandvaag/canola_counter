@@ -989,6 +989,10 @@ def process_predict(item):
                 logger.info("Starting to predict for {}".format(item))
                 isa.set_scheduler_status(username, farm_name, field_name, mission_date, isa.PREDICTING,
                                             extra_items={"percent_complete": 0})
+
+
+                if request["save_result"]:
+                    isa.emit_results_change(username, farm_name, field_name, mission_date)
                             
 
                 interrupted = yolov4_image_set_driver.predict(sch_ctx, image_set_dir, request)
