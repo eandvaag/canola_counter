@@ -133,18 +133,18 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
         removed_annotations_path = os.path.join(image_set_dir, "annotations", "removed_annotations_" + str(fraction_to_remove) + ".json")
         shutil.copy(annotations_path, removed_annotations_path)
 
-        run_diverse_model(training_image_sets, "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
+    run_diverse_model(training_image_sets, "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
 
-        for image_set in training_image_sets:
-            image_set_dir = os.path.join("usr", "data",
-                                        image_set["username"], "image_sets",
-                                        image_set["farm_name"],
-                                        image_set["field_name"],
-                                        image_set["mission_date"])
+    for image_set in training_image_sets:
+        image_set_dir = os.path.join("usr", "data",
+                                    image_set["username"], "image_sets",
+                                    image_set["farm_name"],
+                                    image_set["field_name"],
+                                    image_set["mission_date"])
 
-            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
-            shutil.copy(preserved_annotations_path, annotations_path)
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
+        shutil.copy(preserved_annotations_path, annotations_path)
 
 
 def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir): #taken_regions): #num_patches_to_take):
