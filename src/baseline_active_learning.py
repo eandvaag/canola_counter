@@ -96,10 +96,56 @@ def restore_annotations(training_image_sets):
                             image_set["farm_name"],
                             image_set["field_name"],
                             image_set["mission_date"])
-        preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_dilation.json")
+        preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
         annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
         if os.path.exists(preserved_annotations_path):
             shutil.copy(preserved_annotations_path, annotations_path)
+
+
+
+def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches_to_take, prev_model_dir):
+
+    for image_set in training_image_sets:
+
+        image_set_dir = os.path.join("usr", "data",
+                                    image_set["username"], "image_sets",
+                                    image_set["farm_name"],
+                                    image_set["field_name"],
+                                    image_set["mission_date"])
+        print("\tRemoving", image_set_dir)
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
+        shutil.copy(annotations_path, preserved_annotations_path)
+
+        # metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+        # metadata = json_io.load_json(metadata_path)
+
+        annotations = annotation_utils.load_annotations(annotations_path)
+        for image_name in annotations.keys():
+
+            boxes = annotations[image_name]["boxes"]
+            if boxes.size > 0:
+                keep_mask = np.random.rand(boxes.shape[0]) > fraction_to_remove
+                kept_boxes = boxes[keep_mask]
+                annotations[image_name]["boxes"] = kept_boxes
+
+        annotation_utils.save_annotations(annotations_path, annotations)
+        removed_annotations_path = os.path.join(image_set_dir, "annotations", "removed_annotations_" + str(fraction_to_remove) + ".json")
+        shutil.copy(annotations_path, removed_annotations_path)
+
+        run_diverse_model(training_image_sets, "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
+
+        for image_set in training_image_sets:
+            image_set_dir = os.path.join("usr", "data",
+                                        image_set["username"], "image_sets",
+                                        image_set["farm_name"],
+                                        image_set["field_name"],
+                                        image_set["mission_date"])
+
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
+            shutil.copy(preserved_annotations_path, annotations_path)
+
 
 def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir): #taken_regions): #num_patches_to_take):
 
@@ -115,7 +161,7 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
                                         image_set["mission_date"])
             print("\tDilating", image_set_dir)
             annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_dilation.json")
+            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
             shutil.copy(annotations_path, preserved_annotations_path)
 
             metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
@@ -154,7 +200,7 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
                                         image_set["mission_date"])
 
             annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_dilation.json")
+            preserved_annotations_path = os.path.join(image_set_dir, "annotations", "preserved_annotations_no_modification.json")
             shutil.copy(preserved_annotations_path, annotations_path)
 
 

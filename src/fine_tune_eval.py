@@ -660,14 +660,14 @@ def get_global_accuracy(annotations, full_predictions, assessment_images):
     global_accuracy = total_true_positives / (total_true_positives + total_false_positives + total_false_negatives)
     return global_accuracy
 
-def get_accuracy(annotated_boxes, sel_pred_boxes):
+def get_accuracy(annotated_boxes, sel_pred_boxes, iou_thresh=0.50):
 
     num_predicted = sel_pred_boxes.shape[0]
     num_annotated = annotated_boxes.shape[0]
 
     if num_predicted > 0:
         if num_annotated > 0:
-            true_positive, false_positive, false_negative = inference_metrics.get_positives_and_negatives(annotated_boxes, sel_pred_boxes, 0.50)
+            true_positive, false_positive, false_negative = inference_metrics.get_positives_and_negatives(annotated_boxes, sel_pred_boxes, iou_thresh)
             # print(true_positive, false_positive, false_negative)
             precision_050 = true_positive / (true_positive + false_positive)
             recall_050 = true_positive / (true_positive + false_negative)
