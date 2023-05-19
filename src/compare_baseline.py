@@ -3802,8 +3802,9 @@ perturbed_baselines = [
 
 dilation_baselines = [
     # "set_of_27_dilated_by_1_16000_patches",
+    "set_of_27_dilated_by_2_16000_patches",
     # "set_of_27_dilated_by_3_16000_patches",
-    "set_of_27_dilated_by_4_16000_patches",
+    # "set_of_27_dilated_by_4_16000_patches",
     # "set_of_27_dilated_by_5_16000_patches",
     # "set_of_27_dilated_by_7_16000_patches"
 ]
@@ -4089,13 +4090,13 @@ def eval_run():
     baselines = [{"model_name": "set_of_27_38891_patches_rep_0", "model_creator": "eval"}]
 
     # # # # create_eval_improvement_plot(eval_test_sets, d_nonperturbed_baselines, d_perturbed_baselines, [], [])
-    # predict_on_test_sets(eval_test_sets, single_baselines)
+    predict_on_test_sets(eval_test_sets, single_baselines)
     # # # # create_patch_merging_plot(eval_test_sets, baselines[0], ["no_overlap_", "no_prune_", "alt_prune_", ""])
-    # exit()
+    exit()
 
     methods = [
         # "random_images",
-        # "random_patches",
+        "random_patches",
         # "random_patches_match_patch_num",
         # "selected_patches_match_patch_num",
         # "selected_patches_match_annotation_num",
@@ -4105,9 +4106,9 @@ def eval_run():
 
     num_dups = 1
     num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    for num_annotations_to_select in [250]: #num_annotations_to_select_lst:
-        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-    # create_fine_tune_plot(baselines[0], eval_test_sets[1], methods, num_annotations_to_select_lst=[500], num_dups=num_dups)
+    # for num_annotations_to_select in [250]: #num_annotations_to_select_lst:
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    create_fine_tune_plot(baselines[0], eval_test_sets[1], methods, num_annotations_to_select_lst=[250], num_dups=num_dups)
 
     # my_dilation_plot()
     exit()

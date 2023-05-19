@@ -133,7 +133,18 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
         removed_annotations_path = os.path.join(image_set_dir, "annotations", "removed_annotations_" + str(fraction_to_remove) + ".json")
         shutil.copy(annotations_path, removed_annotations_path)
 
-    run_diverse_model(training_image_sets, "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
+    # run_diverse_model(training_image_sets, 
+    #                   "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0", 
+    #                   num_patches_to_take, 
+    #                   prev_model_dir, 
+    #                   supplementary_weed_image_sets=None, 
+    #                   run=True)
+    
+    model_name = "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+    existing_model_log_path = os.path.join(prev_model_dir, "log.json")
+    existing_model_log = json_io.load_json(existing_model_log_path)
+    run_from_existing_diverse_model(model_name, existing_model_log, run=True)
+
 
     for image_set in training_image_sets:
         image_set_dir = os.path.join("usr", "data",
@@ -190,7 +201,11 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
 
         # run_diverse_model(training_image_sets, "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
 
-        run_diverse_model(training_image_sets, "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
+        model_name = "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+        existing_model_log_path = os.path.join(prev_model_dir, "log.json")
+        existing_model_log = json_io.load_json(existing_model_log_path)
+        run_from_existing_diverse_model(model_name, existing_model_log, run=True)
+        # run_diverse_model(training_image_sets, "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
 
         for image_set in training_image_sets:
             image_set_dir = os.path.join("usr", "data",
@@ -393,6 +408,53 @@ def exg_zero_anno_replacement(training_image_sets, model_name, model_dir_to_matc
             if re_enqueue:
                 server.sch_ctx["baseline_queue"].enqueue(log)
             baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+def run_from_existing_diverse_model(model_name, existing_model_log, run=True):
+
+
+    log = {}
+    log["model_creator"] = "eval"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["image_sets"] = []
+
+    # for key in s:
+    #     pieces = key.split("/")
+    #     log["image_sets"].append({
+    #         "username": pieces[0],
+    #         "farm_name": pieces[1],
+    #         "field_name": pieces[2],
+    #         "mission_date": pieces[3],
+    #         "taken_regions": s[key],
+    #         "patch_overlap_percent": 0
+    #     })
+    log["image_sets"] = existing_model_log["image_sets"]
+
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "eval", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+    if run:
+        server.sch_ctx["baseline_queue"].enqueue(log)
+
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+        while baseline_queue_size > 0:
+        
+            log = server.sch_ctx["baseline_queue"].dequeue()
+            re_enqueue = server.process_baseline(log)
+            if re_enqueue:
+                server.sch_ctx["baseline_queue"].enqueue(log)
+            baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
 
 
 
