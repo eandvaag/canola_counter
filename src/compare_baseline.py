@@ -133,11 +133,19 @@ def create_fine_tune_plot(baseline, test_set, methods, num_annotations_to_select
     ax = fig.add_subplot(111)
 
 
-    for i in range(len(results["random_patches"])):
-        ax.plot([results["random_patches"][i][0], results["selected_patches_fairer_dist_score"][i][0]], 
-                [results["random_patches"][i][1], results["selected_patches_fairer_dist_score"][i][1]], c="black", zorder=1)
-    for i, method in enumerate(list(results.keys())):
-        ax.scatter([x[0] for x in results[method]], [x[1] for x in results[method]], s=50, c=my_plot_colors[i], label=method, zorder=2)
+    for i in range(len(results["random_patches_second"])):
+        # ax.plot([results["random_patches_second"][i][0], results["selected_patches_first"][i][0]], 
+        #         [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+        
+        ax.plot([i, i], 
+                [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+    # for i, method in enumerate(list(results.keys())):
+    #     ax.scatter([x[0] for x in results[method]], [x[1] for x in results[method]], s=50, c=my_plot_colors[i], label=method, zorder=2)
+
+    # ax.scatter([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
+    # ax.scatter([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
+    ax.scatter([i for i in range(len(results["random_patches_second"]))], [x[1] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
+    ax.scatter([i for i in range(len(results["selected_patches_first"]))], [x[1] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
 
 
     # ax.plot([0, max_num_fine_tuning_boxes], [pre_fine_tune_accuracy, pre_fine_tune_accuracy], c="black", linestyle="dashed", label="No Fine-Tuning")
@@ -154,7 +162,7 @@ def create_fine_tune_plot(baseline, test_set, methods, num_annotations_to_select
 
     plt.tight_layout()
 
-    out_path = os.path.join("eval_charts", "fine_tuning", "fairer", test_set_str + "_" + baseline["model_name"] + "_annotations.svg")
+    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_annotations.svg")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
     plt.savefig(out_path)
@@ -1508,45 +1516,45 @@ def create_dilation_plot(test_sets, baselines, out_dirname):
 
 
 
-    end_point = max(abs(total_min_diff), abs(total_max_diff))
-    fig, axs = plt.subplots(len(results), 1, figsize=(10, 8))
-    # fig.suptitle("Methods for Merging Patch Predictions: Difference in Count (Predicted - Annotated)")
-    for i, result in enumerate(results):
-        counts, bins = np.histogram(result[3], bins=2*end_point, range=(-end_point, end_point))
-        axs[i].stairs(counts, bins, color=my_plot_colors[i], fill=True)
-        # label=label_lookup[merging_prefix], 
-        # axs[i].legend()
-        props = dict(boxstyle="round", facecolor="white", alpha=0.5)
-        textstr = result[0] #label_lookup[merging_prefix]
-        axs[i].text(0.985, 0.94, textstr, transform=axs[i].transAxes,
-            verticalalignment='top', horizontalalignment="right", bbox=props, fontsize=12)
-        # axs[i].set_title(textstr)
+    # end_point = max(abs(total_min_diff), abs(total_max_diff))
+    # fig, axs = plt.subplots(len(results), 1, figsize=(10, 8))
+    # # fig.suptitle("Methods for Merging Patch Predictions: Difference in Count (Predicted - Annotated)")
+    # for i, result in enumerate(results):
+    #     counts, bins = np.histogram(result[3], bins=2*end_point, range=(-end_point, end_point))
+    #     axs[i].stairs(counts, bins, color=my_plot_colors[i], fill=True)
+    #     # label=label_lookup[merging_prefix], 
+    #     # axs[i].legend()
+    #     props = dict(boxstyle="round", facecolor="white", alpha=0.5)
+    #     textstr = result[0] #label_lookup[merging_prefix]
+    #     axs[i].text(0.985, 0.94, textstr, transform=axs[i].transAxes,
+    #         verticalalignment='top', horizontalalignment="right", bbox=props, fontsize=12)
+    #     # axs[i].set_title(textstr)
 
-        # plt.locator_params(axis="y", nbins=4)
-        # yticks = ticker.MaxNLocator(4)
-        # axs[i].yaxis.set_major_locator(yticks)
-    plt.tight_layout()
-
-
+    #     # plt.locator_params(axis="y", nbins=4)
+    #     # yticks = ticker.MaxNLocator(4)
+    #     # axs[i].yaxis.set_major_locator(yticks)
+    # plt.tight_layout()
 
 
 
 
 
 
-    # ax = fig.add_subplot(111)
-    # ax = fig.add_axes([0.32, 0.05, 0.66, 0.9])
 
-    # plt.scatter([x[0] for x in results], [x[3] for x in results])
+
+    # # ax = fig.add_subplot(111)
+    # # ax = fig.add_axes([0.32, 0.05, 0.66, 0.9])
+
+    # # plt.scatter([x[0] for x in results], [x[3] for x in results])
     
-    # ax.set_ylabel("Mean Absolute Difference In Count")
-    # ax.set_xlabel("Dilation Sigma (Pixels)")
+    # # ax.set_ylabel("Mean Absolute Difference In Count")
+    # # ax.set_xlabel("Dilation Sigma (Pixels)")
 
 
-    out_path = os.path.join("eval_charts", out_dirname, "hist_abs_dic_plot.png") #".svg")
-    out_dir = os.path.dirname(out_path)
-    os.makedirs(out_dir, exist_ok=True)
-    plt.savefig(out_path, dpi=600)
+    # out_path = os.path.join("eval_charts", out_dirname, "hist_abs_dic_plot.png") #".svg")
+    # out_dir = os.path.dirname(out_path)
+    # os.makedirs(out_dir, exist_ok=True)
+    # plt.savefig(out_path, dpi=600)
 
 
 
@@ -3801,12 +3809,12 @@ perturbed_baselines = [
 ]
 
 dilation_baselines = [
-    # "set_of_27_dilated_by_1_16000_patches",
+    "set_of_27_dilated_by_1_16000_patches",
     "set_of_27_dilated_by_2_16000_patches",
-    # "set_of_27_dilated_by_3_16000_patches",
-    # "set_of_27_dilated_by_4_16000_patches",
-    # "set_of_27_dilated_by_5_16000_patches",
-    # "set_of_27_dilated_by_7_16000_patches"
+    "set_of_27_dilated_by_3_16000_patches",
+    "set_of_27_dilated_by_4_16000_patches",
+    "set_of_27_dilated_by_5_16000_patches",
+    "set_of_27_dilated_by_7_16000_patches"
 ]
 
 exg_repl_baselines = [
@@ -4086,29 +4094,46 @@ def eval_run():
     #     })
 
     # my_patch_merging_plot()
+    # my_dilation_plot()
 
     baselines = [{"model_name": "set_of_27_38891_patches_rep_0", "model_creator": "eval"}]
 
     # # # # create_eval_improvement_plot(eval_test_sets, d_nonperturbed_baselines, d_perturbed_baselines, [], [])
-    predict_on_test_sets(eval_test_sets, single_baselines)
+    # predict_on_test_sets(eval_test_sets, single_baselines)
     # # # # create_patch_merging_plot(eval_test_sets, baselines[0], ["no_overlap_", "no_prune_", "alt_prune_", ""])
-    exit()
+    # exit()
 
     methods = [
         # "random_images",
-        "random_patches",
+        # "random_patches",
         # "random_patches_match_patch_num",
         # "selected_patches_match_patch_num",
         # "selected_patches_match_annotation_num",
         # "selected_patches",
-        "selected_patches_fairer_dist_score"
+        # "selected_patches_unfair_dist_score"
+
+        "selected_patches_first",
+        "random_patches_second",
     ]
 
-    num_dups = 1
+    num_dups = 5
     num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    # for num_annotations_to_select in [250]: #num_annotations_to_select_lst:
+    for num_annotations_to_select in [250]: #num_annotations_to_select_lst:
+        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    # num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
+    # for num_annotations_to_select in [500]: #num_annotations_to_select_lst:
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-    create_fine_tune_plot(baselines[0], eval_test_sets[1], methods, num_annotations_to_select_lst=[250], num_dups=num_dups)
+    # for num_annotations_to_select in [750]: #num_annotations_to_select_lst:
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    
+
+    # create_fine_tune_plot(baselines[0], eval_test_sets[2], methods, num_annotations_to_select_lst=[500, 750], num_dups=5)
 
     # my_dilation_plot()
     exit()

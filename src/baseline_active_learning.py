@@ -105,6 +105,25 @@ def restore_annotations(training_image_sets):
 
 def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches_to_take, prev_model_dir):
 
+    model_name = "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+    existing_model_log_path = os.path.join(prev_model_dir, "log.json")
+    existing_model_log = json_io.load_json(existing_model_log_path)
+
+    for i, image_set in enumerate(existing_model_log["image_sets"]):
+        image_set_dir = os.path.join("usr", "data",
+                                        image_set["username"], "image_sets",
+                                        image_set["farm_name"],
+                                        image_set["field_name"],
+                                        image_set["mission_date"]) 
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+        patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
+
+        existing_model_log["image_sets"][i]["patch_size"] = patch_size
+
+
     for image_set in training_image_sets:
 
         image_set_dir = os.path.join("usr", "data",
@@ -140,9 +159,7 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
     #                   supplementary_weed_image_sets=None, 
     #                   run=True)
     
-    model_name = "set_of_27_remove_" + str(fraction_to_remove) + "_" + str(num_patches_to_take) + "_patches_rep_0"
-    existing_model_log_path = os.path.join(prev_model_dir, "log.json")
-    existing_model_log = json_io.load_json(existing_model_log_path)
+
     run_from_existing_diverse_model(model_name, existing_model_log, run=True)
 
 
@@ -160,6 +177,24 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
 
 def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir): #taken_regions): #num_patches_to_take):
 
+
+    model_name = "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+    existing_model_log_path = os.path.join(prev_model_dir, "log.json")
+    existing_model_log = json_io.load_json(existing_model_log_path)
+
+    for i, image_set in enumerate(existing_model_log["image_sets"]):
+        image_set_dir = os.path.join("usr", "data",
+                                        image_set["username"], "image_sets",
+                                        image_set["farm_name"],
+                                        image_set["field_name"],
+                                        image_set["mission_date"]) 
+        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+        annotations = annotation_utils.load_annotations(annotations_path)
+
+        average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+        patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
+
+        existing_model_log["image_sets"][i]["patch_size"] = patch_size
 
     for dilation_sigma in dilation_sigmas:
         print("Dilation sigma: {}".format(dilation_sigma))
@@ -201,9 +236,7 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
 
         # run_diverse_model(training_image_sets, "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir=None)
 
-        model_name = "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
-        existing_model_log_path = os.path.join(prev_model_dir, "log.json")
-        existing_model_log = json_io.load_json(existing_model_log_path)
+
         run_from_existing_diverse_model(model_name, existing_model_log, run=True)
         # run_diverse_model(training_image_sets, "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0", num_patches_to_take, prev_model_dir, supplementary_weed_image_sets=None, run=True)
 
@@ -3428,7 +3461,8 @@ if __name__ == "__main__":
     matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_0")
     # log_path = os.path.join(matched_dir, "log.json")
     # log = json_io.load_json(log_path)
-    annotation_dilation_test(training_image_sets, [3], 16000, matched_dir) #, taken_regions=log["taken_regions"]) #num_patches_to_take=16000)
+    # annotation_dilation_test(training_image_sets, [3], 16000, matched_dir) #, taken_regions=log["taken_regions"]) #num_patches_to_take=16000)
+    annotation_removal_test(training_image_sets, 0.05, 16000, matched_dir)
     # create_patch_sample_plot(training_image_sets, test_image_sets, "sample_patches")
     # model_name = "UNI_Dugout_2022-05-30_630_patches_BlaineLake_Serhienko9S_2022-06-14_630_patches_rep_1"
     # model_name = "BlaineLake_River_2021-06-09_630_patches_BlaineLake_Serhienko9S_2022-06-14_630_patches_rep_0"

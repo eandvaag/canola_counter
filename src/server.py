@@ -301,6 +301,9 @@ def process_baseline(item):
                     average_box_height = "NA"
                     average_box_width = "NA"
                     patch_size = 416
+
+                if "patch_size" in image_set:
+                    patch_size = image_set["patch_size"]
                 # log["image_sets"][image_set_index]["image_names"] = image_names
                 log["image_sets"][image_set_index]["num_annotations"] = num_annotations
 

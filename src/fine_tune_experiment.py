@@ -422,10 +422,266 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
         print("Full patch count: {} (want {})".format(cur_full_patch_count, num_full_patches_to_match))
         print("Partial patch count: {} (want {})".format(cur_partial_patch_count, num_partial_patches_to_match))
 
+    elif method == "selected_patches_first":
+
+
+        print("method is selected_patches_first")
+        print("num_annotations_to_select", num_annotations_to_select)
+        # patch_candidate_inds = np.arange(0, len(patch_candidates))
+        # random.shuffle(patch_candidate_inds)
+        sorted_candidates = sorted(patch_candidates, key=lambda x: x[2])
+        # num_annotations_to_take = num_annotations_to_select #method.split("_")[2]
+        i = 0
+        while True:
+            candidate = sorted_candidates[i]
+            i += 1
+            image_name = candidate[0]
+            patch_coords = candidate[1]
+            if image_name not in taken_regions:
+                taken_regions[image_name] = []
+            taken_regions[image_name].append(patch_coords)
+
+            new_annotation_count = 0
+            for image_name in annotations.keys():
+                if image_name in taken_regions:
+                    new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+
+            # print(i, new_annotation_count)
+            if new_annotation_count >= num_annotations_to_select:
+                break
+
+
+        print("Selected {} patches and {} annotations. Wanted {} annotations".format(i, new_annotation_count, num_annotations_to_select)) 
+        
+    elif method == "random_patches_second":
+        print("method is random_patches_second")
+
+        num_annotations_to_match = baseline_matching_info["num_annotations"]
+        num_full_patches_to_match = baseline_matching_info["num_full_patches"]
+        num_partial_patches_to_match = baseline_matching_info["num_partial_patches"]
+
+        patch_candidate_inds = np.arange(0, len(patch_candidates))
+        random.shuffle(patch_candidates)
+        random.shuffle(patch_candidate_inds)
+        # num_annotations_to_take = num_annotations_to_select #method.split("_")[2]
+        taken_candidates = []
+        cur_annotation_count = 0
+        cur_full_patch_count = 0
+        cur_partial_patch_count = 0
+        i = 0
+        while True:
+
+            sel_ind = patch_candidate_inds[i]
+            candidate = patch_candidates[sel_ind]
+            i += 1
+            s_image_name = candidate[0]
+            patch_coords = candidate[1]
+
+            is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
+
+            if is_full_patch and cur_full_patch_count >= num_full_patches_to_match:
+                continue
+            if not is_full_patch and cur_partial_patch_count >= num_partial_patches_to_match:
+                continue
+
+
+            taken_candidates.append(candidate)
+
+            if s_image_name not in taken_regions:
+                taken_regions[s_image_name] = []
+            
+            taken_regions[s_image_name].append(patch_coords)
+            if is_full_patch:
+                cur_full_patch_count += 1
+            else:
+                cur_partial_patch_count += 1
+
+
+            new_annotation_count = 0
+            for image_name in annotations.keys():
+                if image_name in taken_regions:
+                    new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+                
+            # if new_annotation_count > num_annotations_to_match:
+            #     del taken_regions[s_image_name][-1]
+            #     if len(taken_regions[s_image_name]) == 0:
+            #         del taken_regions[s_image_name]
+            #     print("Breaking because number of annotations would be exceeded")
+            #     break
+
+ 
+            cur_annotation_count = new_annotation_count
+
+            if cur_annotation_count >= num_annotations_to_match:
+                print("Breaking because number of annotations has been matched")
+                break
+
+            if cur_full_patch_count >= num_full_patches_to_match and cur_partial_patch_count >= num_partial_patches_to_match:
+                print("Breaking because number of patches has been matched")
+                break
+
+    
+
+        cur_annotation_count = 0
+        for image_name in annotations.keys():
+            if image_name in taken_regions:
+                cur_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+        cur_full_patch_count = 0
+        cur_partial_patch_count = 0
+        for image_name in annotations.keys():
+            if image_name in taken_regions:
+                for patch_coords in taken_regions[image_name]:
+                    patch_h = patch_coords[2] - patch_coords[0]
+                    patch_w = patch_coords[3] - patch_coords[1]
+                    if patch_h == patch_size and patch_w == patch_size:
+                        cur_full_patch_count += 1
+                    else:
+                        cur_partial_patch_count += 1
+
+
+        print("After initial random selection step, have {} annotations, {} full patches, and {} partial_patches".format(
+            cur_annotation_count, cur_full_patch_count, cur_partial_patch_count
+        ))
+
+        if cur_annotation_count < num_annotations_to_match:
+            print("Not enough annotations. Performing substitutions...")
+            while True:
+
+                possibly_remove_ind = random.randrange(len(taken_candidates))
+                possibly_remove_candidate = taken_candidates[possibly_remove_ind]
+
+                s_image_name = possibly_remove_candidate[0]
+                patch_coords = possibly_remove_candidate[1]
+
+                is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
+
+                annotation_count_before = 0
+                for image_name in taken_regions.keys():
+                    # if image_name == s_image_name:
+                    #     l = taken_regions[image_name].copy()
+                    #     ind = l.index(patch_coords)
+                    #     del l[ind]
+                    #     annotation_count_before += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                    # else:
+                    annotation_count_before += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+
+
+                done = False
+                for substitute_candidate in patch_candidates:
+                    if substitute_candidate not in taken_candidates:
+                        substitute_image_name = substitute_candidate[0]
+                        substitute_patch_coords = substitute_candidate[1]
+                        substitute_is_full_patch = substitute_patch_coords[2] - substitute_patch_coords[0] == patch_size and substitute_patch_coords[3] - substitute_patch_coords[1] == patch_size
+                        if is_full_patch == substitute_is_full_patch:
+                            annotation_count_after = 0
+                            for image_name in taken_regions.keys():
+                                l = taken_regions[image_name].copy()
+                                if image_name == substitute_image_name:
+                                    l.append(substitute_patch_coords)
+                                if image_name == s_image_name:
+                                    ind = l.index(patch_coords)
+                                    del l[ind]
+                                    annotation_count_after += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                                else:
+                                    annotation_count_after += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                            if annotation_count_after > annotation_count_before:
+                                del_index = taken_regions[s_image_name].index(patch_coords)
+                                del taken_regions[s_image_name][del_index]
+
+                                if substitute_image_name not in taken_regions:
+                                    taken_regions[substitute_image_name] = []
+                                taken_regions[substitute_image_name].append(substitute_patch_coords)
+
+                                if len(taken_regions[s_image_name]) == 0:
+                                    del taken_regions[s_image_name]
+
+                                del_index = taken_candidates.index(possibly_remove_candidate)
+                                del taken_candidates[del_index]
+                                taken_candidates.append(substitute_candidate)
+
+                                done = True
+                                break
+                    if done:
+                        break
+
+                new_annotation_count = 0
+                for image_name in taken_regions.keys():
+                    new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+                
+                if new_annotation_count >= num_annotations_to_match:
+                    break
+
+
+        elif cur_full_patch_count < num_full_patches_to_match or cur_partial_patch_count < num_partial_patches_to_match:
+            print("Not enough patches ... adding more.")
+
+            while True:
+                candidate = patch_candidates[i]
+                i += 1
+                s_image_name = candidate[0]
+                patch_coords = candidate[1]
+
+                is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
+
+                if is_full_patch and cur_full_patch_count >= num_full_patches_to_match:
+                    continue
+                if not is_full_patch and cur_partial_patch_count >= num_partial_patches_to_match:
+                    continue
+
+                new_annotation_count = 0
+                for image_name in annotations.keys():
+                    if image_name == s_image_name:
+                        if image_name in taken_regions:
+                            l = taken_regions[image_name].copy()
+                        else:
+                            l = []
+                        l.append(patch_coords)
+                        new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                    else:
+                        if image_name in taken_regions:
+                            new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+                        
+
+                if cur_annotation_count == new_annotation_count:
+                    taken_regions[s_image_name].append(patch_coords)
+                    if is_full_patch:
+                        cur_full_patch_count += 1
+                    else:
+                        cur_partial_patch_count += 1
+
+                if cur_full_patch_count >= num_full_patches_to_match and cur_partial_patch_count >= num_partial_patches_to_match:
+                    break
 
 
 
-    elif method == "selected_patches_fairer_dist_score":
+
+        cur_annotation_count = 0
+        for image_name in annotations.keys():
+            if image_name in taken_regions:
+                cur_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+        cur_full_patch_count = 0
+        cur_partial_patch_count = 0
+        for image_name in annotations.keys():
+            if image_name in taken_regions:
+                for patch_coords in taken_regions[image_name]:
+                    patch_h = patch_coords[2] - patch_coords[0]
+                    patch_w = patch_coords[3] - patch_coords[1]
+                    if patch_h == patch_size and patch_w == patch_size:
+                        cur_full_patch_count += 1
+                    else:
+                        cur_partial_patch_count += 1
+
+
+
+        print("Final totals: {}/{} annotations, {}/{} full patches, {}/{} partial patches".format(
+            cur_annotation_count, num_annotations_to_match, cur_full_patch_count, num_full_patches_to_match,
+            cur_partial_patch_count, num_partial_patches_to_match
+        ))
+
+
+
+
+    elif method == "selected_patches_unfair_dist_score":
         num_annotations_to_match = baseline_matching_info["num_annotations"]
         num_full_patches_to_match = baseline_matching_info["num_full_patches"]
         num_partial_patches_to_match = baseline_matching_info["num_partial_patches"]
@@ -435,6 +691,7 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
         cur_annotation_count = 0
         cur_full_patch_count = 0
         cur_partial_patch_count = 0
+        # taken_candidates = []
         i = 0
         while True:
             candidate = sorted_candidates[i]
@@ -480,7 +737,12 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                 break
 
             if cur_full_patch_count >= num_full_patches_to_match and cur_partial_patch_count >= num_partial_patches_to_match:
-                raise RuntimeError("Got enough patches, but not enough annotations")
+                print("Breaking because number of patches has been matched") #Got enough patches, but not enough annotations")
+                #. Num annotations {}/{}. Num full patches {}/{}. Num partial patches {}/{}.".format(cur_annotation_count, num_annotations_to_match,
+                #                                                       cur_full_patch_count, num_full_patches_to_match,
+                #                                                       cur_partial_patch_count, num_partial_patches_to_match))
+                # exit()
+                break
                 # print("Breaking because number of patches has been matched")
                 # break
 
@@ -506,63 +768,70 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
             cur_annotation_count, cur_full_patch_count, cur_partial_patch_count
         ))
 
+        # if cur_annotation_count < num_annotations_to_match:
 
-        while True:
-            candidate = sorted_candidates[i]
-            i += 1
-            s_image_name = candidate[0]
-            patch_coords = candidate[1]
+        #     while True:
 
-            is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
 
-            if is_full_patch and cur_full_patch_count >= num_full_patches_to_match:
-                continue
-            if not is_full_patch and cur_partial_patch_count >= num_partial_patches_to_match:
-                continue
+        # elif cur_full_patch_count < num_full_patches_to_match or cur_partial_patch_count < num_partial_patches_to_match:
 
-            new_annotation_count = 0
-            for image_name in annotations.keys():
-                if image_name == s_image_name:
-                    if image_name in taken_regions:
-                        l = taken_regions[image_name].copy()
-                    else:
-                        l = []
-                    l.append(patch_coords)
-                    new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
-                else:
-                    if image_name in taken_regions:
-                        new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
-                    
 
-            if cur_annotation_count == new_annotation_count:
-                taken_regions[s_image_name].append(patch_coords)
-                if is_full_patch:
-                    cur_full_patch_count += 1
-                else:
-                    cur_partial_patch_count += 1
+        #     while True:
+        #         candidate = sorted_candidates[i]
+        #         i += 1
+        #         s_image_name = candidate[0]
+        #         patch_coords = candidate[1]
 
-            if cur_full_patch_count >= num_full_patches_to_match and cur_partial_patch_count >= num_partial_patches_to_match:
-                break
+        #         is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
 
-        cur_annotation_count = 0
-        for image_name in annotations.keys():
-            if image_name in taken_regions:
-                cur_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
-        cur_full_patch_count = 0
-        cur_partial_patch_count = 0
-        for image_name in annotations.keys():
-            if image_name in taken_regions:
-                for patch_coords in taken_regions[image_name]:
-                    patch_h = patch_coords[2] - patch_coords[0]
-                    patch_w = patch_coords[3] - patch_coords[1]
-                    if patch_h == patch_size and patch_w == patch_size:
-                        cur_full_patch_count += 1
-                    else:
-                        cur_partial_patch_count += 1
+        #         if is_full_patch and cur_full_patch_count >= num_full_patches_to_match:
+        #             continue
+        #         if not is_full_patch and cur_partial_patch_count >= num_partial_patches_to_match:
+        #             continue
+
+        #         new_annotation_count = 0
+        #         for image_name in annotations.keys():
+        #             if image_name == s_image_name:
+        #                 if image_name in taken_regions:
+        #                     l = taken_regions[image_name].copy()
+        #                 else:
+        #                     l = []
+        #                 l.append(patch_coords)
+        #                 new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+        #             else:
+        #                 if image_name in taken_regions:
+        #                     new_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+                        
+
+        #         if cur_annotation_count == new_annotation_count:
+        #             taken_regions[s_image_name].append(patch_coords)
+        #             if is_full_patch:
+        #                 cur_full_patch_count += 1
+        #             else:
+        #                 cur_partial_patch_count += 1
+
+        #         if cur_full_patch_count >= num_full_patches_to_match and cur_partial_patch_count >= num_partial_patches_to_match:
+        #             break
+
+        # cur_annotation_count = 0
+        # for image_name in annotations.keys():
+        #     if image_name in taken_regions:
+        #         cur_annotation_count += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
+        # cur_full_patch_count = 0
+        # cur_partial_patch_count = 0
+        # for image_name in annotations.keys():
+        #     if image_name in taken_regions:
+        #         for patch_coords in taken_regions[image_name]:
+        #             patch_h = patch_coords[2] - patch_coords[0]
+        #             patch_w = patch_coords[3] - patch_coords[1]
+        #             if patch_h == patch_size and patch_w == patch_size:
+        #                 cur_full_patch_count += 1
+        #             else:
+        #                 cur_partial_patch_count += 1
         
-        print("Annotation count: {} (want {})".format(cur_annotation_count, num_annotations_to_match))
-        print("Full patch count: {} (want {})".format(cur_full_patch_count, num_full_patches_to_match))
-        print("Partial patch count: {} (want {})".format(cur_partial_patch_count, num_partial_patches_to_match))
+        # print("Annotation count: {} (want {})".format(cur_annotation_count, num_annotations_to_match))
+        # print("Full patch count: {} (want {})".format(cur_full_patch_count, num_full_patches_to_match))
+        # print("Partial patch count: {} (want {})".format(cur_partial_patch_count, num_partial_patches_to_match))
 
         if cur_full_patch_count > num_full_patches_to_match:
             print("Have too many full patches...")
@@ -623,8 +892,8 @@ def possibly_update_baseline_matching_info(baseline, test_set_image_set_dir, num
     baseline_matching_info = None
     mapping = get_mapping_for_test_set(test_set_image_set_dir)
     # random_images_name = baseline["model_name"] + "_post_finetune_random_images" + "_" + str(num_images_to_select) + "_dup_" + str(dup_num)
-    random_patches_name = baseline["model_name"] + "_post_finetune_random_patches" + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
-
+    # random_patches_name = baseline["model_name"] + "_post_finetune_random_patches" + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
+    random_patches_name = baseline["model_name"] + "_post_finetune_selected_patches_first" + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
     
     if random_patches_name in mapping:
         print("\nupdating baseline matching info\n")
@@ -670,7 +939,7 @@ def eval_fine_tune_test(server, test_set, baseline, methods, num_annotations_to_
         
     res_names = [] #[baseline["model_name"] + "_pre_finetune"]
     for method in methods:
-        for dup_num in range(num_dups):
+        for dup_num in range(1, num_dups+0):
             res_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
             res_names.append(res_name)
 
@@ -765,7 +1034,7 @@ def eval_fine_tune_test(server, test_set, baseline, methods, num_annotations_to_
     for method in methods:
 
 
-        for dup_num in range(num_dups):
+        for dup_num in range(1, num_dups+0):
 
 
 
