@@ -109,19 +109,19 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
     existing_model_log_path = os.path.join(prev_model_dir, "log.json")
     existing_model_log = json_io.load_json(existing_model_log_path)
 
-    for i, image_set in enumerate(existing_model_log["image_sets"]):
-        image_set_dir = os.path.join("usr", "data",
-                                        image_set["username"], "image_sets",
-                                        image_set["farm_name"],
-                                        image_set["field_name"],
-                                        image_set["mission_date"]) 
-        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-        annotations = annotation_utils.load_annotations(annotations_path)
+    # for i, image_set in enumerate(existing_model_log["image_sets"]):
+    #     image_set_dir = os.path.join("usr", "data",
+    #                                     image_set["username"], "image_sets",
+    #                                     image_set["farm_name"],
+    #                                     image_set["field_name"],
+    #                                     image_set["mission_date"]) 
+    #     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    #     annotations = annotation_utils.load_annotations(annotations_path)
 
-        average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
-        patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
+    #     average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+    #     patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
 
-        existing_model_log["image_sets"][i]["patch_size"] = patch_size
+    #     existing_model_log["image_sets"][i]["patch_size"] = patch_size
 
 
     for image_set in training_image_sets:
@@ -182,19 +182,19 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
     existing_model_log_path = os.path.join(prev_model_dir, "log.json")
     existing_model_log = json_io.load_json(existing_model_log_path)
 
-    for i, image_set in enumerate(existing_model_log["image_sets"]):
-        image_set_dir = os.path.join("usr", "data",
-                                        image_set["username"], "image_sets",
-                                        image_set["farm_name"],
-                                        image_set["field_name"],
-                                        image_set["mission_date"]) 
-        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-        annotations = annotation_utils.load_annotations(annotations_path)
+    # for i, image_set in enumerate(existing_model_log["image_sets"]):
+    #     image_set_dir = os.path.join("usr", "data",
+    #                                     image_set["username"], "image_sets",
+    #                                     image_set["farm_name"],
+    #                                     image_set["field_name"],
+    #                                     image_set["mission_date"]) 
+    #     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    #     annotations = annotation_utils.load_annotations(annotations_path)
 
-        average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
-        patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
+    #     average_box_area = annotation_utils.get_average_box_area(annotations, region_keys=["training_regions", "test_regions"], measure="mean")
+    #     patch_size = annotation_utils.average_box_area_to_patch_size(average_box_area)
 
-        existing_model_log["image_sets"][i]["patch_size"] = patch_size
+    #     existing_model_log["image_sets"][i]["patch_size"] = patch_size
 
     for dilation_sigma in dilation_sigmas:
         print("Dilation sigma: {}".format(dilation_sigma))
