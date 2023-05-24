@@ -178,10 +178,6 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
 def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir): #taken_regions): #num_patches_to_take):
 
 
-    model_name = "set_of_27_uniformly_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
-    existing_model_log_path = os.path.join(prev_model_dir, "log.json")
-    existing_model_log = json_io.load_json(existing_model_log_path)
-
     # for i, image_set in enumerate(existing_model_log["image_sets"]):
     #     image_set_dir = os.path.join("usr", "data",
     #                                     image_set["username"], "image_sets",
@@ -197,6 +193,13 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
     #     existing_model_log["image_sets"][i]["patch_size"] = patch_size
 
     for dilation_sigma in dilation_sigmas:
+
+
+        model_name = "set_of_27_uniformly_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+        existing_model_log_path = os.path.join(prev_model_dir, "log.json")
+        existing_model_log = json_io.load_json(existing_model_log_path)
+
+
         print("Dilation sigma: {}".format(dilation_sigma))
         for image_set in training_image_sets:
 
