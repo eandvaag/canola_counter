@@ -178,7 +178,7 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
 def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir): #taken_regions): #num_patches_to_take):
 
 
-    model_name = "set_of_27_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+    model_name = "set_of_27_uniformly_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
     existing_model_log_path = os.path.join(prev_model_dir, "log.json")
     existing_model_log = json_io.load_json(existing_model_log_path)
 
@@ -218,10 +218,15 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
                 image_h = metadata["images"][image_name]["height_px"]
                 image_w = metadata["images"][image_name]["width_px"]
                 for box in annotations[image_name]["boxes"]:
-                    min_y_dilation = abs(round(random.gauss(0, dilation_sigma)))
-                    min_x_dilation = abs(round(random.gauss(0, dilation_sigma)))
-                    max_y_dilation = abs(round(random.gauss(0, dilation_sigma)))
-                    max_x_dilation = abs(round(random.gauss(0, dilation_sigma)))
+                    min_y_dilation = abs(round(random.uniform(0, dilation_sigma)))
+                    min_x_dilation = abs(round(random.uniform(0, dilation_sigma)))
+                    max_y_dilation = abs(round(random.uniform(0, dilation_sigma)))
+                    max_x_dilation = abs(round(random.uniform(0, dilation_sigma)))
+
+                    # min_y_dilation = abs(round(random.gauss(0, dilation_sigma)))
+                    # min_x_dilation = abs(round(random.gauss(0, dilation_sigma)))
+                    # max_y_dilation = abs(round(random.gauss(0, dilation_sigma)))
+                    # max_x_dilation = abs(round(random.gauss(0, dilation_sigma)))
 
 
                     box[0] = max(0, box[0] - min_y_dilation) # min(image_h - 1, max(0, p_min_y)) #box[0] + random.randint(-(1) * perturbation_amount, perturbation_amount)))
@@ -2849,6 +2854,158 @@ def run_targeted_BlaineLake_Serhienko9S():
 
 
 
+def dilation_plot(training_sets, sigma_vals, out_dir):
+    # image_sets = {
+    #     "training": training_sets,
+    # }
+
+    done = False
+    # patches = {}
+
+    image_set = random.choice(training_sets)
+    # for key in image_sets.keys():
+    #     patches[key] = []
+        # for image_set in image_sets[key]:
+    image_set_dir = os.path.join("usr", "data", image_set["username"], 
+                                "image_sets", image_set["farm_name"], 
+                                image_set["field_name"], image_set["mission_date"])
+    
+    metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    metadata = json_io.load_json(metadata_path)
+    
+    annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path)
+
+
+
+    # max_contained = -1
+    for image_name in annotations.keys():
+        if len(annotations[image_name]["test_regions"]) > 0:
+            image_w = metadata["images"][image_name]["width_px"]
+            image_h = metadata["images"][image_name]["height_px"]
+
+            patch_size = 416
+            incr = patch_size #- overlap_px
+            w_covered = max(image_w - patch_size, 0)
+            num_w_patches = m.ceil(w_covered / incr) #+ 1
+
+            h_covered = max(image_h - patch_size, 0)
+            num_h_patches = m.ceil(h_covered / incr) #+ 1
+            # candidates = []
+
+
+            for i in range(0, num_w_patches):
+                for j in range(0, num_h_patches):
+                    patch_min_y = (patch_size) * j
+                    patch_min_x = (patch_size) * i
+
+                    patch_max_y = (patch_min_y + patch_size) #, image_height)
+                    patch_max_x = (patch_min_x + patch_size) #, image_width)
+
+                    patch_region = [patch_min_y, patch_min_x, patch_max_y, patch_max_x]
+
+                    num_contained = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_region]).size
+
+
+                    if num_contained > 5:
+                        chosen_patch_coords = patch_region
+                        chosen_image = image_name
+                        done = True
+                        break
+
+                    # if num_contained > max_contained:
+                    #     max_contained = num_contained
+                    #     chosen_patch_coords = patch_region
+                    #     chosen_image = image_name
+
+                if done:
+                    break
+
+        if done:
+            break
+
+
+            # print(max_contained)
+
+
+    image_path = glob.glob(os.path.join(image_set_dir, "images", chosen_image + ".*"))[0]
+    image = Image(image_path)
+    image_array = image.load_image_array()
+
+    patch = image_array[chosen_patch_coords[0]: chosen_patch_coords[2], chosen_patch_coords[1]: chosen_patch_coords[3]]
+
+    # patches[key].append(patch)
+
+    inds = box_utils.get_contained_inds(annotations[chosen_image]["boxes"], [chosen_patch_coords])
+    sel_boxes = annotations[chosen_image]["boxes"][inds]
+    sigma_to_boxes = {
+        0: sel_boxes
+    }
+    for dilation_sigma in sigma_vals:
+
+        boxes = np.copy(sel_boxes)
+
+        for box in boxes:
+
+            min_y_dilation = abs(round(random.gauss(0, dilation_sigma)))
+            min_x_dilation = abs(round(random.gauss(0, dilation_sigma)))
+            max_y_dilation = abs(round(random.gauss(0, dilation_sigma)))
+            max_x_dilation = abs(round(random.gauss(0, dilation_sigma)))
+
+
+            box[0] = max(0, box[0] - min_y_dilation)
+            box[1] = max(0, box[1] - min_x_dilation)
+            box[2] = min(image_h, box[2] + max_y_dilation)
+            box[3] = min(image_w, box[3] + max_x_dilation)
+
+        sigma_to_boxes[dilation_sigma] = boxes
+
+    num_subplots = len(sigma_vals) + 1
+    fig, axs = plt.subplots(1, num_subplots, figsize=(14, 6))
+
+    for i in range(num_subplots):
+        if i == 0:
+            sigma = 0
+        else:
+            sigma = sigma_vals[i-1]
+
+        boxes = sigma_to_boxes[sigma]
+        print("boxes", boxes)
+
+
+        out_array = np.copy(patch)
+
+        # shapes = np.zeros_like(patch, np.uint8)
+        for box in boxes:
+            box[0] = box[0] - chosen_patch_coords[0]
+            box[1] = box[1] - chosen_patch_coords[1]
+            box[2] = box[2] - chosen_patch_coords[0]
+            box[3] = box[3] - chosen_patch_coords[1]
+            # cv2.rectangle(shapes, (box[1], box[0]), (box[3], box[2]), (255, 0, 0), -1)
+            cv2.rectangle(out_array, (max(box[1], 0), max(box[0], 0)),
+                                 (min(box[3], out_array.shape[1]), min(box[2], out_array.shape[0])),
+                                 (0, 132, 255), 2)
+        # alpha = 0.25
+        # mask = shapes.astype(bool)
+        # out_array[mask] = cv2.addWeighted(patch, alpha, shapes, 1-alpha, 0)[mask]
+        sigma_patch_path = os.path.join(out_dir, "sigma_" + str(sigma) + ".png")
+        cv2.imwrite(sigma_patch_path, cv2.cvtColor(out_array, cv2.COLOR_RGB2BGR))
+        in_array = cv2.imread(sigma_patch_path, cv2.IMREAD_UNCHANGED)
+        if in_array.ndim == 3:
+            in_array = cv2.cvtColor(in_array, cv2.COLOR_BGR2RGB)
+
+        axs[i].set_title("$\sigma = " + str(sigma) + "$") #"Training Samples", fontsize=50, fontweight=50)
+        axs[i].imshow(in_array)
+        axs[i].axis("off")
+
+
+    plt.suptitle("Expanding Annotations By Varying Amounts")
+    plt.tight_layout()
+
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "dilated_annotations.png")
+    plt.savefig(out_path)
+
 
 def create_patch_sample_plot(training_sets, test_sets, out_dir):
     image_sets = {
@@ -3039,168 +3196,168 @@ if __name__ == "__main__":
     server.sch_ctx["baseline_queue"] = LockQueue()
 
     training_image_sets = [
-        {
-            "username": "kaylie",
-            "farm_name": "row_spacing",
-            "field_name": "nasser",
-            "mission_date": "2021-06-01"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "row_spacing",
-            "field_name": "brown",
-            "mission_date": "2021-06-01"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "UNI",
-            "field_name": "Dugout",
-            "mission_date": "2022-05-30"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "MORSE",
-            "field_name": "Dugout",
-            "mission_date": "2022-05-27"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "UNI",
-            "field_name": "Brown",
-            "mission_date": "2021-06-05"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "UNI",
-            "field_name": "Sutherland",
-            "mission_date": "2021-06-05"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "row_spacing",
-            "field_name": "nasser2",
-            "mission_date": "2022-06-02"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "MORSE",
-            "field_name": "Nasser",
-            "mission_date": "2022-05-27"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "UNI",
-            "field_name": "LowN2",
-            "mission_date": "2021-06-07"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim4",
-            "mission_date": "2022-05-24"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim5",
-            "mission_date": "2022-05-24"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim1",
-            "mission_date": "2021-05-26"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim2",
-            "mission_date": "2021-05-26"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Biggar",
-            "field_name": "Dennis1",
-            "mission_date": "2021-06-04"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Biggar",
-            "field_name": "Dennis3",
-            "mission_date": "2021-06-04"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "BlaineLake",
-            "field_name": "River",
-            "mission_date": "2021-06-09"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "BlaineLake",
-            "field_name": "Lake",
-            "mission_date": "2021-06-09"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "BlaineLake",
-            "field_name": "HornerWest",
-            "mission_date": "2021-06-09"
-        },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "row_spacing",
+        #     "field_name": "nasser",
+        #     "mission_date": "2021-06-01"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "row_spacing",
+        #     "field_name": "brown",
+        #     "mission_date": "2021-06-01"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "UNI",
+        #     "field_name": "Dugout",
+        #     "mission_date": "2022-05-30"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "MORSE",
+        #     "field_name": "Dugout",
+        #     "mission_date": "2022-05-27"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "UNI",
+        #     "field_name": "Brown",
+        #     "mission_date": "2021-06-05"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "UNI",
+        #     "field_name": "Sutherland",
+        #     "mission_date": "2021-06-05"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "row_spacing",
+        #     "field_name": "nasser2",
+        #     "mission_date": "2022-06-02"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "MORSE",
+        #     "field_name": "Nasser",
+        #     "mission_date": "2022-05-27"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "UNI",
+        #     "field_name": "LowN2",
+        #     "mission_date": "2021-06-07"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim4",
+        #     "mission_date": "2022-05-24"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim5",
+        #     "mission_date": "2022-05-24"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim1",
+        #     "mission_date": "2021-05-26"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim2",
+        #     "mission_date": "2021-05-26"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Biggar",
+        #     "field_name": "Dennis1",
+        #     "mission_date": "2021-06-04"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Biggar",
+        #     "field_name": "Dennis3",
+        #     "mission_date": "2021-06-04"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "River",
+        #     "mission_date": "2021-06-09"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "Lake",
+        #     "mission_date": "2021-06-09"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "HornerWest",
+        #     "mission_date": "2021-06-09"
+        # },
         {
             "username": "kaylie",
             "farm_name": "UNI",
             "field_name": "LowN1",
             "mission_date": "2021-06-07"
         },
-        {
-            "username": "kaylie",
-            "farm_name": "BlaineLake",
-            "field_name": "Serhienko9N",
-            "mission_date": "2022-06-07"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Saskatoon",
-            "field_name": "Norheim1",
-            "mission_date": "2021-06-02"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "row_spacing",
-            "field_name": "brown",
-            "mission_date": "2021-06-08"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "SaskatoonEast",
-            "field_name": "Stevenson5NW",
-            "mission_date": "2022-06-20"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "UNI",
-            "field_name": "Vaderstad",
-            "mission_date": "2022-06-16"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "Biggar",
-            "field_name": "Dennis2",
-            "mission_date": "2021-06-12"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "BlaineLake",
-            "field_name": "Serhienko10",
-            "mission_date": "2022-06-14"
-        },
-        {
-            "username": "kaylie",
-            "farm_name": "BlaineLake",
-            "field_name": "Serhienko9S",
-            "mission_date": "2022-06-14"
-        }
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "Serhienko9N",
+        #     "mission_date": "2022-06-07"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Saskatoon",
+        #     "field_name": "Norheim1",
+        #     "mission_date": "2021-06-02"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "row_spacing",
+        #     "field_name": "brown",
+        #     "mission_date": "2021-06-08"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "SaskatoonEast",
+        #     "field_name": "Stevenson5NW",
+        #     "mission_date": "2022-06-20"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "UNI",
+        #     "field_name": "Vaderstad",
+        #     "mission_date": "2022-06-16"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "Biggar",
+        #     "field_name": "Dennis2",
+        #     "mission_date": "2021-06-12"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "Serhienko10",
+        #     "mission_date": "2022-06-14"
+        # },
+        # {
+        #     "username": "kaylie",
+        #     "farm_name": "BlaineLake",
+        #     "field_name": "Serhienko9S",
+        #     "mission_date": "2022-06-14"
+        # }
     ]
 
     test_image_sets = [
@@ -3458,11 +3615,12 @@ if __name__ == "__main__":
     # for sz in [1000, 2000, 4000]: #16000]:
     #     run_diverse_model(training_image_sets, "set_of_27_" + str(sz) + "_patches_rep_4", sz, None, supplementary_weed_image_sets=None, run=True)
     
-    matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_0")
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_0")
     # log_path = os.path.join(matched_dir, "log.json")
     # log = json_io.load_json(log_path)
     # annotation_dilation_test(training_image_sets, [3], 16000, matched_dir) #, taken_regions=log["taken_regions"]) #num_patches_to_take=16000)
-    annotation_removal_test(training_image_sets, 0.05, 16000, matched_dir)
+    # annotation_removal_test(training_image_sets, 0.05, 16000, matched_dir)
+    dilation_plot(training_image_sets, [5, 10], "dilation_plot")
     # create_patch_sample_plot(training_image_sets, test_image_sets, "sample_patches")
     # model_name = "UNI_Dugout_2022-05-30_630_patches_BlaineLake_Serhienko9S_2022-06-14_630_patches_rep_1"
     # model_name = "BlaineLake_River_2021-06-09_630_patches_BlaineLake_Serhienko9S_2022-06-14_630_patches_rep_0"

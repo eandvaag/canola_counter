@@ -939,7 +939,7 @@ def eval_fine_tune_test(server, test_set, baseline, methods, num_annotations_to_
         
     res_names = [] #[baseline["model_name"] + "_pre_finetune"]
     for method in methods:
-        for dup_num in range(1, num_dups+0):
+        for dup_num in range(0, num_dups+0):
             res_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
             res_names.append(res_name)
 
@@ -1034,7 +1034,7 @@ def eval_fine_tune_test(server, test_set, baseline, methods, num_annotations_to_
     for method in methods:
 
 
-        for dup_num in range(1, num_dups+0):
+        for dup_num in range(0, num_dups+0):
 
 
 

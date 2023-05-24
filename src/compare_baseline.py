@@ -41,6 +41,145 @@ my_plot_colors = ["orangered", "royalblue", "forestgreen", "orange", "mediumorch
 def quality_score_vs_accuracy():
     pass
 
+
+def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_to_select_lst, num_dups):
+    test_set_image_set_dir = os.path.join("usr", "data",
+                                                    test_set["username"], "image_sets",
+                                                    test_set["farm_name"],
+                                                    test_set["field_name"],
+                                                    test_set["mission_date"])
+    test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
+    
+
+    mapping = get_mapping_for_test_set(test_set_image_set_dir)
+    # annotations_path = os.path.join(test_set_image_set_dir, "annotations", "annotations.json")
+    # annotations = annotation_utils.load_annotations(annotations_path)
+    results = {}
+    # labels = []
+
+    
+    pre_fine_tune_result_name = baseline["model_name"] + "_pre_finetune" #+ str(num_images_to_select)
+    result_uuid = mapping[pre_fine_tune_result_name]
+    result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
+
+    predictions_path = os.path.join(result_dir, "predictions.json")
+    predictions = annotation_utils.load_predictions(predictions_path)
+
+    annotations_path = os.path.join(result_dir, "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path)
+
+    accuracies = []
+    for image_name in annotations.keys():
+        sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+        accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
+        accuracies.append(accuracy)
+
+    pre_fine_tune_accuracy = np.mean(accuracies)
+
+    # label_lookup = {
+    #     "selected_patches_match_both": "selected_patches",
+    #     "random_images": "random_images"
+    # }
+
+    max_num_fine_tuning_boxes = 0
+    for i, method in enumerate(methods):
+        results[method] = []
+        for j in range(len(num_annotations_to_select_lst)):
+
+            dup_accuracies = []
+            for dup_num in range(num_dups):
+
+                result_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select_lst[j]) + "_annotations_dup_" + str(dup_num)
+                result_uuid = mapping[result_name]
+                result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
+
+                predictions_path = os.path.join(result_dir, "predictions.json")
+                predictions = annotation_utils.load_predictions(predictions_path)
+
+                annotations_path = os.path.join(result_dir, "annotations.json")
+                annotations = annotation_utils.load_annotations(annotations_path)
+
+
+                num_fine_tuning_boxes = 0
+                num_fine_tuning_regions = 0
+                accuracies = []
+                for image_name in annotations.keys():
+                    sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+                    accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
+                    accuracies.append(accuracy)
+
+                    num_fine_tuning_boxes += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                    num_fine_tuning_regions += len(annotations[image_name]["training_regions"])
+
+
+                if num_fine_tuning_boxes > max_num_fine_tuning_boxes:
+                    max_num_fine_tuning_boxes = num_fine_tuning_boxes
+                # global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
+
+                # test_set_accuracy = global_accuracy #np.mean(accuracy)
+                test_set_accuracy = np.mean(accuracies)
+                dup_accuracies.append(test_set_accuracy)
+                # results[method].append((num_fine_tuning_boxes, test_set_accuracy))
+                # results[method].append((num_fine_tuning_regions, test_set_accuracy))
+
+            # results.append(np.mean(dup_accuracies))
+            # labels.append(method)
+            results[method].append((num_annotations_to_select_lst[j], 
+                                    np.mean(dup_accuracies), 
+                                    np.std(dup_accuracies)))
+
+    print(results)
+
+
+    fig = plt.figure(figsize=(10, 10))
+    # ax = fig.add_axes([0.05, 0.05, 0.9, 0.9]) #[0.35, 0.15, 0.5, 0.7])
+    ax = fig.add_subplot(111)
+
+
+    # for i in range(len(results["random_patches_second"])):
+    #     # ax.plot([results["random_patches_second"][i][0], results["selected_patches_first"][i][0]], 
+    #     #         [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+        
+    #     ax.plot([i, i], 
+    #             [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+    # for i, method in enumerate(list(results.keys())):
+    #     ax.scatter([x[0] for x in results[method]], [x[1] for x in results[method]], s=50, c=my_plot_colors[i], label=method, zorder=2)
+
+    ax.scatter([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], marker="_", c=my_plot_colors[0], label="random_patches_second", zorder=2)
+    ax.scatter([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], marker="_", c=my_plot_colors[1], label="selected_patches_first", zorder=2)
+    
+    for x in results["random_patches_second"]:
+        ax.plot([x[0], x[0]], [x[1]-x[2], x[1]+x[2]], c=my_plot_colors[0])
+    
+
+    for x in results["selected_patches_first"]:
+        ax.plot([x[0], x[0]], [x[1]-x[2], x[1]+x[2]], c=my_plot_colors[1])
+
+
+    # ax.scatter([i for i in range(len(results["random_patches_second"]))], [x[1] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
+    # ax.scatter([i for i in range(len(results["selected_patches_first"]))], [x[1] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
+
+
+    # ax.plot([0, max_num_fine_tuning_boxes], [pre_fine_tune_accuracy, pre_fine_tune_accuracy], c="black", linestyle="dashed", label="No Fine-Tuning")
+
+    # ax.scatter(results, np.arange(len(labels))) #, color=colors) #, width=0.4)
+
+    # ax.set_yticks(np.arange(len(labels)))
+    # ax.set_yticklabels(labels)
+
+    plt.axhline(y=pre_fine_tune_accuracy, c="black", linestyle="dashdot", label="No Fine-Tuning")
+    ax.legend()
+    ax.set_ylabel("Accuracy")
+    ax.set_xlabel("Number of Patches") #Annotations")
+
+    plt.tight_layout()
+
+    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_averaged.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
+
+
 def create_fine_tune_plot(baseline, test_set, methods, num_annotations_to_select_lst, num_dups):
     test_set_image_set_dir = os.path.join("usr", "data",
                                                     test_set["username"], "image_sets",
@@ -1398,98 +1537,98 @@ def create_dilation_plot(test_sets, baselines, out_dirname):
     total_min_diff = 10000000
     total_max_diff = -10000000
     for baseline in baselines:
-        rep_accuracies_iou_10 = []
-        rep_accuracies_iou_50 = []
-        rep_abs_dics = []
-        for rep_num in range(1):
+        # rep_accuracies_iou_10 = []
+        # rep_accuracies_iou_50 = []
+        # rep_dics = []
+        # for rep_num in range(1):
 
-            model_name = baseline["model_name"] + "_rep_" + str(rep_num)
-            
-            test_set_accuracies_iou_10 = []
-            test_set_accuracies_iou_50 = []
-            test_set_abs_dics = []
-            for test_set in test_sets:
-                # print(test_set)
-                test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
-                test_set_image_set_dir = os.path.join("usr", "data",
-                                                        test_set["username"], "image_sets",
-                                                        test_set["farm_name"],
-                                                        test_set["field_name"],
-                                                        test_set["mission_date"])
-                model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+        model_name = baseline["model_name"] + "_rep_" + str(0)
+        
+        test_set_accuracies_iou_10 = []
+        test_set_accuracies_iou_50 = []
+        test_set_dics = []
+        for test_set in test_sets:
+            # print(test_set)
+            test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+            test_set_image_set_dir = os.path.join("usr", "data",
+                                                    test_set["username"], "image_sets",
+                                                    test_set["farm_name"],
+                                                    test_set["field_name"],
+                                                    test_set["mission_date"])
+            model_dir = os.path.join(test_set_image_set_dir, "model", "results")
 
-                result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
-
-
-
-                annotations_path = os.path.join(result_dir, "annotations.json")
-                annotations = annotation_utils.load_annotations(annotations_path)
-
-                predictions_path = os.path.join(result_dir, "predictions.json")
-                predictions = annotation_utils.load_predictions(predictions_path)
-
-                accuracies_iou_10 = []
-                accuracies_iou_50 = []
-                for image_name in annotations.keys():
-                    if len(annotations[image_name]["test_regions"]) > 0:
-                        annotated_boxes = annotations[image_name]["boxes"]
-                        predicted_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
-                        accuracy_iou_10 = fine_tune_eval.get_accuracy(annotated_boxes, predicted_boxes, iou_thresh=0.10)
-                        accuracy_iou_50 = fine_tune_eval.get_accuracy(annotated_boxes, predicted_boxes, iou_thresh=0.50)
-                        
-                        accuracies_iou_10.append(accuracy_iou_10)
-                        accuracies_iou_50.append(accuracy_iou_50)
-
-                test_set_accuracy_iou_10 = np.mean(accuracies_iou_10)
-                test_set_accuracy_iou_50 = np.mean(accuracies_iou_50)
+            result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
 
 
-                excel_path = os.path.join(result_dir, "metrics.xlsx")
-                df = pd.read_excel(excel_path, sheet_name=0)
-                # test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
 
-                annotated_counts = df["Annotated Count"][df["Annotated Count"].notnull()]
-                predicted_counts = df["Predicted Count"][df["Annotated Count"].notnull()]
+            annotations_path = os.path.join(result_dir, "annotations.json")
+            annotations = annotation_utils.load_annotations(annotations_path)
 
-                abs_dics = np.array((annotated_counts - predicted_counts))
+            predictions_path = os.path.join(result_dir, "predictions.json")
+            predictions = annotation_utils.load_predictions(predictions_path)
 
-                min_diff = np.min(abs_dics)
-                max_diff = np.max(abs_dics)
-                if min_diff < total_min_diff:
-                    total_min_diff = min_diff
-                if max_diff > total_max_diff:
-                    total_max_diff = max_diff
+            accuracies_iou_10 = []
+            accuracies_iou_50 = []
+            for image_name in annotations.keys():
+                if len(annotations[image_name]["test_regions"]) > 0:
+                    annotated_boxes = annotations[image_name]["boxes"]
+                    predicted_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+                    accuracy_iou_10 = fine_tune_eval.get_accuracy(annotated_boxes, predicted_boxes, iou_thresh=0.10)
+                    accuracy_iou_50 = fine_tune_eval.get_accuracy(annotated_boxes, predicted_boxes, iou_thresh=0.50)
+                    
+                    accuracies_iou_10.append(accuracy_iou_10)
+                    accuracies_iou_50.append(accuracy_iou_50)
 
-                test_set_abs_dics.extend(abs_dics.tolist())
-                # rep_accuracies.append(rep_accuracy)
-
-                test_set_accuracies_iou_10.append(test_set_accuracy_iou_10)
-                test_set_accuracies_iou_50.append(test_set_accuracy_iou_50)
+            test_set_accuracy_iou_10 = np.mean(accuracies_iou_10)
+            test_set_accuracy_iou_50 = np.mean(accuracies_iou_50)
 
 
-            rep_accuracy_iou_10 = np.mean(test_set_accuracies_iou_10)
-            rep_accuracies_iou_10.append(rep_accuracy_iou_10)
+            excel_path = os.path.join(result_dir, "metrics.xlsx")
+            df = pd.read_excel(excel_path, sheet_name=0)
+            # test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
 
-            rep_accuracy_iou_50 = np.mean(test_set_accuracies_iou_50)
-            rep_accuracies_iou_50.append(rep_accuracy_iou_50)
+            annotated_counts = df["Annotated Count"][df["Annotated Count"].notnull()]
+            predicted_counts = df["Predicted Count"][df["Annotated Count"].notnull()]
+
+            dics = np.array((predicted_counts - annotated_counts))
+
+            min_diff = np.min(dics)
+            max_diff = np.max(dics)
+            if min_diff < total_min_diff:
+                total_min_diff = min_diff
+            if max_diff > total_max_diff:
+                total_max_diff = max_diff
+
+            test_set_dics.extend(dics.tolist())
+            # rep_accuracies.append(rep_accuracy)
+
+            test_set_accuracies_iou_10.append(test_set_accuracy_iou_10)
+            test_set_accuracies_iou_50.append(test_set_accuracy_iou_50)
+
+
+            # rep_accuracy_iou_10 = np.mean(test_set_accuracies_iou_10)
+            # rep_accuracies_iou_10.append(rep_accuracy_iou_10)
+
+            # rep_accuracy_iou_50 = np.mean(test_set_accuracies_iou_50)
+            # rep_accuracies_iou_50.append(rep_accuracy_iou_50)
 
             # rep_abs_dic = np.mean(test_set_abs_dics)
-            rep_abs_dics = test_set_abs_dics #.append(rep_abs_dic)
+            # rep_dics = test_set_dics #.append(rep_abs_dic)
 
         # if i == 1:
         # print(baseline["model_name"], rep_accuracies)
 
-        baseline_accuracy_iou_10 = np.mean(rep_accuracies_iou_10)
-        baseline_accuracy_iou_50 = np.mean(rep_accuracies_iou_50)
+        baseline_accuracy_iou_10 = np.mean(test_set_accuracies_iou_10)
+        baseline_accuracy_iou_50 = np.mean(test_set_accuracies_iou_50)
         # baseline_std = np.std(rep_accuracies)
         # baseline_abs_dic = np.mean(rep_abs_dics)
-        baseline_abs_dics = rep_abs_dics
+        baseline_dics = test_set_dics
         results.append(
                 # (baseline["model_label"], 
                 (baseline["dilation_sigma"],
                 baseline_accuracy_iou_10, #overall_baseline_accuracy,
                 baseline_accuracy_iou_50,
-                baseline_abs_dics))
+                baseline_dics))
         
     fig = plt.figure(figsize=(10,10))
     ax = fig.add_subplot(111)
@@ -1572,10 +1711,38 @@ def create_dilation_plot(test_sets, baselines, out_dirname):
     for i in range(lines.shape[0]):
         ax.plot(x_vals, lines[i, :], linewidth=1, color="black", alpha=0.2)
 
-    out_path = os.path.join("eval_charts", out_dirname, "lines_abs_dic_plot.svg") #".svg")
+    out_path = os.path.join("eval_charts", out_dirname, "lines_dic_plot.svg") #".svg")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
     plt.savefig(out_path) #, dpi=600)
+
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_axes([0.10, 0.10, 0.80, 0.80])
+    bp = ax.violinplot([x[3] for x in results], showmeans=True)
+
+    xticklabels = [0]
+    for x in results:
+        xticklabels.append(x[0])
+    ax.set_xticks(np.arange(0, len(xticklabels)))
+    ax.set_xticklabels(xticklabels)
+    plt.axhline(y=0, linestyle="dotted", color="black", linewidth=1)
+    
+
+    plt.title("Difference In Count For Different Dilation Amounts")
+    ax.set_ylabel("Difference in Count (Predicted - Annotated)")
+    ax.set_xlabel("Dilation Amount ($\sigma$)")
+    # plt.tight_layout()
+
+    out_path = os.path.join("eval_charts", out_dirname, "dic_boxplot.svg") #".svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path) #, dpi=600)
+
+
+
+
+
 
 
 
@@ -3678,6 +3845,7 @@ def run():
 
 
 
+
 eval_fixed_patch_num_baselines = [
     "set_of_27_250_patches",
     "set_of_27_500_patches",
@@ -3814,7 +3982,11 @@ dilation_baselines = [
     "set_of_27_dilated_by_3_16000_patches",
     "set_of_27_dilated_by_4_16000_patches",
     "set_of_27_dilated_by_5_16000_patches",
-    "set_of_27_dilated_by_7_16000_patches"
+    "set_of_27_dilated_by_6_16000_patches",
+    "set_of_27_dilated_by_7_16000_patches",
+    "set_of_27_dilated_by_8_16000_patches",
+    "set_of_27_dilated_by_9_16000_patches",
+    "set_of_27_dilated_by_10_16000_patches",
 ]
 
 exg_repl_baselines = [
@@ -4095,6 +4267,7 @@ def eval_run():
 
     # my_patch_merging_plot()
     # my_dilation_plot()
+    # exit()
 
     baselines = [{"model_name": "set_of_27_38891_patches_rep_0", "model_creator": "eval"}]
 
@@ -4118,9 +4291,9 @@ def eval_run():
 
     num_dups = 5
     num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    for num_annotations_to_select in [250]: #num_annotations_to_select_lst:
+    for num_annotations_to_select in [1000]: #num_annotations_to_select_lst:
         # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[4], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=1)
         # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     # num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
     # for num_annotations_to_select in [500]: #num_annotations_to_select_lst:
@@ -4133,16 +4306,16 @@ def eval_run():
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     
 
-    # create_fine_tune_plot(baselines[0], eval_test_sets[2], methods, num_annotations_to_select_lst=[500, 750], num_dups=5)
-
+    # create_fine_tune_plot(baselines[0], eval_test_sets[4], methods, num_annotations_to_select_lst=[1000], num_dups=5)
+    # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, num_annotations_to_select_lst=[250, 500, 750], num_dups=num_dups)
     # my_dilation_plot()
-    exit()
+    # exit()
 
 
     # predict_on_test_sets(eval_test_sets, single_baselines) # + d_diverse_baselines)
     # create_weed_comparison_plot(eval_test_sets, single_baselines)
 
-    # exit()
+    exit()
     # single_baselines = []
     # for baseline in eval_single_630_baselines:
     #     # for i in range(0, 5):
