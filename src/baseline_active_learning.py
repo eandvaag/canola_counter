@@ -3199,168 +3199,168 @@ if __name__ == "__main__":
     server.sch_ctx["baseline_queue"] = LockQueue()
 
     training_image_sets = [
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "row_spacing",
-        #     "field_name": "nasser",
-        #     "mission_date": "2021-06-01"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "row_spacing",
-        #     "field_name": "brown",
-        #     "mission_date": "2021-06-01"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "Dugout",
-        #     "mission_date": "2022-05-30"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "MORSE",
-        #     "field_name": "Dugout",
-        #     "mission_date": "2022-05-27"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "Brown",
-        #     "mission_date": "2021-06-05"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "Sutherland",
-        #     "mission_date": "2021-06-05"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "row_spacing",
-        #     "field_name": "nasser2",
-        #     "mission_date": "2022-06-02"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "MORSE",
-        #     "field_name": "Nasser",
-        #     "mission_date": "2022-05-27"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "LowN2",
-        #     "mission_date": "2021-06-07"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim4",
-        #     "mission_date": "2022-05-24"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim5",
-        #     "mission_date": "2022-05-24"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim1",
-        #     "mission_date": "2021-05-26"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim2",
-        #     "mission_date": "2021-05-26"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Biggar",
-        #     "field_name": "Dennis1",
-        #     "mission_date": "2021-06-04"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Biggar",
-        #     "field_name": "Dennis3",
-        #     "mission_date": "2021-06-04"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "River",
-        #     "mission_date": "2021-06-09"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Lake",
-        #     "mission_date": "2021-06-09"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "HornerWest",
-        #     "mission_date": "2021-06-09"
-        # },
+        {
+            "username": "kaylie",
+            "farm_name": "row_spacing",
+            "field_name": "nasser",
+            "mission_date": "2021-06-01"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "row_spacing",
+            "field_name": "brown",
+            "mission_date": "2021-06-01"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Dugout",
+            "mission_date": "2022-05-30"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "MORSE",
+            "field_name": "Dugout",
+            "mission_date": "2022-05-27"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Brown",
+            "mission_date": "2021-06-05"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Sutherland",
+            "mission_date": "2021-06-05"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "row_spacing",
+            "field_name": "nasser2",
+            "mission_date": "2022-06-02"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "MORSE",
+            "field_name": "Nasser",
+            "mission_date": "2022-05-27"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "LowN2",
+            "mission_date": "2021-06-07"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim4",
+            "mission_date": "2022-05-24"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim5",
+            "mission_date": "2022-05-24"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim1",
+            "mission_date": "2021-05-26"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim2",
+            "mission_date": "2021-05-26"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Biggar",
+            "field_name": "Dennis1",
+            "mission_date": "2021-06-04"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Biggar",
+            "field_name": "Dennis3",
+            "mission_date": "2021-06-04"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "River",
+            "mission_date": "2021-06-09"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Lake",
+            "mission_date": "2021-06-09"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "HornerWest",
+            "mission_date": "2021-06-09"
+        },
         {
             "username": "kaylie",
             "farm_name": "UNI",
             "field_name": "LowN1",
             "mission_date": "2021-06-07"
         },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Serhienko9N",
-        #     "mission_date": "2022-06-07"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Saskatoon",
-        #     "field_name": "Norheim1",
-        #     "mission_date": "2021-06-02"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "row_spacing",
-        #     "field_name": "brown",
-        #     "mission_date": "2021-06-08"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "SaskatoonEast",
-        #     "field_name": "Stevenson5NW",
-        #     "mission_date": "2022-06-20"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "UNI",
-        #     "field_name": "Vaderstad",
-        #     "mission_date": "2022-06-16"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "Biggar",
-        #     "field_name": "Dennis2",
-        #     "mission_date": "2021-06-12"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Serhienko10",
-        #     "mission_date": "2022-06-14"
-        # },
-        # {
-        #     "username": "kaylie",
-        #     "farm_name": "BlaineLake",
-        #     "field_name": "Serhienko9S",
-        #     "mission_date": "2022-06-14"
-        # }
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Serhienko9N",
+            "mission_date": "2022-06-07"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Saskatoon",
+            "field_name": "Norheim1",
+            "mission_date": "2021-06-02"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "row_spacing",
+            "field_name": "brown",
+            "mission_date": "2021-06-08"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "SaskatoonEast",
+            "field_name": "Stevenson5NW",
+            "mission_date": "2022-06-20"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "UNI",
+            "field_name": "Vaderstad",
+            "mission_date": "2022-06-16"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "Biggar",
+            "field_name": "Dennis2",
+            "mission_date": "2021-06-12"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Serhienko10",
+            "mission_date": "2022-06-14"
+        },
+        {
+            "username": "kaylie",
+            "farm_name": "BlaineLake",
+            "field_name": "Serhienko9S",
+            "mission_date": "2022-06-14"
+        }
     ]
 
     test_image_sets = [
