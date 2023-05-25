@@ -59,40 +59,43 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                 ]
 
                 
-
-
-                contained_inds = box_utils.get_contained_inds(predictions[image_name]["boxes"], [patch_coords])
-                # contained_annotation_inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
-                contained_boxes = predictions[image_name]["boxes"][contained_inds]
-                contained_scores = predictions[image_name]["scores"][contained_inds]
-                clipped_boxes = box_utils.clip_boxes_np(contained_boxes, patch_coords)
-                visibilities = box_utils.box_visibilities_np(contained_boxes, clipped_boxes)
-                # score = np.abs(contained_scores - 0.50) * visibilities
-
-                # patch_value = 
-                # patch_value = 0
-                # for k in range(contained_scores.size):
-                #     if contained_scores[k] <= 0.5:
-                #         patch_value += (4 * contained_scores[k] + (-1))
-                #     else:
-                #         patch_value += (-4 * (contained_scores[k]) + 3)
-
-
-                if contained_scores.size > 0:
-                    dists = []
-                    for k in range(contained_scores.size):
-                        dist = abs(0.5 - contained_scores[k])
-                        dists.append(dist)
-                    patch_value = np.mean(dists)
-                else:
+                if predictions[image_name]["boxes"].size == 0:
                     patch_value = 1000000 + random.random()
 
-                # patch_value = 0
-                # for k in range(contained_scores.size):
-                #     patch_value += gaussian(contained_scores[k], 0.5, 0.167) * visibilities[k]
+                else:
 
-                # exg_patch = exg_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
-                # exg_value = np.sum(exg_patch ** 2) / exg_patch.size
+                    contained_inds = box_utils.get_contained_inds(predictions[image_name]["boxes"], [patch_coords])
+                    # contained_annotation_inds = box_utils.get_contained_inds(annotations[image_name]["boxes"], [patch_coords])
+                    contained_boxes = predictions[image_name]["boxes"][contained_inds]
+                    contained_scores = predictions[image_name]["scores"][contained_inds]
+                    clipped_boxes = box_utils.clip_boxes_np(contained_boxes, patch_coords)
+                    visibilities = box_utils.box_visibilities_np(contained_boxes, clipped_boxes)
+                    # score = np.abs(contained_scores - 0.50) * visibilities
+
+                    # patch_value = 
+                    # patch_value = 0
+                    # for k in range(contained_scores.size):
+                    #     if contained_scores[k] <= 0.5:
+                    #         patch_value += (4 * contained_scores[k] + (-1))
+                    #     else:
+                    #         patch_value += (-4 * (contained_scores[k]) + 3)
+
+
+                    if contained_scores.size > 0:
+                        dists = []
+                        for k in range(contained_scores.size):
+                            dist = abs(0.5 - contained_scores[k])
+                            dists.append(dist)
+                        patch_value = np.mean(dists)
+                    else:
+                        patch_value = 1000000 + random.random()
+
+                    # patch_value = 0
+                    # for k in range(contained_scores.size):
+                    #     patch_value += gaussian(contained_scores[k], 0.5, 0.167) * visibilities[k]
+
+                    # exg_patch = exg_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+                    # exg_value = np.sum(exg_patch ** 2) / exg_patch.size
 
                 patch_candidates.append([image_name, patch_coords, patch_value]) #, exg_value]) #, contained_annotation_inds.size])
 
@@ -555,6 +558,7 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
 
                 is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
 
+                # print("getting annotation_count_before")
                 annotation_count_before = 0
                 for image_name in taken_regions.keys():
                     # if image_name == s_image_name:
@@ -565,6 +569,7 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                     # else:
                     annotation_count_before += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
 
+                print(annotation_count_before)
 
                 done = False
                 for substitute_candidate in patch_candidates:

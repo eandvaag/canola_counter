@@ -228,41 +228,43 @@ def create_fine_tune_plot(baseline, test_set, methods, num_annotations_to_select
             for dup_num in range(num_dups):
 
                 result_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select_lst[j]) + "_annotations_dup_" + str(dup_num)
-                result_uuid = mapping[result_name]
-                result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
+                
+                if result_name in mapping:
+                    result_uuid = mapping[result_name]
+                    result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
 
-                predictions_path = os.path.join(result_dir, "predictions.json")
-                predictions = annotation_utils.load_predictions(predictions_path)
+                    predictions_path = os.path.join(result_dir, "predictions.json")
+                    predictions = annotation_utils.load_predictions(predictions_path)
 
-                annotations_path = os.path.join(result_dir, "annotations.json")
-                annotations = annotation_utils.load_annotations(annotations_path)
-
-
-                num_fine_tuning_boxes = 0
-                num_fine_tuning_regions = 0
-                accuracies = []
-                for image_name in annotations.keys():
-                    sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
-                    accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
-                    accuracies.append(accuracy)
-
-                    num_fine_tuning_boxes += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
-                    num_fine_tuning_regions += len(annotations[image_name]["training_regions"])
+                    annotations_path = os.path.join(result_dir, "annotations.json")
+                    annotations = annotation_utils.load_annotations(annotations_path)
 
 
-                if num_fine_tuning_boxes > max_num_fine_tuning_boxes:
-                    max_num_fine_tuning_boxes = num_fine_tuning_boxes
-                # global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
+                    num_fine_tuning_boxes = 0
+                    num_fine_tuning_regions = 0
+                    accuracies = []
+                    for image_name in annotations.keys():
+                        sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+                        accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
+                        accuracies.append(accuracy)
 
-                # test_set_accuracy = global_accuracy #np.mean(accuracy)
-                test_set_accuracy = np.mean(accuracies)
-                dup_accuracies.append(test_set_accuracy)
-                # results[method].append((num_fine_tuning_boxes, test_set_accuracy))
-                results[method].append((num_fine_tuning_regions, test_set_accuracy))
+                        num_fine_tuning_boxes += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+                        num_fine_tuning_regions += len(annotations[image_name]["training_regions"])
 
-            # results.append(np.mean(dup_accuracies))
-            # labels.append(method)
-            # results[method].append((num_annotations_to_select_lst[j], np.mean(dup_accuracies)))
+
+                    if num_fine_tuning_boxes > max_num_fine_tuning_boxes:
+                        max_num_fine_tuning_boxes = num_fine_tuning_boxes
+                    # global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
+
+                    # test_set_accuracy = global_accuracy #np.mean(accuracy)
+                    test_set_accuracy = np.mean(accuracies)
+                    dup_accuracies.append(test_set_accuracy)
+                    # results[method].append((num_fine_tuning_boxes, test_set_accuracy))
+                    results[method].append((num_annotations_to_select_lst[j], num_fine_tuning_regions, test_set_accuracy))
+
+                # results.append(np.mean(dup_accuracies))
+                # labels.append(method)
+                # results[method].append((num_annotations_to_select_lst[j], np.mean(dup_accuracies)))
 
     print(results)
 
@@ -272,19 +274,24 @@ def create_fine_tune_plot(baseline, test_set, methods, num_annotations_to_select
     ax = fig.add_subplot(111)
 
 
-    for i in range(len(results["random_patches_second"])):
-        # ax.plot([results["random_patches_second"][i][0], results["selected_patches_first"][i][0]], 
-        #         [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+    # for i in range(len(results["random_patches_second"])):
+    #     # ax.plot([results["random_patches_second"][i][0], results["selected_patches_first"][i][0]], 
+    #     #         [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
         
-        ax.plot([i, i], 
-                [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+    #     ax.plot([i, i], 
+    #             [results["random_patches_second"][i][1], results["selected_patches_first"][i][1]], c="black", zorder=1)
+    
+    
     # for i, method in enumerate(list(results.keys())):
     #     ax.scatter([x[0] for x in results[method]], [x[1] for x in results[method]], s=50, c=my_plot_colors[i], label=method, zorder=2)
 
     # ax.scatter([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
     # ax.scatter([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
-    ax.scatter([i for i in range(len(results["random_patches_second"]))], [x[1] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
-    ax.scatter([i for i in range(len(results["selected_patches_first"]))], [x[1] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
+    # ax.scatter([i for i in range(len(results["random_patches_second"]))], [x[1] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
+    # ax.scatter([i for i in range(len(results["selected_patches_first"]))], [x[1] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
+
+    ax.scatter([x[0] for x in results["random_patches_second"]], [x[2] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="Random Patch-Regions", zorder=2)
+    ax.scatter([x[0] for x in results["selected_patches_first"]], [x[2] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="Selected Patch-Regions", zorder=2)
 
 
     # ax.plot([0, max_num_fine_tuning_boxes], [pre_fine_tune_accuracy, pre_fine_tune_accuracy], c="black", linestyle="dashed", label="No Fine-Tuning")
@@ -293,6 +300,8 @@ def create_fine_tune_plot(baseline, test_set, methods, num_annotations_to_select
 
     # ax.set_yticks(np.arange(len(labels)))
     # ax.set_yticklabels(labels)
+
+    plt.xlim([0, num_annotations_to_select_lst[-1] + 250])
 
     plt.axhline(y=pre_fine_tune_accuracy, c="deeppink", linestyle="dashdot", label="No Fine-Tuning")
     ax.legend()
@@ -4214,7 +4223,36 @@ def my_accuracy_efficiency_sampling():
             accuracy_sampling_efficiency(eval_test_set, baseline_model, "accuracy_assessment")
             # exit()
 
+def get_result_uuids(baseline, test_set, methods, num_annotations_to_select_lst):
 
+    model_names = []
+    model_name = baseline["model_name"] + "_pre_finetune"
+    model_names.append(model_name)
+    dup_nums = 5
+    for dup_num in range(dup_nums):
+        for method in methods:
+            for num_annotations_to_select in num_annotations_to_select_lst:
+                model_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
+                model_names.append(model_name)
+
+    test_set_image_set_dir = os.path.join("usr", "data",
+                                                    test_set["username"], "image_sets",
+                                                    test_set["farm_name"],
+                                                    test_set["field_name"],
+                                                    test_set["mission_date"])
+    # test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
+    
+    mapping = get_mapping_for_test_set(test_set_image_set_dir)
+
+    result_uuids = []
+    for model_name in model_names:
+        if model_name in mapping:
+            result_uuids.append(mapping[model_name])
+
+
+    for result_uuid in result_uuids:
+        print(result_uuid)
+    
 
 
 
@@ -4291,9 +4329,12 @@ def eval_run():
 
     num_dups = 5
     num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    for num_annotations_to_select in [1000]: #num_annotations_to_select_lst:
-        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[4], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=1)
+    # for num_annotations_to_select in [1000]: #num_annotations_to_select_lst:
+    #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[3], baselines[0], methods, num_annotations_to_select=1500, num_dups=1)
+        
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
+
         # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     # num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
     # for num_annotations_to_select in [500]: #num_annotations_to_select_lst:
@@ -4304,9 +4345,9 @@ def eval_run():
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-    
+    # get_result_uuids(baselines[0], eval_test_sets[3], methods, [250, 500, 750, 1000, 1250, 1500])
 
-    # create_fine_tune_plot(baselines[0], eval_test_sets[4], methods, num_annotations_to_select_lst=[1000], num_dups=5)
+    create_fine_tune_plot(baselines[0], eval_test_sets[0], methods, num_annotations_to_select_lst=[250, 500, 750, 1000, 1500], num_dups=5)
     # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, num_annotations_to_select_lst=[250, 500, 750], num_dups=num_dups)
     # my_dilation_plot()
     # exit()
