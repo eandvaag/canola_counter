@@ -648,6 +648,8 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                         
 
                 if cur_annotation_count == new_annotation_count:
+                    if s_image_name not in taken_regions:
+                        taken_regions[s_image_name] = []
                     taken_regions[s_image_name].append(patch_coords)
                     if is_full_patch:
                         cur_full_patch_count += 1

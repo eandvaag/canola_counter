@@ -4329,9 +4329,9 @@ def eval_run():
 
     num_dups = 5
     num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    # for num_annotations_to_select in [1000]: #num_annotations_to_select_lst:
-    #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[3], baselines[0], methods, num_annotations_to_select=1500, num_dups=1)
+    for num_annotations_to_select in [1250, 1500]: #num_annotations_to_select_lst:
+        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
         
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
 
@@ -4347,7 +4347,7 @@ def eval_run():
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     # get_result_uuids(baselines[0], eval_test_sets[3], methods, [250, 500, 750, 1000, 1250, 1500])
 
-    create_fine_tune_plot(baselines[0], eval_test_sets[0], methods, num_annotations_to_select_lst=[250, 500, 750, 1000, 1500], num_dups=5)
+    # create_fine_tune_plot(baselines[0], eval_test_sets[0], methods, num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500], num_dups=5)
     # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, num_annotations_to_select_lst=[250, 500, 750], num_dups=num_dups)
     # my_dilation_plot()
     # exit()
