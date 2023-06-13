@@ -19,6 +19,7 @@ decorator==5.1.1
 et-xmlfile==1.1.0
 faerun==0.3.20
 fast-histogram==0.10
+Fiona==1.9.4.post1
 fire==0.4.0
 Flask==2.2.2
 flatbuffers==2.0
@@ -26,6 +27,7 @@ fonttools==4.29.0
 fsspec==2022.3.0
 future==0.18.2
 gast==0.4.0
+geopandas==0.13.2
 google-auth==2.3.3
 google-auth-oauthlib==0.4.6
 google-pasta==0.2.0

@@ -53,7 +53,7 @@ from models.yolov4.encode import Decoder
 EPOCHS_WITHOUT_IMPROVEMENT_TOLERANCE = 10 #20
 TRAINING_TIME_SESSION_CEILING = 5000000           # number of seconds before current session is stopped in order to give others a chance
 
-TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS = True #False
+TRAIN_FOR_FIXED_NUMBER_OF_EPOCHS = False #True #False
 NUM_EPOCHS_TO_TRAIN = 200
 # MAX_IN_MEMORY_IMAGE_SIZE = 5e+8     # 500 megabytes
 

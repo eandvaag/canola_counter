@@ -162,7 +162,7 @@ def create_vegetation_record_for_orthomosaic(image_set_dir, excess_green_record,
 
     # image_chunk = ds.ReadAsArray(i, j, chunk_size, chunk_size)
 
-    results = Parallel(int(os.cpu_count() / 2))(
+    results = Parallel(int(os.cpu_count() / 3))(
         delayed(get_vegetation_percentages_for_chunk)(
             excess_green_record, annotations, predictions, image.image_path, chunk_coords) for chunk_coords in chunk_coords_lst)
     # print("results", results)
@@ -421,7 +421,7 @@ def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, a
 
     image_names = list(annotations.keys()) 
 
-    results = Parallel(int(os.cpu_count() / 2))(
+    results = Parallel(int(os.cpu_count() / 3))(
         delayed(get_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, predictions, image_name) for image_name in image_names)
 
     # print("new vegetation record results", results)
