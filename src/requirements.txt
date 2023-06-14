@@ -27,7 +27,6 @@ fonttools==4.29.0
 fsspec==2022.3.0
 future==0.18.2
 gast==0.4.0
-geopandas==0.13.2
 google-auth==2.3.3
 google-auth-oauthlib==0.4.6
 google-pasta==0.2.0

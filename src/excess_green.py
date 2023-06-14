@@ -421,6 +421,11 @@ def create_vegetation_record_for_image_set(image_set_dir, excess_green_record, a
 
     image_names = list(annotations.keys()) 
 
+    # num_threads = int(os.cpu_count() / 3)
+    # for i in range(num_threads):
+    #     worker = threading.Thread(name="worker_" + str(i), target=work)
+    #     worker.start()
+
     results = Parallel(int(os.cpu_count() / 3))(
         delayed(get_vegetation_percentages_for_image)(image_set_dir, excess_green_record, annotations, predictions, image_name) for image_name in image_names)
 
