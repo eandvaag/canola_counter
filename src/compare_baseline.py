@@ -5480,7 +5480,7 @@ def eval_run():
         # "selected_patches",
         # "selected_patches_unfair_dist_score"
 
-        "selected_patches_first",
+        # "selected_patches_first",
         "random_patches_second",
     ]
 

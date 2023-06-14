@@ -576,7 +576,7 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                 #     # else:
                 #     annotation_count_before += box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[image_name]).size
 
-                for image_name in current_annotation_counts_per_image:
+                for image_name in current_annotation_counts_per_image.keys():
                     annotation_count_before += current_annotation_counts_per_image[image_name]
 
 
@@ -591,13 +591,15 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                         if is_full_patch == substitute_is_full_patch:
                             annotation_count_after = 0
                             for image_name in taken_regions.keys():
-                                if image_name == substitute_image_name:
+                                if image_name == substitute_image_name or image_name == s_image_name:
                                     l = taken_regions[image_name].copy()
-                                    l.append(substitute_patch_coords)
-                                if image_name == s_image_name:
-                                    l = taken_regions[image_name].copy()
-                                    ind = l.index(patch_coords)
-                                    del l[ind]
+                                    if image_name == substitute_image_name:
+                                        l.append(substitute_patch_coords)
+                                        # annotation_count_after += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
+                                    if image_name == s_image_name:
+                                        # l = taken_regions[image_name].copy()
+                                        ind = l.index(patch_coords)
+                                        del l[ind]
                                     annotation_count_after += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
                                 else:
                                     # annotation_count_after += box_utils.get_contained_inds(annotations[image_name]["boxes"], l).size
@@ -605,6 +607,7 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                             
                             
                             if annotation_count_after > annotation_count_before:
+                                print("\t{} {}".format(annotation_count_before, annotation_count_after))
                                 del_index = taken_regions[s_image_name].index(patch_coords)
                                 del taken_regions[s_image_name][del_index]
 
@@ -618,14 +621,24 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                                 del_index = taken_candidates.index(possibly_remove_candidate)
                                 del taken_candidates[del_index]
                                 taken_candidates.append(substitute_candidate)
-
-
-                                current_annotation_counts_per_image[substitute_image_name] = box_utils.get_contained_inds(annotations[image_name]["boxes"], taken_regions[substitute_image_name]).size
+                                
+                                if s_image_name in taken_regions:
+                                    current_annotation_counts_per_image[s_image_name] = box_utils.get_contained_inds(annotations[s_image_name]["boxes"], taken_regions[s_image_name]).size
+                                else:
+                                    current_annotation_counts_per_image[s_image_name] = 0
+                                current_annotation_counts_per_image[substitute_image_name] = box_utils.get_contained_inds(annotations[substitute_image_name]["boxes"], taken_regions[substitute_image_name]).size
 
                                 done = True
                                 break
+                            if done:
+                                break
+                        if done:
+                            break
                     if done:
                         break
+
+                if not done:
+                    print("found none")
 
                 new_annotation_count = 0
                 for image_name in taken_regions.keys():
