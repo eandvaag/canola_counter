@@ -6,7 +6,7 @@ import math as m
 import numpy as np
 import tensorflow as tf
 from scipy.spatial.distance import cosine
-from vendi_score import vendi
+# from vendi_score import vendi
 from scipy.stats import entropy
 import pandas as pd
 import random
@@ -3473,178 +3473,178 @@ def plot_min_num_single_diverse_comparison(test_sets, single_baselines, diverse_
 
 
 
-def get_vendi_diversity(model_dir):
+# def get_vendi_diversity(model_dir):
 
 
-    log_path = os.path.join(model_dir, "log.json")
-    log = json_io.load_json(log_path)
+#     log_path = os.path.join(model_dir, "log.json")
+#     log = json_io.load_json(log_path)
 
-    taken_patches = {}
-    for image_set in log["image_sets"]:
+#     taken_patches = {}
+#     for image_set in log["image_sets"]:
 
-        username = image_set["username"]
-        farm_name = image_set["farm_name"]
-        field_name = image_set["field_name"]
-        mission_date = image_set["mission_date"]
+#         username = image_set["username"]
+#         farm_name = image_set["farm_name"]
+#         field_name = image_set["field_name"]
+#         mission_date = image_set["mission_date"]
 
-        image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
-        taken_patches[image_set_str] = {}
-        image_set_dir = os.path.join("usr", "data", 
-                                    username, "image_sets",
-                                    farm_name,
-                                    field_name,
-                                    mission_date)
+#         image_set_str = username + " " + farm_name + " " + field_name + " " + mission_date
+#         taken_patches[image_set_str] = {}
+#         image_set_dir = os.path.join("usr", "data", 
+#                                     username, "image_sets",
+#                                     farm_name,
+#                                     field_name,
+#                                     mission_date)
         
-        annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
-        annotations = annotation_utils.load_annotations(annotations_path)
+#         annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+#         annotations = annotation_utils.load_annotations(annotations_path)
 
-        metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
-        metadata = json_io.load_json(metadata_path)
+#         metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+#         metadata = json_io.load_json(metadata_path)
 
-        try:
-            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
-        except Exception as e:
-            patch_size = 416
-        if "patch_overlap_percent" in image_set:
-            patch_overlap_percent = image_set["patch_overlap_percent"]
-        else:
-            patch_overlap_percent = 50
+#         try:
+#             patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+#         except Exception as e:
+#             patch_size = 416
+#         if "patch_overlap_percent" in image_set:
+#             patch_overlap_percent = image_set["patch_overlap_percent"]
+#         else:
+#             patch_overlap_percent = 50
 
-        if "taken_regions" in image_set:
-            for image_name in image_set["taken_regions"].keys():
-                taken_patches[image_set_str][image_name] = []
-                image_h = metadata["images"][image_name]["height_px"]
-                image_w = metadata["images"][image_name]["width_px"]
-                for region in image_set["taken_regions"][image_name]:
+#         if "taken_regions" in image_set:
+#             for image_name in image_set["taken_regions"].keys():
+#                 taken_patches[image_set_str][image_name] = []
+#                 image_h = metadata["images"][image_name]["height_px"]
+#                 image_w = metadata["images"][image_name]["width_px"]
+#                 for region in image_set["taken_regions"][image_name]:
 
-                    if region[2] != image_h and region[3] != image_w:
-                        taken_patches[image_set_str][image_name].append(region)
+#                     if region[2] != image_h and region[3] != image_w:
+#                         taken_patches[image_set_str][image_name].append(region)
 
-        else:
+#         else:
 
-            for image_name in annotations.keys():
-                if len(annotations[image_name]["test_regions"]) > 0:
-                    taken_patches[image_set_str][image_name] = []
-                    image_h = metadata["images"][image_name]["height_px"]
-                    image_w = metadata["images"][image_name]["width_px"]
-                    for i in range(0, image_h, patch_size):
-                        for j in range(0, image_w, patch_size):
-                            taken_patches[image_set_str][image_name].append([i, j, i+patch_size, j+patch_size])
+#             for image_name in annotations.keys():
+#                 if len(annotations[image_name]["test_regions"]) > 0:
+#                     taken_patches[image_set_str][image_name] = []
+#                     image_h = metadata["images"][image_name]["height_px"]
+#                     image_w = metadata["images"][image_name]["width_px"]
+#                     for i in range(0, image_h, patch_size):
+#                         for j in range(0, image_w, patch_size):
+#                             taken_patches[image_set_str][image_name].append([i, j, i+patch_size, j+patch_size])
             
 
-    patch_arrays = []
-    for image_set_str in taken_patches:
+#     patch_arrays = []
+#     for image_set_str in taken_patches:
 
-        pieces = image_set_str.split(" ")
-        username = pieces[0]
-        farm_name = pieces[1]
-        field_name = pieces[2]
-        mission_date = pieces[3]
+#         pieces = image_set_str.split(" ")
+#         username = pieces[0]
+#         farm_name = pieces[1]
+#         field_name = pieces[2]
+#         mission_date = pieces[3]
 
-        image_set_dir = os.path.join("usr", "data", 
-                                    username, "image_sets",
-                                    farm_name,
-                                    field_name,
-                                    mission_date)
-
-
-        for image_name in taken_patches[image_set_str]:
-
-            image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
-            image = Image(image_path)
-
-            image_array = image.load_image_array()
-
-            for patch_coords in taken_patches[image_set_str][image_name]:
-
-                patch_array = image_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
-                patch_arrays.append(patch_array)
+#         image_set_dir = os.path.join("usr", "data", 
+#                                     username, "image_sets",
+#                                     farm_name,
+#                                     field_name,
+#                                     mission_date)
 
 
+#         for image_name in taken_patches[image_set_str]:
+
+#             image_path = glob.glob(os.path.join(image_set_dir, "images", image_name + ".*"))[0]
+#             image = Image(image_path)
+
+#             image_array = image.load_image_array()
+
+#             for patch_coords in taken_patches[image_set_str][image_name]:
+
+#                 patch_array = image_array[patch_coords[0]:patch_coords[2], patch_coords[1]:patch_coords[3]]
+#                 patch_arrays.append(patch_array)
 
 
 
-    batch_size = 256
 
-    patch_arrays = np.array(patch_arrays)
-    num_patches = patch_arrays.size
-    print("processing {} patches".format(num_patches))
 
-    # from models.yolov4.yolov4_image_set_driver import create_default_config
-    # from models.common import model_keys
-    # config = create_default_config()
-    # model_keys.add_general_keys(config)
-    # model_keys.add_specialized_keys(config)
+#     batch_size = 256
 
-    # from models.yolov4 import yolov4
+#     patch_arrays = np.array(patch_arrays)
+#     num_patches = patch_arrays.size
+#     print("processing {} patches".format(num_patches))
 
-    # model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
-    # input_shape = (256, *(config["arch"]["input_image_shape"]))
-    # model.build(input_shape=input_shape)
-    # model.load_weights(os.path.join("usr", "data", "erik", "models", "available", "public", 
-    #                                 "fixed_epoch_set_of_27_no_overlap", "weights.h5"), by_name=False)
+#     # from models.yolov4.yolov4_image_set_driver import create_default_config
+#     # from models.common import model_keys
+#     # config = create_default_config()
+#     # model_keys.add_general_keys(config)
+#     # model_keys.add_specialized_keys(config)
 
-    weights = 'imagenet'
-    model = tf.keras.applications.InceptionV3( #101( #ResNet50(
-        weights=weights,
-        include_top=False, 
-        input_shape=[None, None, 3],
-        pooling="max"
-    )
+#     # from models.yolov4 import yolov4
 
-    # if extraction_type == "box_patches":
-    #     input_image_shape = np.array([150, 150, 3])
-    # else:
-    input_image_shape = [416, 416] #config.arch["input_image_shape"]
+#     # model = yolov4.YOLOv4TinyBackbone(config, max_pool=True)
+#     # input_shape = (256, *(config["arch"]["input_image_shape"]))
+#     # model.build(input_shape=input_shape)
+#     # model.load_weights(os.path.join("usr", "data", "erik", "models", "available", "public", 
+#     #                                 "fixed_epoch_set_of_27_no_overlap", "weights.h5"), by_name=False)
 
-    all_features = []
-    for i in tqdm.trange(0, num_patches, batch_size):
-        batch_patches = []
-        for j in range(i, min(num_patches, i+batch_size)):
-            patch = tf.convert_to_tensor(patch_arrays[j], dtype=tf.float32)
-            patch = tf.image.resize(images=patch, size=input_image_shape[:2])
-            # vec = tf.reshape(patch, [-1])
+#     weights = 'imagenet'
+#     model = tf.keras.applications.InceptionV3( #101( #ResNet50(
+#         weights=weights,
+#         include_top=False, 
+#         input_shape=[None, None, 3],
+#         pooling="max"
+#     )
 
-            # all_features.append(vec)
-            batch_patches.append(patch)
-        batch_patches = tf.stack(values=batch_patches, axis=0)
+#     # if extraction_type == "box_patches":
+#     #     input_image_shape = np.array([150, 150, 3])
+#     # else:
+#     input_image_shape = [416, 416] #config.arch["input_image_shape"]
+
+#     all_features = []
+#     for i in tqdm.trange(0, num_patches, batch_size):
+#         batch_patches = []
+#         for j in range(i, min(num_patches, i+batch_size)):
+#             patch = tf.convert_to_tensor(patch_arrays[j], dtype=tf.float32)
+#             patch = tf.image.resize(images=patch, size=input_image_shape[:2])
+#             # vec = tf.reshape(patch, [-1])
+
+#             # all_features.append(vec)
+#             batch_patches.append(patch)
+#         batch_patches = tf.stack(values=batch_patches, axis=0)
         
-        features = model.predict(batch_patches)
-        for f in features:
-            f = f.flatten()
-            all_features.append(f)
+#         features = model.predict(batch_patches)
+#         for f in features:
+#             f = f.flatten()
+#             all_features.append(f)
 
-    all_features = np.array(all_features)
-    print("calculating vendi score...")
-    score = vendi.score(all_features, cosine)
-    print("score is {}".format(score))
+#     all_features = np.array(all_features)
+#     print("calculating vendi score...")
+#     score = vendi.score(all_features, cosine)
+#     print("score is {}".format(score))
 
-    # print("shape of features matrix is {}".format(all_features.shape))
-    # print("calculating similarity matrix...")
-    # sim_mat = np.zeros(shape=(all_features.shape[0], all_features.shape[0]))
-    # for i in range(all_features.shape[0]):
-    #     for j in range(all_features.shape[0]):
-    #         if i == j:
-    #             sim_mat[i][j] = 1
-    #         elif i > j:
-    #             sim_mat[i][j] = sim_mat[j][i]
-    #         else:
-    #             sim = cosine(all_features[i], all_features[j])
-    #             sim_mat[i][j] = sim
-    # # sim_mat = cosine(all_features, all_features)
-    # print("sim_mat is: {}".format(sim_mat))
-    # sim_mat = sim_mat / all_features.shape[0]
-    # print("calculating eigenvalues...")
-    # w, _ = np.linalg.eig(sim_mat)
-    # print("eigenvalues are: {}".format(w))
-    # print("calculating entropy...")
-    # ent = entropy(w)
-    # print("entropy is {}".format(ent))
-    # print("calculating vendi score")
-    # score = m.exp(ent)
-    # print("score is {}".format(score))
+#     # print("shape of features matrix is {}".format(all_features.shape))
+#     # print("calculating similarity matrix...")
+#     # sim_mat = np.zeros(shape=(all_features.shape[0], all_features.shape[0]))
+#     # for i in range(all_features.shape[0]):
+#     #     for j in range(all_features.shape[0]):
+#     #         if i == j:
+#     #             sim_mat[i][j] = 1
+#     #         elif i > j:
+#     #             sim_mat[i][j] = sim_mat[j][i]
+#     #         else:
+#     #             sim = cosine(all_features[i], all_features[j])
+#     #             sim_mat[i][j] = sim
+#     # # sim_mat = cosine(all_features, all_features)
+#     # print("sim_mat is: {}".format(sim_mat))
+#     # sim_mat = sim_mat / all_features.shape[0]
+#     # print("calculating eigenvalues...")
+#     # w, _ = np.linalg.eig(sim_mat)
+#     # print("eigenvalues are: {}".format(w))
+#     # print("calculating entropy...")
+#     # ent = entropy(w)
+#     # print("entropy is {}".format(ent))
+#     # print("calculating vendi score")
+#     # score = m.exp(ent)
+#     # print("score is {}".format(score))
 
-    return score
+#     return score
 
 
 def plot_my_results_alt(test_sets, all_baselines, num_reps, include_fine_tune=False):
