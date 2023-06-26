@@ -967,6 +967,66 @@ def possibly_update_baseline_matching_info(baseline, test_set_image_set_dir, num
 
     return baseline_matching_info
 
+
+
+
+def get_anno_stats_for_model(mapping, model_name):
+
+    result_uuid = mapping[model_name]
+    result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
+    annotations_path = os.path.join(result_dir, "annotations.json")
+    annotations = annotation_utils.load_annotations(annotations_path)
+
+    patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+    baseline_matching_info = {}
+    baseline_matching_info["num_patches"] = 0
+    baseline_matching_info["num_full_patches"] = 0
+    baseline_matching_info["num_partial_patches"] = 0
+    baseline_matching_info["num_annotations"] = 0
+    for image_name in annotations.keys():
+        if len(annotations[image_name]["training_regions"]) > 0:
+            for region in annotations[image_name]["training_regions"]:
+                if region[2] - region[0] == patch_size and region[3] - region[1] == patch_size:
+                    baseline_matching_info["num_full_patches"] += 1
+                else:
+                    baseline_matching_info["num_partial_patches"] += 1
+
+            baseline_matching_info["num_patches"] += len(annotations[image_name]["training_regions"])
+            baseline_matching_info["num_annotations"] += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
+
+
+def check_fine_tuning_models(test_set_image_set_dir):
+
+    mapping = get_mapping_for_test_set(test_set_image_set_dir)
+
+    methods = [
+        "selected_patches_first",
+        "random_patches_second"
+    ]
+
+    
+    for dup_num in range(0, num_dups+0):
+        dup_num_results = []
+        for method in methods:
+            res_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
+    
+            anno_stats = get_anno_stats_for_model(mapping, model_name)
+            print()
+            print(res_name)
+            print(anno_stats)
+            dup_num_results.append(anno_stats)
+
+        for k in ["num_annotations", "num_partial_patches", "num_full_patches"]:
+            if dup_num_results[0][k] > dup_num_results[1][k]:
+                print("Problem")
+
+        print()
+        print("---")
+        print()
+
+
+
 def eval_fine_tune_test(server, test_set, baseline, methods, num_annotations_to_select, num_dups):
 
 
