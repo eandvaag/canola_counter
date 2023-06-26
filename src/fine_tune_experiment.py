@@ -996,7 +996,7 @@ def get_anno_stats_for_model(mapping, model_name):
             baseline_matching_info["num_annotations"] += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
 
 
-def check_fine_tuning_models(test_set, num_dups):
+def check_fine_tuning_models(baseline, test_set, num_dups):
 
     test_set_image_set_dir = os.path.join("usr", "data",
                                                 test_set["username"], "image_sets",
