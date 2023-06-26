@@ -970,7 +970,7 @@ def possibly_update_baseline_matching_info(baseline, test_set_image_set_dir, num
 
 
 
-def get_anno_stats_for_model(mapping, model_name):
+def get_anno_stats_for_model(mapping, test_set_image_set_dir, model_name):
 
     result_uuid = mapping[model_name]
     result_dir = os.path.join(test_set_image_set_dir, "model", "results", result_uuid)
@@ -1017,7 +1017,7 @@ def check_fine_tuning_models(baseline, test_set, num_dups, num_annotations_to_se
         for method in methods:
             res_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
     
-            anno_stats = get_anno_stats_for_model(mapping, res_name)
+            anno_stats = get_anno_stats_for_model(mapping, test_set_image_set_dir, res_name)
             print()
             print(res_name)
             print(anno_stats)
