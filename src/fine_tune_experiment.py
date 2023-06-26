@@ -995,6 +995,7 @@ def get_anno_stats_for_model(mapping, test_set_image_set_dir, model_name):
             baseline_matching_info["num_patches"] += len(annotations[image_name]["training_regions"])
             baseline_matching_info["num_annotations"] += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
 
+    return baseline_matching_info
 
 def check_fine_tuning_models(baseline, test_set, num_dups, num_annotations_to_select):
 
