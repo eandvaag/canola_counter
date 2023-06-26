@@ -652,10 +652,13 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
             print("Not enough patches ... adding more.")
 
             while True:
-                candidate = patch_candidates[i]
-                i += 1
+                possibly_take_ind = random.randrange(len(patch_candidates))
+                candidate = patch_candidates[possibly_take_ind]
                 s_image_name = candidate[0]
                 patch_coords = candidate[1]
+
+                if candidate in taken_candidates:
+                    continue
 
                 is_full_patch = patch_coords[2] - patch_coords[0] == patch_size and patch_coords[3] - patch_coords[1] == patch_size
 
@@ -682,6 +685,7 @@ def select_fine_tuning_data(test_set_image_set_dir, method, annotations, predict
                     if s_image_name not in taken_regions:
                         taken_regions[s_image_name] = []
                     taken_regions[s_image_name].append(patch_coords)
+                    taken_candidates.append(candidate)
                     if is_full_patch:
                         cur_full_patch_count += 1
                     else:
