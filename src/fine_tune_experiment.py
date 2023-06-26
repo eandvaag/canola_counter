@@ -1017,7 +1017,7 @@ def check_fine_tuning_models(baseline, test_set, num_dups, num_annotations_to_se
         for method in methods:
             res_name = baseline["model_name"] + "_post_finetune_" + method + "_" + str(num_annotations_to_select) + "_annotations_dup_" + str(dup_num)
     
-            anno_stats = get_anno_stats_for_model(mapping, model_name)
+            anno_stats = get_anno_stats_for_model(mapping, res_name)
             print()
             print(res_name)
             print(anno_stats)
