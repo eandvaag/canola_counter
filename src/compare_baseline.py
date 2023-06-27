@@ -163,8 +163,8 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
     #     ax.plot([x[0], x[0]], [x[1]-x[2], x[1]+x[2]], c=my_plot_colors[1])
 
 
-    ax.plot([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], c=my_plot_colors[0], label="Random Patches")
-    ax.plot([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], c=my_plot_colors[1], label="Selected Patches")
+    ax.plot([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], c=my_plot_colors[0], label="Random Patches", zorder=1)
+    ax.plot([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], c=my_plot_colors[1], label="Selected Patches", zorder=1)
     
     # ax.fill_between([x[0] for x in results["random_patches_second"]], 
     #                 [x[1] - x[2] for x in results["random_patches_second"]], 
@@ -174,10 +174,10 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
     #                 [x[1] + x[2] for x in results["selected_patches_first"]], edgecolor=my_plot_colors[1], facecolor=my_plot_colors[1], alpha=0.15)
     for x in results["random_patches_second"]:
         print(x)
-        ax.scatter([x[0]] * len(x[3]), x[3], s=50, c=my_plot_colors[0])
+        ax.scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[0], marker="o", zorder=2, alpha=0.7, s=70, edgecolors='none')
 
     for x in results["selected_patches_first"]:
-        ax.scatter([x[0]] * len(x[3]), x[3], s=50, c=my_plot_colors[1])   
+        ax.scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[1], marker="o", zorder=2, alpha=0.7, s=70, edgecolors='none')
 
     # ax.scatter([x[3] for x in results["random_patches_second"]], [x[4] for x in results["random_patches_second"]], s=50, c=my_plot_colors[0], label="random_patches_second", zorder=2)
     # ax.scatter([x[3] for x in results["selected_patches_first"]], [x[4] for x in results["selected_patches_first"]], s=50, c=my_plot_colors[1], label="selected_patches_first", zorder=2)
@@ -5480,13 +5480,13 @@ def eval_run():
         # "selected_patches",
         # "selected_patches_unfair_dist_score"
 
-        # "selected_patches_first",
+        "selected_patches_first",
         "random_patches_second",
     ]
 
     num_dups = 5
     num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    for num_annotations_to_select in [3250]: #1000, 1250, 1500]: #num_annotations_to_select_lst:
+    for num_annotations_to_select in [5000, 5250, 5500, 5560]: #1000, 1250, 1500]: #num_annotations_to_select_lst:
         # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
         # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
         
