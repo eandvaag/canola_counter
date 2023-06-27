@@ -959,6 +959,9 @@ def possibly_update_baseline_matching_info(baseline, test_set_image_set_dir, num
                     else:
                         baseline_matching_info["num_partial_patches"] += 1
 
+                if len(annotations[image_name]["training_regions"]) != len(np.unique(annotations[image_name]["training_regions"], axis=0)):
+                    print("Problem -- duplicate training region")
+
                 baseline_matching_info["num_patches"] += len(annotations[image_name]["training_regions"])
                 baseline_matching_info["num_annotations"] += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
                 #len(annotations[image_name]["boxes"])
