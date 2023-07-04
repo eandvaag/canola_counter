@@ -74,13 +74,15 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
     annotations_path = os.path.join(result_dir, "annotations.json")
     annotations = annotation_utils.load_annotations(annotations_path)
 
-    accuracies = []
-    for image_name in annotations.keys():
-        sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
-        accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
-        accuracies.append(accuracy)
+    # accuracies = []
+    # for image_name in annotations.keys():
+    #     sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+    #     accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
+    #     accuracies.append(accuracy)
 
-    pre_fine_tune_accuracy = np.mean(accuracies)
+    # pre_fine_tune_accuracy = np.mean(accuracies)
+
+    pre_fine_tune_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys()))
 
     # label_lookup = {
     #     "selected_patches_match_both": "selected_patches",
@@ -108,11 +110,11 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
 
                 num_fine_tuning_boxes = 0
                 num_fine_tuning_regions = 0
-                accuracies = []
+                # accuracies = []
                 for image_name in annotations.keys():
-                    sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
-                    accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
-                    accuracies.append(accuracy)
+                    # sel_pred_boxes = predictions[image_name]["boxes"][predictions[image_name]["scores"] > 0.50]
+                    # accuracy = fine_tune_eval.get_accuracy(annotations[image_name]["boxes"], sel_pred_boxes)
+                    # accuracies.append(accuracy)
 
                     num_fine_tuning_boxes += box_utils.get_contained_inds(annotations[image_name]["boxes"], annotations[image_name]["training_regions"]).size
                     num_fine_tuning_regions += len(annotations[image_name]["training_regions"])
@@ -120,10 +122,12 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
 
                 if num_fine_tuning_boxes > max_num_fine_tuning_boxes:
                     max_num_fine_tuning_boxes = num_fine_tuning_boxes
-                # global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
+                global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
+
+                test_set_accuracy = global_accuracy
 
                 # test_set_accuracy = global_accuracy #np.mean(accuracy)
-                test_set_accuracy = np.mean(accuracies)
+                # test_set_accuracy = np.mean(accuracies)
                 dup_accuracies.append(test_set_accuracy)
                 # results[method].append((num_fine_tuning_boxes, test_set_accuracy))
                 # results[method].append((num_fine_tuning_regions, test_set_accuracy))
@@ -199,7 +203,7 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
 
     plt.tight_layout()
 
-    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_averaged.svg")
+    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_averaged_global.svg")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
     plt.savefig(out_path)
@@ -743,7 +747,7 @@ def create_individual_image_sets_eval_size_plot_id_ood(id_test_sets, ood_test_se
 
     print("num id test sets: {}".format(len(id_test_sets)))
     print("num ood test sets: {}".format(len(ood_test_sets)))
-    results = {}
+    # results = {}
     mappings = {}
     test_set_str_to_label = {}
     for i, test_set_type in enumerate([id_test_sets, ood_test_sets]):
@@ -775,7 +779,7 @@ def create_individual_image_sets_eval_size_plot_id_ood(id_test_sets, ood_test_se
 
         json_io.print_json(mappings)
         for k in baseline_sets.keys():
-            results[k] = []
+            # results[k] = []
             baselines = baseline_sets[k]
             for baseline in baselines:
                 model_name = baseline["model_name"]
@@ -953,6 +957,244 @@ def create_individual_image_sets_eval_size_plot_id_ood(id_test_sets, ood_test_se
     plt.savefig(out_path) #, dpi=600)
 
 
+
+
+
+
+def create_individual_image_sets_eval_size_plot_id_ood_abs_dic(id_test_sets, ood_test_sets, baseline_sets, out_dirname):
+
+    print("num id test sets: {}".format(len(id_test_sets)))
+    print("num ood test sets: {}".format(len(ood_test_sets)))
+    image_based_test_set_results = {}
+    mappings = {}
+    test_set_str_to_label = {}
+    for i, test_set_type in enumerate([id_test_sets, ood_test_sets]):
+
+        if i == 0:
+            label = "id"
+        else:
+            label = "ood"
+
+        for test_set in test_set_type:
+            test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+            test_set_image_set_dir = os.path.join("usr", "data",
+                                                            test_set["username"], "image_sets",
+                                                            test_set["farm_name"],
+                                                            test_set["field_name"],
+                                                            test_set["mission_date"])
+
+            mappings[test_set_str] = get_mapping_for_test_set(test_set_image_set_dir)
+            test_set_str_to_label[test_set_str] = label
+
+    if os.path.exists(os.path.join("eval_charts", out_dirname, "image_based_test_set_results_abs_dic.json")):
+            
+        image_based_test_set_results = json_io.load_json(os.path.join("eval_charts", out_dirname, "image_based_test_set_results_abs_dic.json"))
+    else:
+        image_based_test_set_results = {}
+        instance_based_test_set_results = {}
+
+        json_io.print_json(mappings)
+        for k in baseline_sets.keys():
+            # results[k] = []
+            baselines = baseline_sets[k]
+            for baseline in baselines:
+                model_name = baseline["model_name"]
+                patch_num = baseline["patch_num"]
+
+                print(model_name)
+
+                for test_set in id_test_sets:
+
+                    test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+                    
+                    print("\tid: {}".format(test_set_str))
+                    test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])                
+                    
+                    id_test_set_abs_dics = []
+                    # id_global_test_set_accuracies = []
+                    for rep_num in range(5):
+                        print("\t\t{}".format(rep_num))
+                        
+
+                        
+
+                        model_name = baseline["model_name"] + "_rep_" + str(rep_num)
+                        # print(model_name)
+                        model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+                        result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
+                        excel_path = os.path.join(result_dir, "metrics.xlsx")
+                        df = pd.read_excel(excel_path, sheet_name=0)
+
+                        # inds = df["Annotated Count"] > 10
+                        # id_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"][inds].mean(skipna=True)
+                        sub_df = df[df["Image Is Fully Annotated"] == "yes: for testing"]
+                        annotated_counts = sub_df["Annotated Count"]
+                        predicted_counts = sub_df["Predicted Count"]
+                        count_diffs = (predicted_counts - annotated_counts).tolist()
+
+
+
+                        # predictions_path = os.path.join(result_dir, "predictions.json")
+                        # predictions = annotation_utils.load_predictions(predictions_path)
+                        # annotations_path = os.path.join(result_dir, "annotations.json")
+                        # annotations = annotation_utils.load_annotations(annotations_path)
+                        # assessment_images = []
+                        # for image_name in annotations.keys():
+                        #     if len(annotations[image_name]["test_regions"]) > 0:
+                        #         assessment_images.append(image_name)
+
+                        # id_global_test_set_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, assessment_images) # fine_tune_eval.get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
+                        # id_global_test_set_accuracy = 0
+
+                        id_test_set_abs_dics.append(np.mean(np.abs(count_diffs)))
+
+                        # id_test_set_accuracies.append(id_test_set_accuracy)
+                        # id_global_test_set_accuracies.append(id_global_test_set_accuracy)
+
+
+                    if test_set_str not in image_based_test_set_results:
+                        image_based_test_set_results[test_set_str] = []
+                    image_based_test_set_results[test_set_str].append(
+                        (patch_num, np.mean(id_test_set_abs_dics))
+                    )
+                    # if test_set_str not in instance_based_test_set_results:
+                    #     instance_based_test_set_results[test_set_str] = []
+                    # instance_based_test_set_results[test_set_str].append(
+                    #     (patch_num, np.mean(id_global_test_set_accuracies))
+                    # )
+                
+
+                for test_set in ood_test_sets:
+                    test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+                    test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])
+
+                    print("\tood: {}".format(test_set_str))
+                    ood_test_set_abs_dics = []
+                    # ood_global_test_set_accuracies = []
+                    for rep_num in range(5):
+                        print("\t\t{}".format(rep_num))
+                    
+
+                        model_name = baseline["model_name"] + "_rep_" + str(rep_num)
+                        # print(model_name)
+                        model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+                        result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
+                        excel_path = os.path.join(result_dir, "metrics.xlsx")
+                        df = pd.read_excel(excel_path, sheet_name=0)
+                        # inds = df["Annotated Count"] > 10
+                        # ood_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"][inds].mean(skipna=True)
+                        # ood_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+
+                        sub_df = df[df["Image Is Fully Annotated"] == "yes: for testing"]
+                        annotated_counts = sub_df["Annotated Count"]
+                        predicted_counts = sub_df["Predicted Count"]
+                        count_diffs = (predicted_counts - annotated_counts).tolist()
+
+                        
+                        # predictions_path = os.path.join(result_dir, "predictions.json")
+                        # predictions = annotation_utils.load_predictions(predictions_path)
+                        # annotations_path = os.path.join(result_dir, "annotations.json")
+                        # annotations = annotation_utils.load_annotations(annotations_path)
+                        # assessment_images = []
+                        # for image_name in annotations.keys():
+                        #     if len(annotations[image_name]["test_regions"]) > 0:
+                        #         assessment_images.append(image_name)
+                        # assessment_images = random.sample(assessment_images, 2)
+                        # assessment_images = (np.array(assessment_images)[[0,3]]).tolist()
+
+                        # ood_test_set_accuracy = df[df["Image Name"].astype(str).isin(assessment_images)]["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+                        # print(assessment_images)
+                        # print(df["Image Name"])
+                        # print(ood_test_set_accuracy)
+                        # ood_global_test_set_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, assessment_images) # fine_tune_eval.get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
+                        # ood_global_test_set_accuracy = 0
+
+                        ood_test_set_abs_dics.append(np.mean(np.abs(count_diffs)))
+
+                        # ood_test_set_accuracies.append(ood_test_set_accuracy)
+                        # ood_global_test_set_accuracies.append(ood_global_test_set_accuracy)
+
+
+                    if test_set_str not in image_based_test_set_results:
+                        image_based_test_set_results[test_set_str] = []
+
+                    image_based_test_set_results[test_set_str].append(
+                        (patch_num, np.mean(ood_test_set_abs_dics))
+                    )
+
+                    # if test_set_str not in instance_based_test_set_results:
+                    #     instance_based_test_set_results[test_set_str] = []
+
+                    # instance_based_test_set_results[test_set_str].append(
+                    #     (patch_num, np.mean(ood_global_test_set_accuracies))
+                    # )
+
+    json_io.save_json(os.path.join("eval_charts", out_dirname, "image_based_test_set_results_abs_dic.json"), image_based_test_set_results)
+    # json_io.save_json(os.path.join("eval_charts", out_dirname, "instance_based_test_set_results.json"), instance_based_test_set_results)
+
+    # json_io.print_json(instance_based_test_set_results)
+    fig, axs = plt.subplots(1, 1, figsize=(8, 8))
+    for test_set_str in image_based_test_set_results.keys():
+        if test_set_str_to_label[test_set_str] == "id":
+            plot_color = my_plot_colors[0]
+        else:
+            plot_color = my_plot_colors[1]
+        axs.plot(
+            [x[0] for x in image_based_test_set_results[test_set_str]],
+            [x[1] for x in image_based_test_set_results[test_set_str]],
+            color=plot_color,
+            alpha=0.5
+        )
+
+    # for test_set_str in instance_based_test_set_results.keys():
+    #     if test_set_str_to_label[test_set_str] == "id":
+    #         plot_color = my_plot_colors[0]
+    #     else:
+    #         plot_color = my_plot_colors[1]
+    #     axs[1].plot(
+    #         [x[0] for x in instance_based_test_set_results[test_set_str]],
+    #         [x[1] for x in instance_based_test_set_results[test_set_str]],
+    #         color=plot_color,
+    #         alpha=0.5
+    #     )
+
+    # largest_set_id_results = []
+    # for test_set_str in instance_based_test_set_results.keys():
+    #     if test_set_str_to_label[test_set_str] == "id":
+    #         largest_set_id_results.append((test_set_str, instance_based_test_set_results[test_set_str][-1][1]))
+    
+    # largest_set_id_results.sort(key=lambda x: x[1])
+        
+    # print("largest_set_id_results")
+    # for v in largest_set_id_results:
+    #     print(v)
+    # print(largest_set_id_results)
+
+
+    out_path = os.path.join("eval_charts", out_dirname, "id_ood_individual_image_sets_abs_dic.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path) #, dpi=600)
+
+
+
+
+
+
+
+
+
+
+
+
 def create_eval_size_plot_id_ood(id_test_sets, ood_test_sets, baseline_sets, out_dirname):
 
 
@@ -1012,8 +1254,8 @@ def create_eval_size_plot_id_ood(id_test_sets, ood_test_sets, baseline_sets, out
 
                 for test_set in id_test_sets:
                     test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
-                    if test_set_str in bad_id_test_sets:
-                        continue
+                    # if test_set_str in bad_id_test_sets:
+                    #     continue
                     
                     test_set_image_set_dir = os.path.join("usr", "data",
                                                         test_set["username"], "image_sets",
@@ -1223,7 +1465,238 @@ def create_eval_size_plot_id_ood(id_test_sets, ood_test_sets, baseline_sets, out
 
 
 
+def create_eval_size_plot_id_ood_abs_dic(id_test_sets, ood_test_sets, baseline_sets, out_dirname):
 
+
+    results = {} #[]
+    mappings = {}
+    # test_set_types = [("ood", ood_test_sets), ("id", id_test_sets)]
+    # labels = {}
+    # test_set_str_to_label = {}
+    for i, test_set_type in enumerate([id_test_sets, ood_test_sets]):
+
+        # if i == 0:
+        #     label = "id"
+        # else:
+        #     label = "ood"
+
+        # test_set_label = test_set_type[0]
+        # test_sets = test_set_type[1]
+        # labels[test_set_label] = []
+        for test_set in test_set_type:
+            test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+            test_set_image_set_dir = os.path.join("usr", "data",
+                                                            test_set["username"], "image_sets",
+                                                            test_set["farm_name"],
+                                                            test_set["field_name"],
+                                                            test_set["mission_date"])
+
+            mappings[test_set_str] = get_mapping_for_test_set(test_set_image_set_dir)
+            # labels[test_set_label].append(test_set_str)
+            # test_set_str_to_label[test_set_str] = label
+
+
+    json_io.print_json(mappings)
+    for k in baseline_sets.keys():
+        results[k] = []
+        baselines = baseline_sets[k]
+        for baseline in baselines:
+            model_name = baseline["model_name"]
+            patch_num = baseline["patch_num"]
+            
+            # patch_num = int((baseline["model_name"][len("set_of_27_"):]).split("_")[0])
+            ood_rep_abs_dics = []
+            # ood_global_rep_accuracies = []
+            id_rep_abs_dics = []
+            # id_global_rep_accuracies = []
+            for rep_num in range(5):
+
+                id_test_set_abs_dics = []
+                # id_global_test_set_accuracies = []
+
+                for test_set in id_test_sets:
+                    test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+                    # if test_set_str in bad_id_test_sets:
+                    #     continue
+                    
+                    test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])
+                    
+
+                    model_name = baseline["model_name"] + "_rep_" + str(rep_num)
+                    # print(model_name)
+                    model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+                    result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
+                    excel_path = os.path.join(result_dir, "metrics.xlsx")
+                    df = pd.read_excel(excel_path, sheet_name=0)
+
+                    # inds = df["Annotated Count"] > 10
+                    # id_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"][inds].mean(skipna=True)
+                    # id_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+
+                    sub_df = df[df["Image Is Fully Annotated"] == "yes: for testing"]
+                    annotated_counts = sub_df["Annotated Count"]
+                    predicted_counts = sub_df["Predicted Count"]
+                    count_diffs = (predicted_counts - annotated_counts).tolist()
+
+
+
+                    # predictions_path = os.path.join(result_dir, "predictions.json")
+                    # predictions = annotation_utils.load_predictions(predictions_path)
+                    # annotations_path = os.path.join(result_dir, "annotations.json")
+                    # annotations = annotation_utils.load_annotations(annotations_path)
+                    # assessment_images = []
+                    # for image_name in annotations.keys():
+                    #     if len(annotations[image_name]["test_regions"]) > 0:
+                    #         assessment_images.append(image_name)
+
+                    # id_global_test_set_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, assessment_images) # fine_tune_eval.get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
+
+
+
+                    id_test_set_abs_dics.append(np.mean(np.abs(count_diffs)))
+                    # id_global_test_set_accuracies.append(id_global_test_set_accuracy)
+
+                    # if test_set_str not in image_based_test_set_results:
+                    #     image_based_test_set_results[test_set_str].append(id_test_set_accuracy)
+                    # if test_set_str not in instance_based_test_set_results:
+                    #     instance_based_test_set_results[test_set_str].append(id_global_test_set_accuracy)
+
+                id_rep_abs_dic = np.mean(id_test_set_abs_dics)
+                id_rep_abs_dics.append(id_rep_abs_dic)
+
+                # id_global_rep_accuracy = np.mean(id_global_test_set_accuracies)
+                # id_global_rep_accuracies.append(id_global_rep_accuracy)                
+
+
+                # ood_test_set_accuracies = []
+                ood_test_set_abs_dics = []
+                # ood_global_test_set_accuracies = []
+
+                for test_set in ood_test_sets:
+                    test_set_str = test_set["username"] + " " + test_set["farm_name"] + " " + test_set["field_name"] + " " + test_set["mission_date"]
+                    test_set_image_set_dir = os.path.join("usr", "data",
+                                                        test_set["username"], "image_sets",
+                                                        test_set["farm_name"],
+                                                        test_set["field_name"],
+                                                        test_set["mission_date"])
+                    
+
+                    model_name = baseline["model_name"] + "_rep_" + str(rep_num)
+                    # print(model_name)
+                    model_dir = os.path.join(test_set_image_set_dir, "model", "results")
+                    result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
+                    excel_path = os.path.join(result_dir, "metrics.xlsx")
+                    df = pd.read_excel(excel_path, sheet_name=0)
+                    # inds = df["Annotated Count"] > 10
+                    # ood_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"][inds].mean(skipna=True)
+                    # ood_test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+
+
+                    sub_df = df[df["Image Is Fully Annotated"] == "yes: for testing"]
+                    annotated_counts = sub_df["Annotated Count"]
+                    predicted_counts = sub_df["Predicted Count"]
+                    count_diffs = (predicted_counts - annotated_counts).tolist()
+
+
+
+                    # predictions_path = os.path.join(result_dir, "predictions.json")
+                    # predictions = annotation_utils.load_predictions(predictions_path)
+                    # annotations_path = os.path.join(result_dir, "annotations.json")
+                    # annotations = annotation_utils.load_annotations(annotations_path)
+                    # assessment_images = []
+                    # for image_name in annotations.keys():
+                    #     if len(annotations[image_name]["test_regions"]) > 0:
+                    #         assessment_images.append(image_name)
+
+                    # ood_global_test_set_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, assessment_images) # fine_tune_eval.get_AP(annotations, full_predictions, iou_thresh=".50:.05:.95")
+
+                    ood_test_set_abs_dics.append(np.mean(np.abs(count_diffs)))
+                    # ood_global_test_set_accuracies.append(ood_global_test_set_accuracy)
+
+                    # if test_set_str not in image_based_test_set_results:
+                    #     image_based_test_set_results[test_set_str].append(ood_test_set_accuracy)
+                    # if test_set_str not in instance_based_test_set_results:
+                    #     instance_based_test_set_results[test_set_str].append(ood_global_test_set_accuracy)
+
+
+                ood_rep_abs_dic = np.mean(ood_test_set_abs_dics)
+                ood_rep_abs_dics.append(ood_rep_abs_dic)
+
+
+                # ood_rep_accuracy = np.mean(ood_test_set_accuracies)
+                # ood_rep_accuracies.append(ood_rep_accuracy)
+                # # print(model_name, rep_accuracy)
+
+
+                # ood_global_rep_accuracy = np.mean(ood_global_test_set_accuracies)
+                # ood_global_rep_accuracies.append(ood_global_rep_accuracy)                
+
+
+
+            id_baseline_abs_dic = np.mean(id_rep_abs_dics)
+            id_baseline_stdev = np.std(id_rep_abs_dics)
+
+            ood_baseline_abs_dic = np.mean(ood_rep_abs_dics)
+            ood_baseline_stdev = np.std(ood_rep_abs_dics)
+            # ood_baseline_accuracy = np.mean(ood_rep_accuracies)
+            # ood_baseline_stdev = np.std(ood_rep_accuracies)
+
+
+            # id_global_baseline_accuracy = np.mean(id_global_rep_accuracies)
+            # id_global_baseline_stdev = np.std(id_global_rep_accuracies)
+
+            # ood_global_baseline_accuracy = np.mean(ood_global_rep_accuracies)
+            # ood_global_baseline_stdev = np.std(ood_global_rep_accuracies)
+
+            # print(ood_baseline_accuracy, ood_global_baseline_accuracy)
+
+
+            results[k].append((patch_num, 
+                               id_baseline_abs_dic, 
+                               id_baseline_stdev, 
+                               ood_baseline_abs_dic, 
+                               ood_baseline_stdev,
+                               ))
+
+    # fig = plt.figure(figsize=(8, 6))
+
+    fig, axs = plt.subplots(1, 1, figsize=(8, 8))
+    xticks = [0, 40000]
+
+
+    for i, k in enumerate(list(results.keys())):
+        # axs[0].scatter([x[0] for x in results[k]], [x[1] for x in results[k]], color=my_plot_colors[0], marker="_", label="In Domain", zorder=2)
+        # axs[0].scatter([x[0] for x in results[k]], [x[3] for x in results[k]], color=my_plot_colors[1], marker="_", label="Out Of Domain", zorder=2)
+
+        # for x in results[k]:
+        #     axs[0].plot([x[0], x[0]], [x[1] + x[2], x[1] - x[2]], color=my_plot_colors[0], linestyle="solid", linewidth=1, zorder=2)
+        # for x in results[k]:
+        #     axs[0].plot([x[0], x[0]], [x[3] + x[4], x[3] - x[4]], color=my_plot_colors[1], linestyle="solid", linewidth=1, zorder=2)
+
+        axs.plot([x[0] for x in results[k]], [x[1] for x in results[k]], color=my_plot_colors[0], label="In Domain")
+        axs.plot([x[0] for x in results[k]], [x[3] for x in results[k]], color=my_plot_colors[1], label="Out Of Domain")
+        
+        axs.fill_between([x[0] for x in results[k]], [x[1] - x[2] for x in results[k]], [x[1] + x[2] for x in results[k]], edgecolor=my_plot_colors[0], color=my_plot_colors[0], linewidth=1, facecolor=my_plot_colors[0], alpha=0.15)
+        axs.fill_between([x[0] for x in results[k]], [x[3] - x[4] for x in results[k]], [x[3] + x[4] for x in results[k]], edgecolor=my_plot_colors[1], color=my_plot_colors[1], linewidth=1, facecolor=my_plot_colors[1], alpha=0.15)
+
+    axs.set_xlabel("Number of Training Patches")
+    axs.set_ylabel("Average Image Set Absolute Difference in Count")
+    axs.set_ylim([0, None])
+    axs.legend()
+
+    plt.suptitle("Effect of Training Set Size")
+
+    # plt.legend()
+    plt.tight_layout()
+
+    out_path = os.path.join("eval_charts", out_dirname, "id_ood_training_set_size_abs_dic.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path) #, dpi=600)
 
 
 
@@ -2000,8 +2473,27 @@ def get_min_num_results(test_sets, single_baselines, diverse_baselines):
                     result_dir = os.path.join(model_dir, mappings[test_set_str][model_name])
                     excel_path = os.path.join(result_dir, "metrics.xlsx")
                     df = pd.read_excel(excel_path, sheet_name=0)
-                    test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
+                    # test_set_accuracy = df["Accuracy (IoU=.50, conf>.50)"].mean(skipna=True)
                     # rep_accuracies.append(rep_accuracy)
+
+
+                    predictions_path = os.path.join(result_dir, "predictions.json")
+                    predictions = annotation_utils.load_predictions(predictions_path)
+                    annotations_path = os.path.join(result_dir, "annotations.json")
+                    annotations = annotation_utils.load_annotations(annotations_path)
+                    assessment_images = []
+                    for image_name in annotations.keys():
+                        if len(annotations[image_name]["test_regions"]) > 0:
+                            assessment_images.append(image_name)
+
+                    test_set_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, assessment_images)
+
+
+
+
+
+
+
 
                     test_set_accuracies.append(test_set_accuracy)
 
@@ -2741,10 +3233,10 @@ def create_eval_min_num_plot(test_sets, single_baselines, diverse_baselines, out
 
         # plt.tight_layout()
 
-        out_path = os.path.join("eval_charts", out_dirname, test_set_str + ".png") #".svg")
+        out_path = os.path.join("eval_charts", out_dirname, test_set_str + ".svg")
         out_dir = os.path.dirname(out_path)
         os.makedirs(out_dir, exist_ok=True)
-        plt.savefig(out_path, dpi=600)
+        plt.savefig(out_path) #, dpi=600)
 
 
 
@@ -2812,7 +3304,7 @@ def predict_on_test_sets(test_sets, baselines):
                 "image_names": image_names,
                 "regions": regions,
                 "save_result": True,
-                "results_name": baseline["model_name"], # "no_prune_" + baseline["model_name"],
+                "results_name": "trimming_eval_50_percent_overlap", #baseline["model_name"], # "no_prune_" + baseline["model_name"],
                 "results_message": ""
             }
 
@@ -5242,7 +5734,7 @@ def my_diversity_plot():
         })        
     out_dirname = "diversity_630"
     create_eval_min_num_plot(eval_test_sets, single_baselines, diverse_baselines, out_dirname)
-    create_eval_min_num_plot_individual_test_sets(eval_test_sets, single_baselines, diverse_baselines, out_dirname)
+    # create_eval_min_num_plot_individual_test_sets(eval_test_sets, single_baselines, diverse_baselines, out_dirname)
 
 
 def my_multitrace_size_plot():
@@ -5350,8 +5842,10 @@ def my_size_plot():
     # create_eval_size_plot_individual_test_sets(eval_test_sets, baseline_sets, "size")
 
 
-    create_eval_size_plot_id_ood(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
+    # create_eval_size_plot_id_ood(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
+    create_eval_size_plot_id_ood_abs_dic(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
     # create_individual_image_sets_eval_size_plot_id_ood(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
+    # create_individual_image_sets_eval_size_plot_id_ood_abs_dic(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
 
 
 def my_patch_merging_plot():
@@ -5485,14 +5979,14 @@ def eval_run():
     ]
 
     num_dups = 5
-    num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    for num_annotations_to_select in [5000, 5250, 5500, 5560]: #1000, 1250, 1500]: #num_annotations_to_select_lst:
-        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
+    # num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
+    # for num_annotations_to_select in [5500, 5560]: #1000, 1250, 1500]: #num_annotations_to_select_lst:
+    #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
         
-        fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
 
-        # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
+    #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
     # num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
     # for num_annotations_to_select in [500]: #num_annotations_to_select_lst:
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
@@ -5505,14 +5999,17 @@ def eval_run():
     # get_result_uuids(baselines[0], eval_test_sets[3], methods, [250, 500, 750, 1000, 1250, 1500])
 
     # create_fine_tune_plot(baselines[0], eval_test_sets[0], methods, num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500], num_dups=5)
-    # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, 
-    # num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500, 1710], num_dups=num_dups)
+    create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, 
+    num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500, 1710], num_dups=num_dups)
 
     # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[0], methods, 
     # num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250], num_dups=5)
     # my_dilation_plot()
     # my_removal_plot()
+    # my_diversity_plot()
     # my_size_plot()
+
+    # predict_on_test_sets(eval_test_sets, baselines)
     exit()
 
     # my_locs_plot()
