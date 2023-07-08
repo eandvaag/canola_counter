@@ -49,6 +49,9 @@ def quality_score_vs_accuracy():
 
 
 def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_to_select_lst, num_dups):
+    for num_annotations_to_select in num_annotations_to_select_lst:
+        fine_tune_experiment.check_fine_tuning_models(baseline, test_set, num_dups, num_annotations_to_select)
+    
     test_set_image_set_dir = os.path.join("usr", "data",
                                                     test_set["username"], "image_sets",
                                                     test_set["farm_name"],
@@ -128,18 +131,23 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
 
                 # test_set_accuracy = global_accuracy #np.mean(accuracy)
                 # test_set_accuracy = np.mean(accuracies)
-                dup_accuracies.append(test_set_accuracy)
+                dup_accuracies.append(float(test_set_accuracy))
                 # results[method].append((num_fine_tuning_boxes, test_set_accuracy))
                 # results[method].append((num_fine_tuning_regions, test_set_accuracy))
 
             # results.append(np.mean(dup_accuracies))
             # labels.append(method)
             results[method].append((num_annotations_to_select_lst[j], 
-                                    np.mean(dup_accuracies), 
-                                    np.std(dup_accuracies),
+                                    float(np.mean(dup_accuracies)), 
+                                    float(np.std(dup_accuracies)),
                                     dup_accuracies))
 
     print(results)
+
+    results_out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_results.json")
+    out_dir = os.path.dirname(results_out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    json_io.save_json(results_out_path, results)
 
 
     fig = plt.figure(figsize=(10, 10))
@@ -199,7 +207,7 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
     ax.set_ylabel("Accuracy")
     ax.set_xlabel("Number of Patches") #Annotations")
 
-    ax.set_ylim([0.5, 1])
+    ax.set_ylim([0.7, 1])
 
     plt.tight_layout()
 
@@ -912,37 +920,78 @@ def create_individual_image_sets_eval_size_plot_id_ood(id_test_sets, ood_test_se
     json_io.save_json(os.path.join("eval_charts", out_dirname, "image_based_test_set_results.json"), image_based_test_set_results)
     json_io.save_json(os.path.join("eval_charts", out_dirname, "instance_based_test_set_results.json"), instance_based_test_set_results)
 
-    json_io.print_json(instance_based_test_set_results)
-    fig, axs = plt.subplots(2, 1, figsize=(8, 8))
-    for test_set_str in image_based_test_set_results.keys():
-        if test_set_str_to_label[test_set_str] == "id":
-            plot_color = my_plot_colors[0]
-        else:
-            plot_color = my_plot_colors[1]
-        axs[0].plot(
-            [x[0] for x in image_based_test_set_results[test_set_str]],
-            [x[1] for x in image_based_test_set_results[test_set_str]],
-            color=plot_color,
-            alpha=0.5
-        )
+    # json_io.print_json(instance_based_test_set_results)
+    # fig, axs = plt.subplots(2, 1, figsize=(8, 8))
+    # for test_set_str in image_based_test_set_results.keys():
+    #     if test_set_str_to_label[test_set_str] == "id":
+    #         plot_color = my_plot_colors[0]
+    #     else:
+    #         plot_color = my_plot_colors[1]
+    #     axs[0].plot(
+    #         [x[0] for x in image_based_test_set_results[test_set_str]],
+    #         [x[1] for x in image_based_test_set_results[test_set_str]],
+    #         color=plot_color,
+    #         alpha=0.5
+    #     )
 
+    # for test_set_str in instance_based_test_set_results.keys():
+    #     if test_set_str_to_label[test_set_str] == "id":
+    #         plot_color = my_plot_colors[0]
+    #     else:
+    #         plot_color = my_plot_colors[1]
+    #     axs[1].plot(
+    #         [x[0] for x in instance_based_test_set_results[test_set_str]],
+    #         [x[1] for x in instance_based_test_set_results[test_set_str]],
+    #         color=plot_color,
+    #         alpha=0.5
+    #     )
+
+    fig, axs = plt.subplots(1, 1, figsize=(8, 4))
+
+    largest_set_id_results = []
+    for test_set_str in instance_based_test_set_results.keys():
+        if test_set_str_to_label[test_set_str] == "id":
+            largest_set_id_results.append((test_set_str, instance_based_test_set_results[test_set_str][-1][1]))
+    id_label_added = False
+    ood_label_added = False
     for test_set_str in instance_based_test_set_results.keys():
         if test_set_str_to_label[test_set_str] == "id":
             plot_color = my_plot_colors[0]
+            if not id_label_added:
+                label = "In Domain"
+                id_label_added = True
+            else:
+                label = None
         else:
             plot_color = my_plot_colors[1]
-        axs[1].plot(
+            if not ood_label_added:
+                label = "Out Of Domain"
+                ood_label_added = True
+            else:
+                label = None
+        axs.plot(
             [x[0] for x in instance_based_test_set_results[test_set_str]],
             [x[1] for x in instance_based_test_set_results[test_set_str]],
             color=plot_color,
-            alpha=0.5
+            alpha=0.5,
+            label=label
         )
+
+    axs.set_title("Effect of Training Set Size on Individual Image Sets")
+
+    axs.legend()
+
+    axs.set_xlabel("Number of Training Patches")
+    axs.set_ylabel("Instance-Based Accuracy")
 
     largest_set_id_results = []
     for test_set_str in instance_based_test_set_results.keys():
         if test_set_str_to_label[test_set_str] == "id":
             largest_set_id_results.append((test_set_str, instance_based_test_set_results[test_set_str][-1][1]))
     
+
+
+
     largest_set_id_results.sort(key=lambda x: x[1])
         
     print("largest_set_id_results")
@@ -951,10 +1000,10 @@ def create_individual_image_sets_eval_size_plot_id_ood(id_test_sets, ood_test_se
     # print(largest_set_id_results)
 
 
-    out_path = os.path.join("eval_charts", out_dirname, "id_ood_individual_image_sets.svg")
+    out_path = os.path.join("eval_charts", out_dirname, "id_ood_individual_image_sets.png")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
-    plt.savefig(out_path) #, dpi=600)
+    plt.savefig(out_path, dpi=600)
 
 
 
@@ -5843,8 +5892,8 @@ def my_size_plot():
 
 
     # create_eval_size_plot_id_ood(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
-    create_eval_size_plot_id_ood_abs_dic(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
-    # create_individual_image_sets_eval_size_plot_id_ood(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
+    # creadte_eval_size_plot_id_ood_abs_dic(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
+    create_individual_image_sets_eval_size_plot_id_ood(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
     # create_individual_image_sets_eval_size_plot_id_ood_abs_dic(eval_in_domain_test_sets, eval_test_sets, baseline_sets, "id_ood_size")
 
 
@@ -5979,10 +6028,10 @@ def eval_run():
     ]
 
     num_dups = 5
-    # num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
-    # for num_annotations_to_select in [5500, 5560]: #1000, 1250, 1500]: #num_annotations_to_select_lst:
+    num_annotations_to_select_lst = [250, 500] #400, 500, 600, 700]
+    # for num_annotations_to_select in [5560]: #1000, 1250, 1500]: #num_annotations_to_select_lst:
     #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[2], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=num_dups)
-    #     # fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[1], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
+    #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
         
     #     fine_tune_experiment.eval_fine_tune_test(server, eval_test_sets[0], baselines[0], methods, num_annotations_to_select=num_annotations_to_select, num_dups=5)
 
@@ -5999,8 +6048,33 @@ def eval_run():
     # get_result_uuids(baselines[0], eval_test_sets[3], methods, [250, 500, 750, 1000, 1250, 1500])
 
     # create_fine_tune_plot(baselines[0], eval_test_sets[0], methods, num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500], num_dups=5)
-    create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, 
-    num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500, 1710], num_dups=num_dups)
+    # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[1], methods, 
+    # num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500, 1710], num_dups=num_dups)
+    
+
+    fine_tune_lookup_nums = {
+        0: [250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000, 5250, 5500, 5560], 
+        1: [250, 500, 750, 1000, 1250, 1500, 1710],
+        2: [250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 2977],
+        3: [250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3194],
+        4: [250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000, 4250, 4500, 4750, 4786], 
+        5: [250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000, 5250, 5500, 5505]
+    }
+
+    k = 1
+
+    create_fine_tune_plot_averaged(baselines[0], 
+                                eval_test_sets[k], 
+                                methods, 
+                                fine_tune_lookup_nums[k],
+                                num_dups)
+    
+
+    
+    
+    
+    
+    # my_size_plot()
 
     # create_fine_tune_plot_averaged(baselines[0], eval_test_sets[0], methods, 
     # num_annotations_to_select_lst=[250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250], num_dups=5)
