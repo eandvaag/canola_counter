@@ -45,7 +45,47 @@ def quality_score_vs_accuracy():
 
 
 
+def create_fine_tune_plot_averaged_from_records(baseline, test_sets):
 
+
+
+    # fig = plt.figure(figsize=(10, 10))
+    # ax = fig.add_subplot(111)
+
+    fig, axs = plt.subplots(2, 3, figsize=(10, 10))
+
+    for i, test_set in enumerate(test_sets):
+        if i == 0:
+            continue
+        test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
+    
+        record_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_results.json")
+        results = json_io.load_json(record_path)
+
+        axs[i // 3, i % 3].plot([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], c=my_plot_colors[0], label="Random Patches", zorder=1)
+        axs[i // 3, i % 3].plot([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], c=my_plot_colors[1], label="Selected Patches", zorder=1)
+    
+        for x in results["random_patches_second"]:
+            #print(x)
+            axs[i // 3, i % 3].scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[0], marker="o", zorder=2, alpha=0.7, s=70, edgecolors='none')
+
+        for x in results["selected_patches_first"]:
+            axs[i // 3, i % 3].scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[1], marker="o", zorder=2, alpha=0.7, s=70, edgecolors='none')
+
+
+        axs[i // 3, i % 3].hline(y=results["pre_fine_tune_accuracy"], c="black", linestyle="dashdot", label="No Fine-Tuning")
+        axs[i // 3, i % 3].legend()
+        axs[i // 3, i % 3].set_ylabel("Instance-Based Accuracy")
+        axs[i // 3, i % 3].set_xlabel("Number of Patches") #Annotations")
+
+        axs[i // 3, i % 3].set_ylim([0.7, 1])
+
+    plt.tight_layout()
+
+    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", "averaged_global_all_results.svg")
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
 
 
 def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_to_select_lst, num_dups):
@@ -91,6 +131,7 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
     #     "selected_patches_match_both": "selected_patches",
     #     "random_images": "random_images"
     # }
+    results["pre_fine_tune_accuracy"] = pre_fine_tune_accuracy
 
     max_num_fine_tuning_boxes = 0
     for i, method in enumerate(methods):
@@ -6069,7 +6110,7 @@ def eval_run():
                                 fine_tune_lookup_nums[k],
                                 num_dups)
     
-
+    # create_fine_tune_plot_averaged_from_records(baselines[0], [eval_test_sets[i] for i in range(6)])
     
     
     
