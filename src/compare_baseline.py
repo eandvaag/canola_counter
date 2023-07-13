@@ -142,7 +142,7 @@ def create_fine_tune_plot_averaged_dic_from_records(baseline, test_sets):
         ax.axhline(y=results["pre_fine_tune_accuracy"], c="black", linestyle="dashdot", label="No Fine-Tuning")
 
         # axs[i // 3, i % 3].legend()
-        ax.set_ylabel("Instance-Based Accuracy")
+        ax.set_ylabel("Mean Absolute Difference In Count")
         ax.set_xlabel("Number of Annotations Used For Fine-Tuning") #Annotations")
 
         props = dict(edgecolor="white", facecolor="white") #boxstyle='round', facecolor='white') #, alpha=0.5)
@@ -150,7 +150,7 @@ def create_fine_tune_plot_averaged_dic_from_records(baseline, test_sets):
         ax.text(0.04, 0.89, letter_labels[i], transform=ax.transAxes, fontsize=24,
                                 bbox=props)
 
-        ax.set_ylim([0.7, 1])
+        # ax.set_ylim([0.7, 1])
 
     handles, labels = axs[1, 2].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper right', fontsize=11)
@@ -161,7 +161,7 @@ def create_fine_tune_plot_averaged_dic_from_records(baseline, test_sets):
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.9) 
-    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", "averaged_global_all_results.svg")
+    out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", "averaged_global_all_results_dic.svg")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
     plt.savefig(out_path)
@@ -210,11 +210,20 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
 
     pre_fine_tune_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys()))
 
+
+    predicted_counts = [int((predictions[image_name]["scores"] > 0.5).size) for image_name in annotations.keys()]
+    annotated_counts = [int(annotations[image_name]["boxes"].shape[0]) for image_name in annotations.keys()]
+    pre_fine_tune_mean_abs_dic = np.mean(abs(np.array(predicted_counts) - np.array(annotated_counts)))
+
+
+
+
     # label_lookup = {
     #     "selected_patches_match_both": "selected_patches",
     #     "random_images": "random_images"
     # }
     results["pre_fine_tune_accuracy"] = pre_fine_tune_accuracy
+    results["pre_fine_tune_mean_abs_dic"] = pre_fine_tune_mean_abs_dic
 
     max_num_fine_tuning_boxes = 0
     for i, method in enumerate(methods):
@@ -6227,7 +6236,7 @@ def eval_run():
         5: [250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000, 5250, 5500, 5505]
     }
 
-    k = 1
+    k = 0
 
     create_fine_tune_plot_averaged(baselines[0], 
                                 eval_test_sets[k], 
@@ -6235,7 +6244,7 @@ def eval_run():
                                 fine_tune_lookup_nums[k],
                                 num_dups)
     
-    # create_fine_tune_plot_averaged_from_records(baselines[0], [eval_test_sets[i] for i in range(6)])
+    # create_fine_tune_plot_averaged_dic_from_records(baselines[0], [eval_test_sets[i] for i in range(6)])
     
     
     
