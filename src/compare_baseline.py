@@ -139,13 +139,13 @@ def create_fine_tune_plot_averaged_dic_from_records(baseline, test_sets):
             ax.scatter([x[0]] * len(x[6]), x[6], c=my_plot_colors[1], marker="o", zorder=2, alpha=0.3, s=20, edgecolors='none')
 
 
-        ax.axhline(y=results["pre_fine_tune_accuracy"], c="black", linestyle="dashdot", label="No Fine-Tuning")
+        ax.axhline(y=results["pre_fine_tune_mean_abs_dic"], c="black", linestyle="dashdot", label="No Fine-Tuning")
 
         # axs[i // 3, i % 3].legend()
         ax.set_ylabel("Mean Absolute Difference In Count")
         ax.set_xlabel("Number of Annotations Used For Fine-Tuning") #Annotations")
 
-        props = dict(edgecolor="white", facecolor="white") #boxstyle='round', facecolor='white') #, alpha=0.5)
+        props = dict(edgecolor="white", facecolor="white", alpha=0) #boxstyle='round', facecolor='white') #, alpha=0.5)
 
         ax.text(0.04, 0.89, letter_labels[i], transform=ax.transAxes, fontsize=24,
                                 bbox=props)
@@ -211,7 +211,7 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
     pre_fine_tune_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys()))
 
 
-    predicted_counts = [int((predictions[image_name]["scores"] > 0.5).size) for image_name in annotations.keys()]
+    predicted_counts = [int(np.sum(predictions[image_name]["scores"] > 0.5)) for image_name in annotations.keys()]
     annotated_counts = [int(annotations[image_name]["boxes"].shape[0]) for image_name in annotations.keys()]
     pre_fine_tune_mean_abs_dic = np.mean(abs(np.array(predicted_counts) - np.array(annotated_counts)))
 
@@ -261,7 +261,7 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
                     max_num_fine_tuning_boxes = num_fine_tuning_boxes
                 global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
 
-                predicted_counts = [int((predictions[image_name]["scores"] > 0.5).size) for image_name in annotations.keys()]
+                predicted_counts = [int(np.sum(predictions[image_name]["scores"] > 0.5)) for image_name in annotations.keys()]
                 annotated_counts = [int(annotations[image_name]["boxes"].shape[0]) for image_name in annotations.keys()]
                 mean_abs_dic = np.mean(abs(np.array(predicted_counts) - np.array(annotated_counts)))
 
