@@ -52,36 +52,54 @@ def create_fine_tune_plot_averaged_from_records(baseline, test_sets):
     # fig = plt.figure(figsize=(10, 10))
     # ax = fig.add_subplot(111)
 
-    fig, axs = plt.subplots(2, 3, figsize=(10, 10))
+    fig, axs = plt.subplots(2, 3, figsize=(18, 10))
+
+    letter_labels = ["A", "B", "C", "D", "E", "F"]
 
     for i, test_set in enumerate(test_sets):
-        if i == 0:
-            continue
+        print(i)
+        # if i == 0:
+        #     continue
         test_set_str = test_set["username"] + ":" + test_set["farm_name"] + ":" + test_set["field_name"] + ":" + test_set["mission_date"]
     
         record_path = os.path.join("eval_charts", "fine_tuning", "selected_first", test_set_str + "_" + baseline["model_name"] + "_results.json")
         results = json_io.load_json(record_path)
 
-        axs[i // 3, i % 3].plot([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], c=my_plot_colors[0], label="Random Patches", zorder=1)
-        axs[i // 3, i % 3].plot([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], c=my_plot_colors[1], label="Selected Patches", zorder=1)
+        ax = axs[i // 3, i % 3]
+
+        ax.plot([x[0] for x in results["random_patches_second"]], [x[1] for x in results["random_patches_second"]], c=my_plot_colors[0], label="Random Region Selection", zorder=1)
+        ax.plot([x[0] for x in results["selected_patches_first"]], [x[1] for x in results["selected_patches_first"]], c=my_plot_colors[1], label="Uncertainty-Based Region Selection", zorder=1)
     
         for x in results["random_patches_second"]:
             #print(x)
-            axs[i // 3, i % 3].scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[0], marker="o", zorder=2, alpha=0.7, s=70, edgecolors='none')
+            ax.scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[0], marker="o", zorder=2, alpha=0.3, s=20, edgecolors='none')
 
         for x in results["selected_patches_first"]:
-            axs[i // 3, i % 3].scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[1], marker="o", zorder=2, alpha=0.7, s=70, edgecolors='none')
+            ax.scatter([x[0]] * len(x[3]), x[3], c=my_plot_colors[1], marker="o", zorder=2, alpha=0.3, s=20, edgecolors='none')
 
 
-        axs[i // 3, i % 3].hline(y=results["pre_fine_tune_accuracy"], c="black", linestyle="dashdot", label="No Fine-Tuning")
-        axs[i // 3, i % 3].legend()
-        axs[i // 3, i % 3].set_ylabel("Instance-Based Accuracy")
-        axs[i // 3, i % 3].set_xlabel("Number of Patches") #Annotations")
+        ax.axhline(y=results["pre_fine_tune_accuracy"], c="black", linestyle="dashdot", label="No Fine-Tuning")
 
-        axs[i // 3, i % 3].set_ylim([0.7, 1])
+        # axs[i // 3, i % 3].legend()
+        ax.set_ylabel("Instance-Based Accuracy")
+        ax.set_xlabel("Number of Annotations Used For Fine-Tuning") #Annotations")
+
+        props = dict(edgecolor="white", facecolor="white") #boxstyle='round', facecolor='white') #, alpha=0.5)
+
+        ax.text(0.04, 0.89, letter_labels[i], transform=ax.transAxes, fontsize=24,
+                                bbox=props)
+
+        ax.set_ylim([0.7, 1])
+
+    handles, labels = axs[1, 2].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper right', fontsize=11)
+    # from matplotlib import rcParams
+    # rcParams['axes.titlepad'] = 20 
+    fig.suptitle("Targeted Annotation for Fine-Tuning: Results for Six Image Sets", size=18) #, y=1.12)
+
 
     plt.tight_layout()
-
+    plt.subplots_adjust(top=0.9) 
     out_path = os.path.join("eval_charts", "fine_tuning", "selected_first", "averaged_global_all_results.svg")
     out_dir = os.path.dirname(out_path)
     os.makedirs(out_dir, exist_ok=True)
@@ -168,6 +186,9 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
                     max_num_fine_tuning_boxes = num_fine_tuning_boxes
                 global_accuracy = fine_tune_eval.get_global_accuracy(annotations, predictions, list(annotations.keys())) #assessment_images_lst)
 
+                predicted_counts = [int((predictions[image_name]["scores"] > 0.5).size) for image_name in annotations.keys()]
+                annotated_counts = [int(annotations[image_name]["boxes"].shape[0]) for image_name in annotations.keys()]
+
                 test_set_accuracy = global_accuracy
 
                 # test_set_accuracy = global_accuracy #np.mean(accuracy)
@@ -181,7 +202,9 @@ def create_fine_tune_plot_averaged(baseline, test_set, methods, num_annotations_
             results[method].append((num_annotations_to_select_lst[j], 
                                     float(np.mean(dup_accuracies)), 
                                     float(np.std(dup_accuracies)),
-                                    dup_accuracies))
+                                    dup_accuracies,
+                                    annotated_counts,
+                                    predicted_counts))
 
     print(results)
 
@@ -3394,7 +3417,7 @@ def predict_on_test_sets(test_sets, baselines):
                 "image_names": image_names,
                 "regions": regions,
                 "save_result": True,
-                "results_name": "trimming_eval_50_percent_overlap", #baseline["model_name"], # "no_prune_" + baseline["model_name"],
+                "results_name": baseline["model_name"], # "trimming_eval_50_percent_overlap", #baseline["model_name"], # "no_prune_" + baseline["model_name"],
                 "results_message": ""
             }
 
@@ -5521,6 +5544,17 @@ dilation_baselines = [
     "set_of_27_dilated_by_10_16000_patches",
 ]
 
+uniform_dilation_baselines = [
+    "set_of_27_uniformly_dilated_by_2_16000_patches",
+    "set_of_27_uniformly_dilated_by_4_16000_patches",
+    "set_of_27_uniformly_dilated_by_6_16000_patches",
+    "set_of_27_uniformly_dilated_by_8_16000_patches",
+    "set_of_27_uniformly_dilated_by_10_16000_patches",
+    "set_of_27_uniformly_dilated_by_12_16000_patches",
+    "set_of_27_uniformly_dilated_by_14_16000_patches",
+    "set_of_27_uniformly_dilated_by_16_16000_patches",
+]
+
 remove_baselines = [
     "set_of_27_remove_0.05_16000_patches",
     "set_of_27_remove_0.1_16000_patches",
@@ -6040,7 +6074,28 @@ def eval_run():
     #         "model_creator": "eval"
     #     })
 
-    # predict_on_test_sets(eval_test_sets, single_baselines)
+    
+    d_perturbed_baselines = []
+    for baseline in eval_single_630_baselines:
+        for rep_num in range(5):
+            d_perturbed_baselines.append({
+                "model_name": baseline + "_rep_" + str(rep_num),
+                "model_creator": "eval"
+            })
+    for baseline in eval_diverse_630_baselines:
+        for rep_num in range(5):
+            d_perturbed_baselines.append({
+                "model_name": baseline + "_rep_" + str(rep_num),
+                "model_creator": "eval"
+            })
+
+
+    # for baseline in uniform_dilation_baselines:
+    #     d_perturbed_baselines.append({
+    #         "model_name": baseline + "_rep_1",
+    #         "model_creator": "eval"
+    #     })
+    # predict_on_test_sets(eval_in_domain_test_sets, d_perturbed_baselines)
 
     # my_patch_merging_plot()
     # my_dilation_plot()
