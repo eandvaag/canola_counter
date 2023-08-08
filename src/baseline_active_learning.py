@@ -175,7 +175,7 @@ def annotation_removal_test(training_image_sets, fraction_to_remove, num_patches
         shutil.copy(preserved_annotations_path, annotations_path)
 
 
-def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir): #taken_regions): #num_patches_to_take):
+def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_to_take, prev_model_dir, rep_num): #taken_regions): #num_patches_to_take):
 
 
     # for i, image_set in enumerate(existing_model_log["image_sets"]):
@@ -195,7 +195,7 @@ def annotation_dilation_test(training_image_sets, dilation_sigmas, num_patches_t
     for dilation_sigma in dilation_sigmas:
 
 
-        model_name = "set_of_27_uniformly_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_0"
+        model_name = "set_of_27_uniformly_dilated_by_" + str(dilation_sigma) + "_" + str(num_patches_to_take) + "_patches_rep_" + str(rep_num)
         existing_model_log_path = os.path.join(prev_model_dir, "log.json")
         existing_model_log = json_io.load_json(existing_model_log_path)
 
@@ -497,8 +497,124 @@ def run_from_existing_diverse_model(model_name, existing_model_log, run=True):
 
 
 
+def run_diverse_multi(training_image_sets, num_training_image_sets_per_model, num_patches, run=True):
+
+    
+    num_reps = 10
+    for rep_num in range(num_reps):
+
+        s = {}
+
+        model_name = "set_of_" + num_training_image_sets_per_model + "_" + num_patches + "_patches_rep_" + str(rep_num)
+
+        model_training_image_sets = random.sample(training_image_sets, num_training_image_sets_per_model)
+
+        candidates = []
+        for image_set in model_training_image_sets:
+
+            key = image_set["username"] + "/" + image_set["farm_name"] + "/" + image_set["field_name"] + "/" + image_set["mission_date"]
 
 
+            image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+                                        image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+
+            annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+            annotations = annotation_utils.load_annotations(annotations_path)
+
+            metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+            metadata = json_io.load_json(metadata_path)
+
+            image_names = list(annotations.keys())
+            image_w = metadata["images"][image_names[0]]["width_px"]
+            image_h = metadata["images"][image_names[0]]["height_px"]
+
+            patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+                
+            patch_overlap_percent = 0
+            overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+            incr = patch_size - overlap_px
+            w_covered = max(image_w - patch_size, 0)
+            num_w_patches = m.ceil(w_covered / incr) + 1
+
+            h_covered = max(image_h - patch_size, 0)
+            num_h_patches = m.ceil(h_covered / incr) + 1
+
+            for image_name in annotations.keys():
+                image_w = metadata["images"][image_name]["width_px"]
+                image_h = metadata["images"][image_name]["height_px"]
+                if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
+                    for h_index in range(num_h_patches):
+                        for w_index in range(num_w_patches):
+
+                            patch_coords = [
+                                patch_size * h_index,
+                                patch_size * w_index,
+                                min((patch_size * h_index) + patch_size, image_h),
+                                min((patch_size * w_index) + patch_size, image_w)
+                            ]
+
+                            if key in s and image_name in s[key] and patch_coords in s[key][image_name]:
+                                pass
+                            else:
+                                candidates.append((key, image_name, patch_coords))
+
+                    
+        taken_candidates = random.sample(candidates, num_patches)
+
+        for taken_candidate in taken_candidates:
+            key = taken_candidate[0]
+            if key not in s:
+                s[key] = {}
+
+            image_name = taken_candidate[1]
+            if image_name not in s[key]:
+                s[key][image_name] = []
+
+            s[key][image_name].append(taken_candidate[2])
+
+
+        log = {}
+        log["model_creator"] = "eval"
+        log["model_name"] = model_name
+        log["model_object"] = "canola_seedling"
+        log["public"] = "yes"
+        log["image_sets"] = []
+
+        for key in s:
+            pieces = key.split("/")
+            log["image_sets"].append({
+                "username": pieces[0],
+                "farm_name": pieces[1],
+                "field_name": pieces[2],
+                "mission_date": pieces[3],
+                "taken_regions": s[key],
+                "patch_overlap_percent": 0
+            })
+
+        log["submission_time"] = int(time.time())
+        
+        pending_model_path = os.path.join("usr", "data", "eval", "models", "pending", log["model_name"])
+
+        os.makedirs(pending_model_path, exist_ok=False)
+        
+        log_path = os.path.join(pending_model_path, "log.json")
+        json_io.save_json(log_path, log)
+
+        if run:
+            server.sch_ctx["baseline_queue"].enqueue(log)
+
+            baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+            while baseline_queue_size > 0:
+            
+                log = server.sch_ctx["baseline_queue"].dequeue()
+                re_enqueue = server.process_baseline(log)
+                if re_enqueue:
+                    server.sch_ctx["baseline_queue"].enqueue(log)
+                baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+        
 
 
 def run_diverse_model(training_image_sets, model_name, num_patches_to_match, prev_model_dir, supplementary_weed_image_sets=None, run=True):
@@ -638,6 +754,186 @@ def run_diverse_model(training_image_sets, model_name, num_patches_to_match, pre
             if re_enqueue:
                 server.sch_ctx["baseline_queue"].enqueue(log)
             baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def run_smaller_diverse_model(training_image_sets, model_name, num_patches_to_match, next_model_dir, supplementary_weed_image_sets=None, run=True):
+
+    # s = {}
+
+    all_next_taken_candidates = []
+
+    if next_model_dir is not None:
+        num_patches_next_taken = get_num_patches_used_by_model(next_model_dir)
+        next_log_path = os.path.join(next_model_dir, "log.json")
+        next_log = json_io.load_json(next_log_path)
+        for image_set in next_log["image_sets"]:
+            key = image_set["username"] + "/" + image_set["farm_name"] + "/" + image_set["field_name"] + "/" + image_set["mission_date"]
+            # if key not in s:
+            #     s[key] = {}
+
+            # s[key] = image_set["taken_regions"]
+            for image_name in image_set["taken_regions"].keys():
+                for r in image_set["taken_regions"][image_name]:
+                    all_next_taken_candidates.append([key, image_name, r])
+
+
+    else:
+        num_patches_next_taken = 0
+
+    # num_patches_to_match = get_num_patches_used_by_model(model_dir_to_match)
+
+    num_patches_to_remove = num_patches_next_taken - num_patches_to_match
+
+    print("Num patches to match: {}".format(num_patches_to_match))
+    print("Num patches next taken: {}".format(num_patches_next_taken))
+    print("Num patches to remove: {}".format(num_patches_to_remove))
+
+    all_next_taken_candidates = np.array(all_next_taken_candidates)
+    indices = np.random.choice(np.arange(all_next_taken_candidates.shape[0]), replace=False,
+                           size=num_patches_to_match) #int(myarray.size * 0.2))
+    
+    print("indices.size", indices.size)
+    
+    keep_mask = np.full(all_next_taken_candidates.shape[0], False)
+    keep_mask[indices] = True
+    
+    taken_candidates = all_next_taken_candidates[indices]
+
+    # for candidate in keep_candidates:
+
+
+
+
+
+    # candidates = []
+    # for image_set in training_image_sets:
+
+    #     key = image_set["username"] + "/" + image_set["farm_name"] + "/" + image_set["field_name"] + "/" + image_set["mission_date"]
+
+
+    #     image_set_dir = os.path.join("usr", "data", image_set["username"], "image_sets",
+    #                                  image_set["farm_name"], image_set["field_name"], image_set["mission_date"])
+
+    #     annotations_path = os.path.join(image_set_dir, "annotations", "annotations.json")
+    #     annotations = annotation_utils.load_annotations(annotations_path)
+
+    #     metadata_path = os.path.join(image_set_dir, "metadata", "metadata.json")
+    #     metadata = json_io.load_json(metadata_path)
+
+    #     image_names = list(annotations.keys())
+    #     image_w = metadata["images"][image_names[0]]["width_px"]
+    #     image_h = metadata["images"][image_names[0]]["height_px"]
+
+    #     patch_size = annotation_utils.get_patch_size(annotations, ["training_regions", "test_regions"])
+
+            
+    #     patch_overlap_percent = 0
+    #     overlap_px = int(m.floor(patch_size * (patch_overlap_percent / 100)))
+
+    #     incr = patch_size - overlap_px
+    #     w_covered = max(image_w - patch_size, 0)
+    #     num_w_patches = m.ceil(w_covered / incr) + 1
+
+    #     h_covered = max(image_h - patch_size, 0)
+    #     num_h_patches = m.ceil(h_covered / incr) + 1
+
+    #     for image_name in annotations.keys():
+    #         image_w = metadata["images"][image_name]["width_px"]
+    #         image_h = metadata["images"][image_name]["height_px"]
+    #         if annotation_utils.is_fully_annotated(annotations, image_name, image_w, image_h):
+    #             for h_index in range(num_h_patches):
+    #                 for w_index in range(num_w_patches):
+
+    #                     patch_coords = [
+    #                         patch_size * h_index,
+    #                         patch_size * w_index,
+    #                         min((patch_size * h_index) + patch_size, image_h),
+    #                         min((patch_size * w_index) + patch_size, image_w)
+    #                     ]
+
+    #                     if key in s and image_name in s[key] and patch_coords in s[key][image_name]:
+    #                         pass
+    #                     else:
+    #                         candidates.append((key, image_name, patch_coords))
+
+                
+    # taken_candidates = random.sample(candidates, num_patches_to_take)
+    s = {}
+    for taken_candidate in taken_candidates:
+        key = taken_candidate[0]
+        if key not in s:
+            s[key] = {}
+
+        image_name = taken_candidate[1]
+        if image_name not in s[key]:
+            s[key][image_name] = []
+
+        s[key][image_name].append(taken_candidate[2])
+
+    log = {}
+    log["model_creator"] = "eval"
+    log["model_name"] = model_name
+    log["model_object"] = "canola_seedling"
+    log["public"] = "yes"
+    log["image_sets"] = []
+
+    for key in s:
+        pieces = key.split("/")
+        log["image_sets"].append({
+            "username": pieces[0],
+            "farm_name": pieces[1],
+            "field_name": pieces[2],
+            "mission_date": pieces[3],
+            "taken_regions": s[key],
+            "patch_overlap_percent": 0
+        })
+
+    
+    if supplementary_weed_image_sets is not None:
+        for image_set in supplementary_weed_image_sets:
+            image_set["patch_overlap_percent"] = 0
+            log["image_sets"].append(image_set)
+
+    log["submission_time"] = int(time.time())
+    
+    pending_model_path = os.path.join("usr", "data", "eval", "models", "pending", log["model_name"])
+
+    os.makedirs(pending_model_path, exist_ok=False)
+    
+    log_path = os.path.join(pending_model_path, "log.json")
+    json_io.save_json(log_path, log)
+
+    if run:
+        server.sch_ctx["baseline_queue"].enqueue(log)
+
+        baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+        while baseline_queue_size > 0:
+        
+            log = server.sch_ctx["baseline_queue"].dequeue()
+            re_enqueue = server.process_baseline(log)
+            if re_enqueue:
+                server.sch_ctx["baseline_queue"].enqueue(log)
+            baseline_queue_size = server.sch_ctx["baseline_queue"].size()
+
+
+
+
+
+
 
 
 
@@ -3180,9 +3476,23 @@ def create_patch_sample_plot(training_sets, test_sets, out_dir):
     out_path = os.path.join(out_dir, "sample_patches.png")
     plt.savefig(out_path)
 
-
-
     
+def rsync_from_z420(training_image_sets):
+
+
+    for ims in training_image_sets:
+
+        z420_path = "erik@z420:/home/erik/d1/plant_detection/plant_detection/src/usr/data/" + ims["username"] + "/image_sets/" + \
+                        ims["farm_name"] + "/" + ims["field_name"] + "/" + ims["mission_date"] + "/annotations/annotations.json"
+        
+        asus_path = "/home/erik/Documents/plant_detection/plant_detection/src/usr/data/" + ims["username"] + "/image_sets/" + \
+                        ims["farm_name"] + "/" + ims["field_name"] + "/" + ims["mission_date"] + "/annotations/annotations.json"
+
+        cmd = "rsync -av -i " + z420_path + " " + asus_path
+
+        os.system(cmd)
+
+
 
 
 if __name__ == "__main__":
@@ -3618,12 +3928,74 @@ if __name__ == "__main__":
     # for sz in [1000, 2000, 4000]: #16000]:
     #     run_diverse_model(training_image_sets, "set_of_27_" + str(sz) + "_patches_rep_4", sz, None, supplementary_weed_image_sets=None, run=True)
     
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_2")
+    # annotation_dilation_test(training_image_sets, [28], 16000, matched_dir, 2)
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_3")
+    # annotation_dilation_test(training_image_sets, [28], 16000, matched_dir, 3)
+
+
+    run_diverse_multi(training_image_sets, 5, 3150, run=True)
+
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_1")
+    # annotation_dilation_test(training_image_sets, [30], 16000, matched_dir, 1)
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_3")
+    # annotation_dilation_test(training_image_sets, [18], 16000, matched_dir, 3)
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_4")
+    # annotation_dilation_test(training_image_sets, [30], 16000, matched_dir, 4)
+    
+    # rsync_from_z420(training_image_sets)
+    # restore_annotations(training_image_sets)
+
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_4")
+    # annotation_dilation_test(training_image_sets, [24], 16000, matched_dir, 4)
+
+
     # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_0")
+    # annotation_dilation_test(training_image_sets, [26], 16000, matched_dir, 0)
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_1")
+    # annotation_dilation_test(training_image_sets, [26], 16000, matched_dir, 1)
+    # matched_dir = os.path.join("usr", "data", "eval", "models", "available", "public", "set_of_27_16000_patches_rep_2")
+    # annotation_dilation_test(training_image_sets, [26], 16000, matched_dir, 2)
+
+
+    # run_smaller_diverse_model(training_image_sets, "row_spacing_brown_2021-06-01_250_patches_800_epochs_rep_0", 250, 
+    #                           "usr/data/eval/models/available/public/row_spacing_brown_2021-06-01_630_patches_rep_0", 
+    #                           supplementary_weed_image_sets=None, run=True)
+    # run_smaller_diverse_model(training_image_sets, "row_spacing_brown_2021-06-01_250_patches_rep_1", 250, 
+    #                           "usr/data/eval/models/available/public/row_spacing_brown_2021-06-01_630_patches_rep_1", 
+    #                           supplementary_weed_image_sets=None, run=True)
+    # run_smaller_diverse_model(training_image_sets, "row_spacing_brown_2021-06-01_250_patches_rep_2", 250, 
+    #                           "usr/data/eval/models/available/public/row_spacing_brown_2021-06-01_630_patches_rep_2", 
+    #                           supplementary_weed_image_sets=None, run=True)
+    # run_smaller_diverse_model(training_image_sets, "row_spacing_brown_2021-06-01_250_patches_rep_3", 250, 
+    #                           "usr/data/eval/models/available/public/row_spacing_brown_2021-06-01_630_patches_rep_3", 
+    #                           supplementary_weed_image_sets=None, run=True)
+    # run_smaller_diverse_model(training_image_sets, "row_spacing_brown_2021-06-01_250_patches_rep_4", 250, 
+    #                           "usr/data/eval/models/available/public/row_spacing_brown_2021-06-01_630_patches_rep_4", 
+    #                           supplementary_weed_image_sets=None, run=True)
+
+
+
+
+
+
+    # run_diverse_model(training_image_sets, "set_of_27_3906_patches_rep_3", 3906,
+    #                     "usr/data/eval/models/available/public/set_of_27_2000_patches_rep_3", None, True)
+    # run_diverse_model(training_image_sets, "set_of_27_3906_patches_rep_4", 3906,
+    #                     "usr/data/eval/models/available/public/set_of_27_2000_patches_rep_4", None, True)
+
+
+    
     # log_path = os.path.join(matched_dir, "log.json")
     # log = json_io.load_json(log_path)
-    # annotation_dilation_test(training_image_sets, [3], 16000, matched_dir) #, taken_regions=log["taken_regions"]) #num_patches_to_take=16000)
+    # annotation_dilation_test(training_image_sets, [10], 16000, matched_dir) #, taken_regions=log["taken_regions"]) #num_patches_to_take=16000)
+    # annotation_dilation_test(training_image_sets, [12], 16000, matched_dir)
+    # annotation_dilation_test(training_image_sets, [14], 16000, matched_dir)
+
+
     # annotation_removal_test(training_image_sets, 0.05, 16000, matched_dir)
-    dilation_plot(training_image_sets, [5, 10], "dilation_plot")
+
+    # dilation_plot(training_image_sets, [5, 10], "dilation_plot")
     # create_patch_sample_plot(training_image_sets, test_image_sets, "sample_patches")
     # model_name = "UNI_Dugout_2022-05-30_630_patches_BlaineLake_Serhienko9S_2022-06-14_630_patches_rep_1"
     # model_name = "BlaineLake_River_2021-06-09_630_patches_BlaineLake_Serhienko9S_2022-06-14_630_patches_rep_0"
