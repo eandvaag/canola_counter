@@ -505,7 +505,7 @@ def run_diverse_multi(training_image_sets, num_training_image_sets_per_model, nu
 
         s = {}
 
-        model_name = "set_of_" + num_training_image_sets_per_model + "_" + str(num_patches) + "_patches_rep_" + str(rep_num)
+        model_name = "set_of_" + str(num_training_image_sets_per_model) + "_" + str(num_patches) + "_patches_rep_" + str(rep_num)
 
         model_training_image_sets = random.sample(training_image_sets, num_training_image_sets_per_model)
 
