@@ -307,8 +307,13 @@ def compute_iou_np(boxes1, boxes2):
     union_area = np.maximum(
         boxes1_area[:, None] + boxes2_area - intersection_area, 1e-8
     )
+    # print("---")
+    # print(intersection_area)
+    # print("---")
+    # print(union_area)
     res = np.clip(intersection_area / union_area, 0.0, 1.0)
-
+    # print("---")
+    # print(res)
     return res
 
 

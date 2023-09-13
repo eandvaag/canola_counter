@@ -258,6 +258,92 @@ def set_active_training_params(config, seq_num):
 
 
 
+def get_image_detections_any_overlap(patch_abs_boxes, patch_scores, patch_coords, 
+                         region, overlap_px, trim=True): #, patch_border_buffer_percent=None): # buffer_pct=None):
+
+    if patch_abs_boxes.size == 0:
+        image_abs_boxes = np.array([], dtype=np.int32)
+        image_scores = np.array([], dtype=np.float32)
+        # image_classes = np.array([], dtype=np.int32)
+
+    else:
+        patch_height = patch_coords[2] - patch_coords[0]
+        patch_width = patch_coords[3] - patch_coords[1]
+
+        # image_width, image_height = Image(image_path).get_wh()
+
+
+        
+
+        image_abs_boxes = (np.array(patch_abs_boxes) + \
+                           np.tile(patch_coords[:2], 2)).astype(np.int32)
+
+        # if patch_border_buffer_percent is not None:
+        #     patch_wh = (patch_coords[2] - patch_coords[0])
+        #     buffer_px = (patch_border_buffer_percent / 100 ) * patch_wh
+
+        #     mask = np.logical_and(
+        #             np.logical_and(
+        #              np.logical_or(image_abs_boxes[:, 0] > patch_coords[0] + buffer_px, image_abs_boxes[:, 0] <= buffer_px),
+        #              np.logical_or(image_abs_boxes[:, 1] > patch_coords[1] + buffer_px, image_abs_boxes[:, 1] <= buffer_px)),
+        #             np.logical_and(
+        #              np.logical_or(image_abs_boxes[:, 2] < patch_coords[2] - buffer_px, image_abs_boxes[:, 2] >= image_height - buffer_px),
+        #              np.logical_or(image_abs_boxes[:, 3] < patch_coords[3] - buffer_px, image_abs_boxes[:, 3] >= image_width - buffer_px))
+        #         )
+
+        #     image_abs_boxes = image_abs_boxes[mask]
+        #     image_scores = patch_scores[mask]
+        #     image_classes = patch_classes[mask]
+        
+
+
+        # if trim:
+
+        #     mask = np.logical_and(
+        #         np.logical_and(image_abs_boxes[:,0] > patch_coords[0], image_abs_boxes[:,2] < patch_coords[2]),
+        #         np.logical_and(image_abs_boxes[:,1] > patch_coords[1], image_abs_boxes[:,3] < patch_coords[3])
+        #     )
+
+
+        #     image_abs_boxes = image_abs_boxes[mask]
+        #     image_scores = patch_scores[mask]
+
+
+        
+
+        if trim:
+
+            wiggle_room = 3
+
+            accept_bottom = region[0] if patch_coords[0] == region[0] else patch_coords[0] + round(overlap_px / 2) - wiggle_room
+            accept_left = region[1] if patch_coords[1] == region[1] else patch_coords[1] + round(overlap_px / 2) - wiggle_room
+            accept_top = region[2] if patch_coords[2] >= region[2] else patch_coords[2] - round(overlap_px / 2) + wiggle_room
+            accept_right = region[3] if patch_coords[3] >= region[3] else patch_coords[3] - round(overlap_px / 2) + wiggle_room
+
+
+            box_centres = (image_abs_boxes[..., :2] + image_abs_boxes[..., 2:]) / 2.0
+
+            # print("box_centres", box_centres)
+            # print("accept_bottom: {}, accept_left: {}, accept_top: {}, accept_right: {}".format(
+            #     accept_bottom, accept_left, accept_top, accept_right
+            # ))
+            mask = np.logical_and(
+                np.logical_and(box_centres[:,0] >= accept_bottom, box_centres[:,0] < accept_top),
+                np.logical_and(box_centres[:,1] >= accept_left, box_centres[:,1] < accept_right)
+            )
+
+            # print("mask", mask)
+
+            image_abs_boxes = image_abs_boxes[mask]
+            image_scores = patch_scores[mask]
+            # image_classes = patch_classes[mask]
+
+        else:
+            image_scores = patch_scores
+            # image_classes = patch_classes
+
+
+    return image_abs_boxes, image_scores
 
 
 

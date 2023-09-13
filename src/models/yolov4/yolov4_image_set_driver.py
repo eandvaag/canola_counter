@@ -337,6 +337,9 @@ def predict(sch_ctx, image_set_dir, request): #, q):
 
     predictions = {}
 
+    patch_predictions = {}
+    store_patch_predictions = False #True
+
     # transform_types = ["nop"]
 
     best_weights_path = os.path.join(weights_dir, "best_weights.h5")
@@ -585,6 +588,22 @@ def predict(sch_ctx, image_set_dir, request): #, q):
                             ratio = batch_ratios[i]
                             patch_coords = batch_patch_coords[i]
 
+
+                            if store_patch_predictions:
+                                pred_patch_abs_boxes, pred_patch_scores, _ = \
+                                    post_process_sample(pred_bbox, ratio, patch_coords, config, region, apply_nms=False, score_threshold=0.01) #config["inference"]["score_thresh"])
+                                
+                                if image_name not in patch_predictions:
+                                    patch_predictions[image_name] = {
+                                        "patch_coords": [],
+                                        "patch_boxes": [],
+                                        "patch_scores": []
+                                    }
+                                
+                                patch_predictions[image_name]["patch_coords"].append(patch_coords)
+                                patch_predictions[image_name]["patch_boxes"].append(pred_patch_abs_boxes.tolist())
+                                patch_predictions[image_name]["patch_scores"].append(pred_patch_scores.tolist())
+
                             
 
                             pred_patch_abs_boxes, pred_patch_scores, _ = \
@@ -788,6 +807,15 @@ def predict(sch_ctx, image_set_dir, request): #, q):
 
         predictions_path = os.path.join(results_dir, "predictions.json")
         json_io.save_json(predictions_path, thresholded_predictions)
+
+
+
+
+
+    if store_patch_predictions:
+        patch_predictions_path = os.path.join(results_dir, "patch_predictions.json")
+        json_io.save_json(patch_predictions_path, patch_predictions)
+
 
     # q.put(False)
     return False

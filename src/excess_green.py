@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 from image_set import Image
 import image_utils
 from io_utils import json_io
-import lock
+# import lock
 from models.common import box_utils, poly_utils
 
 CHUNK_SIZE = 5000

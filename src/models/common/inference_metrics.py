@@ -32,6 +32,97 @@ from io_utils import json_io, w3c_io
 
 
 
+
+
+
+def get_mAP_val(annotations, full_predictions, iou_thresh, assessment_images):
+    
+    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=True, num_classes=1)
+
+    mAP_vals = []
+    for image_name in tqdm.tqdm(assessment_images):
+        annotated_boxes = np.array(annotations[image_name]["boxes"])
+        predicted_scores = np.array(full_predictions[image_name]["scores"])
+        predicted_boxes = np.array(full_predictions[image_name]["boxes"])
+
+        # predicted_boxes = predicted_boxes[predicted_scores > 0.01]
+        # predicted_scores = predicted_scores[predicted_scores > 0.01]
+
+
+        annotated_classes = np.zeros(shape=(annotated_boxes.shape[0]))
+        predicted_classes = np.zeros(shape=(predicted_boxes.shape[0]))
+
+        pred_for_mAP, true_for_mAP = get_pred_and_true_for_mAP(
+            predicted_boxes, 
+            predicted_classes, 
+            predicted_scores,
+            annotated_boxes,
+            annotated_classes)
+
+        metric_fn.add(pred_for_mAP, true_for_mAP)
+
+    if iou_thresh == ".50:.05:.95":
+        mAP = metric_fn.value(iou_thresholds=np.arange(0.5, 1.0, 0.05), recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    elif iou_thresh == ".50":
+        mAP = metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    elif iou_thresh == ".75":
+        mAP = metric_fn.value(iou_thresholds=0.75, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    elif iou_thresh == ".20":
+        mAP = metric_fn.value(iou_thresholds=0.2, recall_thresholds=np.arange(0., 1.01, 0.01), mpolicy='soft')['mAP']
+    
+    else:
+        raise RuntimeError("Invalid IoU threshold: {}".format(iou_thresh))
+
+        # mAP_vals.append(mAP)
+    return mAP #np.mean(mAP_vals) #mAP
+
+
+
+
+
+def get_global_accuracy(annotations, full_predictions, assessment_images, iou_thresh=0.5):
+
+    total_true_positives = 0
+    total_false_positives = 0
+    total_false_negatives = 0
+
+    for image_name in assessment_images:
+        annotated_boxes = annotations[image_name]["boxes"]
+        pred_boxes = np.array(full_predictions[image_name]["boxes"])
+        pred_scores = np.array(full_predictions[image_name]["scores"])
+
+        sel_pred_boxes = pred_boxes[pred_scores > 0.50]
+
+        num_predicted = sel_pred_boxes.shape[0]
+        num_annotated = annotated_boxes.shape[0]
+
+        if num_predicted > 0:
+            if num_annotated > 0:
+                true_positive, false_positive, false_negative = get_positives_and_negatives(annotated_boxes, sel_pred_boxes, iou_thresh=iou_thresh)
+            else:
+                true_positive = 0
+                false_positive = num_predicted
+                false_negative = 0
+        else:
+            if num_annotated > 0:
+                true_positive = 0
+                false_positive = 0
+                false_negative = num_annotated
+            else:
+                true_positive = 0
+                false_positive = 0
+                false_negative = 0
+
+        total_true_positives += true_positive
+        total_false_positives += false_positive
+        total_false_negatives += false_negative
+
+    global_accuracy = total_true_positives / (total_true_positives + total_false_positives + total_false_negatives)
+    return global_accuracy
+
+
+
+
 # def DiC(actual, pred):
 #     return actual - pred
 

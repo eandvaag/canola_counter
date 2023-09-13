@@ -474,7 +474,7 @@ def process_baseline(item):
                     # shutil.rmtree(baseline_pending_dir)
                 if os.path.exists(baseline_available_dir):
                     saved_available_dir = os.path.join(baseline_aborted_dir, "saved_available")
-                    shutil.move(baseline_pending_dir, saved_available_dir)
+                    shutil.move(baseline_available_dir, saved_available_dir)
                     # shutil.rmtree(baseline_available_dir)
 
             isa.emit_model_change(item["model_creator"])
